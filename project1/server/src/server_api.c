@@ -6,19 +6,12 @@
 #include <unistd.h>
 #include <pthread.h>
 
-typedef struct ServiceRegistryElement {
-    int serviceId;
-    struct ServiceRegistryElement *next;
-} ServiceRegistryT;
-
 static int socketFd;
 static int port;
 static char ip[INET_ADDRSTRLEN];
 
 static ServiceRegistryT *registry;
 static pthread_mutex_t registryLock;
-
-static struct sockaddr_in *clients;
 
 void init() {
     struct sockaddr_in server_addr;
@@ -84,6 +77,10 @@ int registerService(int serviceId) {
     }
     
     newNode->serviceId = serviceId;
+    newNode->queueHead = NULL;
+    newNode->queueTail = NULL;
+    pthread_mutex_init(&(newNode->queueLock), NULL);
+    pthread_cond_init(&(newNode->queueCond), NULL);
     newNode->next = registry;
     registry = newNode;
 
@@ -115,23 +112,41 @@ int unregisterService(int serviceId) {
     return -1;
 }
 
-int serviceExists(int serviceId) {
+ServiceRegistryT *getService(int serviceId) {
     pthread_mutex_lock(&registryLock);
     
     for (ServiceRegistryT *t = registry; t != NULL; t = t->next)
         if (t->serviceId == serviceId) {
             pthread_mutex_unlock(&registryLock);
-            return 0;
+            return t;
         }
 
     pthread_mutex_unlock(&registryLock);
-    return -1;
+    return NULL;
 }
 
 int getRequest(int serviceId, void *buf, int *len) {
-    return 0;
+    ServiceRegistryT *service = getService(serviceId);
+    if (service == NULL) 
+        return -1;
+
+    int requestId;
+    pthread_mutex_lock(&service->queueLock);
+    
+    if (service->queueHead == NULL) {
+        pthread_cond_wait(&service->queueCond, &service->queueLock);
+        pthread_mutex_lock(&service->queueLock);
+    }
+
+    PendingRequestT *req = service->queueHead;
+    requestId = req->requestId;
+    service->queueHead = req->next;
+    free(req);
+
+    pthread_mutex_unlock(&service->queueLock);
+    return req->requestId;
 }
 
-void sendReply(int reqid, void *buf, int len) {
+void sendReply(int requestId, void *buf, int len) {
 
 }
