@@ -1,0 +1,17 @@
+CC = gcc
+CFLAGS = -Wall -g
+
+TARGET = server_app
+OBJS = server_app.o server_api.o
+HEADERS = server_api.h
+
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+	$(CC) $(CFLAGS) -o $(TARGET) $(OBJS)
+
+%.o: %.c $(HEADERS)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	rm -f $(OBJS) $(TARGET)
