@@ -8,9 +8,12 @@
 #include <unistd.h>
 #include <pthread.h>
 
+#define MAX_BUFFER_SIZE (5 * sizeof(uint32_t) + MAX_PAYLOAD_SIZE)
+
+int nextReqId = 0;
 int socketFd;
-int port;
 char ip[INET_ADDRSTRLEN];
+int port;
 
 // Singly-linked list for all services
 ServiceRegistryT *registry = NULL;
@@ -20,9 +23,16 @@ pthread_mutex_t registryLock;
 RequestElementT *activeRequests = NULL;
 pthread_mutex_t activeRequestsLock;
 
+// Circular doubly-linked list for requests already sent but not ack'ed
+RequestElementT *inFlightRequests = NULL;
+pthread_mutex_t inFlightRequestsLock;
+
+pthread_t dispatcherThread;
+
 void init() {
     struct sockaddr_in server_addr;
     socklen_t len = sizeof(server_addr);
+    memset(&server_addr, 0, sizeof(server_addr)); // TODO figure out if this is needed
     
     socketFd = socket(AF_INET, SOCK_DGRAM, 0);
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -58,6 +68,18 @@ void init() {
 
     if (pthread_mutex_init(&activeRequestsLock, NULL) != 0) {
         perror("pthread_mutex_init failed");
+        close(socketFd);
+        exit(EXIT_FAILURE);
+    }
+
+    if (pthread_mutex_init(&inFlightRequestsLock, NULL) != 0) {
+        perror("pthread_mutex_init failed");
+        close(socketFd);
+        exit(EXIT_FAILURE);
+    }
+
+    if (pthread_create(&dispatcherThread, NULL, runDispatcherThread, NULL)) {
+        perror("pthread_create failed");
         close(socketFd);
         exit(EXIT_FAILURE);
     }
@@ -131,7 +153,8 @@ int getRequest(int serviceId, void *buf, int *len) {
     // Copy to user buffers and free payload
     PacketT *packet = &el->req->packet;
     memcpy(buf, packet->payload, packet->payloadLength);
-    *len = packet->payloadLength;
+    if (len)
+        *len = packet->payloadLength;
     free(packet->payload);
     packet->payload = NULL;
     packet->payloadLength = 0;
@@ -141,7 +164,7 @@ int getRequest(int serviceId, void *buf, int *len) {
     CDL_APPEND(activeRequests, el);
     pthread_mutex_unlock(&activeRequestsLock);
 
-    return packet->requestId;
+    return el->req->requestId;
 }
 
 void sendReply(int requestId, void *buf, int len) {
@@ -149,7 +172,127 @@ void sendReply(int requestId, void *buf, int len) {
     if (req == NULL)
         return;
 
+    // Copy user buffer to our packet buffer
+    PacketT *packet = &req->packet;
+    packet->type = REPLY;
+    packet->payloadLength = len;
+    packet->payload = malloc(len);
+    memcpy(packet->payload, buf, len);
+
+    if (addInFlightRequest(req) == -1) {
+        free(packet->payload);
+        free(req);
+        return;
+    }
     
+    int serializedLength;
+    void *serialized = serializePacket(packet, &serializedLength);
+    sendto(socketFd, serialized, serializedLength, 0, (struct sockaddr *) &req->clientAddr, req->clientAddrLen);
+    free(serialized);
+}
+
+void *runDispatcherThread(void *args) {
+    while (1) {
+        RequestT *req = malloc(sizeof(RequestT));
+        req->clientAddrLen = sizeof(req->clientAddr);
+        char buf[MAX_BUFFER_SIZE];
+        if(recvfrom(socketFd, buf, MAX_BUFFER_SIZE, 0, (struct sockaddr *) &req->clientAddr, &req->clientAddrLen) == -1) {
+            free(req);
+            break;
+        }
+        
+        PacketT *packet = &req->packet;
+        deserializePacket(buf, packet);
+
+        // Remove previous cached response and continue if request was just an ACK
+        removeInFlightRequest(packet->clientId, packet->sequenceNumber - 1);
+        if (packet->type == ACKNOWLEDGE) {
+            free(packet->payload);
+            free(req);
+            continue;
+        }
+
+        // Cached response
+        RequestT *cached = getInFlightRequest(packet->clientId, packet->sequenceNumber);
+        if (cached != NULL) {
+            int serializedLength;
+            void *serialized = serializePacket(&cached->packet, &serializedLength);
+            sendto(socketFd, serialized, serializedLength, 0, (struct sockaddr *) &req->clientAddr, req->clientAddrLen);
+            free(packet->payload);
+            free(req);
+            free(serialized);
+            continue;
+        }
+
+        // New request
+        req->requestId = getNextRequestId();
+        if (addToService(req) == -1) {
+            free(packet->payload);
+            free(req);
+        }
+    }
+    return NULL;
+}
+
+void *serializePacket(PacketT *packet, int *length) {
+    *length = 5 * sizeof(uint32_t) + packet->payloadLength;
+    char *serialized = (char *) malloc(*length);
+    if (!serialized)
+        return NULL;
+
+    uint32_t network_type = htonl(packet->type);
+    uint32_t network_clientId = htonl(packet->clientId);
+    uint32_t network_serviceId = htonl(packet->serviceId);
+    uint32_t network_sequenceNumber = htonl(packet->sequenceNumber);
+    uint32_t network_payloadLength = htonl(packet->payloadLength);
+
+    int offset = 0;
+    memcpy(serialized + offset, &network_type, sizeof(uint32_t));
+    offset += sizeof(uint32_t);
+
+    memcpy(serialized + offset, &network_clientId, sizeof(uint32_t));
+    offset += sizeof(uint32_t);
+
+    memcpy(serialized + offset, &network_serviceId, sizeof(uint32_t));
+    offset += sizeof(uint32_t);
+
+    memcpy(serialized + offset, &network_sequenceNumber, sizeof(uint32_t));
+    offset += sizeof(uint32_t);
+
+    memcpy(serialized + offset, &network_payloadLength, sizeof(uint32_t));
+    offset += sizeof(uint32_t);
+    
+    if (packet->payload)
+        memcpy(serialized + offset, packet->payload, packet->payloadLength);
+
+    return (void *) serialized;
+}
+
+void deserializePacket(void *buffer, PacketT *packet) {
+    int offset = 0;
+    char *buf = (char *) buffer;
+
+    packet->type = ntohl(*(uint32_t *)(buf + offset));
+    offset += sizeof(uint32_t);
+
+    packet->clientId = ntohl(*(uint32_t *)(buf + offset));
+    offset += sizeof(uint32_t);
+
+    packet->serviceId = ntohl(*(uint32_t *)(buf + offset));
+    offset += sizeof(uint32_t);
+
+    packet->sequenceNumber = ntohl(*(uint32_t *)(buf + offset));
+    offset += sizeof(uint32_t);
+
+    packet->payloadLength = ntohl(*(uint32_t *)(buf + offset));
+    offset += sizeof(uint32_t);
+
+    if (packet->payloadLength > 0) {
+        packet->payload = malloc(packet->payloadLength);
+        memcpy(packet->payload, buf + offset, packet->payloadLength);
+    } else {
+        packet->payload = NULL;
+    }
 }
 
 ServiceRegistryT *getService(int serviceId) {
@@ -162,12 +305,87 @@ ServiceRegistryT *getService(int serviceId) {
     return el;
 }
 
+int addToService(RequestT *req) {
+    ServiceRegistryT *service = getService(req->packet.serviceId); 
+    if (service == NULL)
+        return -1;
+
+    pthread_mutex_lock(&service->queueLock);
+
+    RequestElementT *el = (RequestElementT *) malloc(sizeof(RequestElementT));
+    if (el == NULL) {
+        pthread_mutex_unlock(&service->queueLock);
+        return -1;
+    }
+
+    el->req = req;
+    CDL_APPEND(service->queue, el);
+    pthread_cond_signal(&service->queueCond);
+
+    pthread_mutex_unlock(&service->queueLock);
+    return 0;
+}
+
+int addInFlightRequest(RequestT *req) {
+    pthread_mutex_lock(&inFlightRequestsLock);
+
+    RequestElementT *el = (RequestElementT *) malloc(sizeof(RequestElementT));
+    if (el == NULL) {
+        pthread_mutex_unlock(&inFlightRequestsLock);
+        return -1;
+    }
+
+    el->req = req;
+    CDL_APPEND(inFlightRequests, el);
+
+    pthread_mutex_unlock(&inFlightRequestsLock);
+    return 0;
+}
+
+int removeInFlightRequest(int clientId, int sequenceNumber) {
+    pthread_mutex_lock(&inFlightRequestsLock);
+    
+    RequestElementT *el, *tmp1, *tmp2;
+    CDL_FOREACH_SAFE(inFlightRequests, el, tmp1, tmp2) {
+        if (el->req->packet.clientId == clientId && 
+            el->req->packet.sequenceNumber == sequenceNumber) {
+            CDL_DELETE(inFlightRequests, el);
+            free(el->req->packet.payload);
+            free(el->req);
+            free(el);
+            pthread_mutex_unlock(&inFlightRequestsLock);
+            return 0;
+        }
+    }
+
+    pthread_mutex_unlock(&inFlightRequestsLock);
+    return -1;
+}
+
+RequestT *getInFlightRequest(int clientId, int sequenceNumber) {
+    pthread_mutex_lock(&inFlightRequestsLock);
+    
+    RequestElementT *el;
+    RequestT* req = NULL;
+
+    CDL_FOREACH(inFlightRequests, el) {
+        if (el->req->packet.clientId == clientId && 
+            el->req->packet.sequenceNumber == sequenceNumber) {
+            req = el->req;
+            break;
+        }
+    }
+
+    pthread_mutex_unlock(&inFlightRequestsLock);
+    return req;
+}
+
 RequestT *popActiveRequest(int requestId) {
     pthread_mutex_lock(&activeRequestsLock);
     
     RequestElementT *el;
     RequestT* req = NULL;
-    CDL_SEARCH_SCALAR(activeRequests, el, req->packet.requestId, requestId);
+    CDL_SEARCH_SCALAR(activeRequests, el, req->requestId, requestId);
     if (el) {
         req = el->req;
         CDL_DELETE(activeRequests, el);
@@ -176,6 +394,10 @@ RequestT *popActiveRequest(int requestId) {
 
     pthread_mutex_unlock(&activeRequestsLock);
     return req;
+}
+
+int getNextRequestId() {
+    return nextReqId++;
 }
 
 void cleanRequestList(RequestElementT *list) {
@@ -189,8 +411,8 @@ void cleanRequestList(RequestElementT *list) {
 }
 
 void cleanUp() {
-    pthread_mutex_destroy(&registryLock);
-    pthread_mutex_destroy(&activeRequestsLock);
+    pthread_cancel(dispatcherThread);
+    pthread_join(dispatcherThread, NULL);
 
     ServiceRegistryT *el, *tmp;
     LL_FOREACH_SAFE(registry,el,tmp) {
@@ -202,4 +424,9 @@ void cleanUp() {
     }
 
     cleanRequestList(activeRequests);
+    cleanRequestList(inFlightRequests);
+
+    pthread_mutex_destroy(&registryLock);
+    pthread_mutex_destroy(&activeRequestsLock);
+    pthread_mutex_destroy(&inFlightRequestsLock);
 }

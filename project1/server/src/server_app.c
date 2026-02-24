@@ -13,9 +13,9 @@ int main() {
     registerService(PRIMALITY);
 
     // while (0) {
-    //     char buf[100];
+        char buf[MAX_PAYLOAD_SIZE];
     //     for (int i = 0; i < 100; i++) buf[i] = 0;
-    //     getRequest(0, buf, NULL);
+        getRequest(PRIMALITY, buf, NULL);
     //     buf[99] = '\0';
     //     printf("Received %s\n", buf);
     //     printf("Sending %d\n", 1);

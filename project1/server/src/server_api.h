@@ -6,22 +6,24 @@
 #define MAX_PAYLOAD_SIZE 4096
 
 typedef enum MessageType {
-    REQ,
-    ACK,
-    RSP
+    REQUEST,
+    REPLY,
+    ACKNOWLEDGE
 } MessageTypeT;
 
 typedef struct Packet {
-    int requestId;
+    enum MessageType type;
     int clientId;
-    int sequenceNumber;
-    int payloadLength;
+    int serviceId;
+    unsigned int sequenceNumber;
+    unsigned int payloadLength;
     void *payload;
 } PacketT;
 
 typedef struct Request {
     PacketT packet;
 
+    int requestId;
     struct sockaddr_in clientAddr;
     socklen_t clientAddrLen;
 } RequestT;
