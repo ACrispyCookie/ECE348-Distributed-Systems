@@ -1,6 +1,7 @@
 #ifndef SERVER_API_H
 #define SERVER_API_H
 #include <arpa/inet.h>
+#include <pthread.h>
 
 #define MAX_PAYLOAD_SIZE 4096
 
@@ -11,29 +12,30 @@ typedef enum MessageType {
 } MessageTypeT;
 
 typedef struct Packet {
-    MessageTypeT type;
+    int requestId;
+    int clientId;
     int sequenceNumber;
-    int serviceId;
     int payloadLength;
+    void *payload;
 } PacketT;
 
-typedef struct PendingRequest {
-    int requestId;
-    int serviceId;
-    struct sockaddr_in client;
+typedef struct Request {
+    PacketT packet;
 
-    int sequenceNumber;
-    void *payload;
-    int payloadLength;
+    struct sockaddr_in clientAddr;
+    socklen_t clientAddrLen;
+} RequestT;
 
-    struct PendingRequest *next;
-} PendingRequestT;
+typedef struct RequestList {
+    RequestT *req;
+    struct RequestList *prev, *next;
+} RequestElementT;
 
 typedef struct ServiceRegistryElement {
     int serviceId;
 
-    PendingRequestT *queueHead;
-    PendingRequestT *queueTail;
+    // Circular doubly-linked list
+    RequestElementT *queue;
 
     pthread_mutex_t queueLock;
     pthread_cond_t queueCond;
@@ -76,6 +78,6 @@ int getRequest(int serviceId, void *buf, int *len);
 /*
     Sends a reply for the specified request
 */
-void sendReply(int reqid, void *buf, int len);
+void sendReply(int requestId, void *buf, int len);
 
 #endif

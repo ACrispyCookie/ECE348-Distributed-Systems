@@ -3,7 +3,7 @@ CFLAGS = -Wall -g
 
 TARGET = server_app
 OBJS = server_app.o server_api.o
-HEADERS = server_api.h
+HEADERS = server_api.h internal_server.h
 
 all: $(TARGET)
 
