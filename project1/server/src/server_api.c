@@ -10,10 +10,12 @@
 
 #define MAX_BUFFER_SIZE (5 * sizeof(uint32_t) + MAX_PAYLOAD_SIZE)
 
-int nextReqId = 0;
+volatile int isShuttingDown = 0;
 int socketFd;
 char ip[INET_ADDRSTRLEN];
 int port;
+
+int nextReqId = 0;
 
 // Singly-linked list for all services
 ServiceRegistryT *registry = NULL;
@@ -142,8 +144,13 @@ int getRequest(int serviceId, void *buf, int *len) {
 
     pthread_mutex_lock(&service->queueLock);
     // Wait for a packet to arrive
-    while (service->queue == NULL)
+    while (service->queue == NULL && !isShuttingDown)
         pthread_cond_wait(&service->queueCond, &service->queueLock);
+
+    if (isShuttingDown) {
+        pthread_mutex_unlock(&service->queueLock);
+        return -1;
+    }
 
     // Remove packet from queue
     RequestElementT *el = service->queue;
@@ -205,12 +212,13 @@ void *runDispatcherThread(void *args) {
         deserializePacket(buf, packet);
 
         // Remove previous cached response and continue if request was just an ACK
-        removeInFlightRequest(packet->clientId, packet->sequenceNumber - 1);
         if (packet->type == ACKNOWLEDGE) {
+            removeInFlightRequest(packet->clientId, packet->sequenceNumber);
             free(packet->payload);
             free(req);
             continue;
         }
+        removeInFlightRequest(packet->clientId, packet->sequenceNumber - 1);
 
         // Cached response
         RequestT *cached = getInFlightRequest(packet->clientId, packet->sequenceNumber);
@@ -410,8 +418,21 @@ void cleanRequestList(RequestElementT *list) {
     }
 }
 
+void triggerShutdown() {
+    isShuttingDown = 1;
+    close(socketFd); 
+
+    pthread_mutex_lock(&registryLock);
+    ServiceRegistryT *el;
+    LL_FOREACH(registry, el) {
+        pthread_mutex_lock(&el->queueLock);
+        pthread_cond_broadcast(&el->queueCond);
+        pthread_mutex_unlock(&el->queueLock);
+    }
+    pthread_mutex_unlock(&registryLock);
+}
+
 void cleanUp() {
-    pthread_cancel(dispatcherThread);
     pthread_join(dispatcherThread, NULL);
 
     ServiceRegistryT *el, *tmp;

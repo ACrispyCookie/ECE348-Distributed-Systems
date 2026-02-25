@@ -5,6 +5,7 @@
 #include "server_api.h"
 #include "utlist.h"
 
+extern volatile int isShuttingDown;
 extern int socketFd;
 extern int port;
 extern char ip[INET_ADDRSTRLEN];

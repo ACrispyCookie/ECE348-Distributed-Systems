@@ -48,7 +48,10 @@ typedef struct ServiceRegistryElement {
 // Initialize server
 void init();
 
-// Clean up and stop server
+// Start shutdown process
+void triggerShutdown();
+
+// Clean up
 void cleanUp();
 
 /*

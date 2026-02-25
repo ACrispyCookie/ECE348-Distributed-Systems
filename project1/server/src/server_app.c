@@ -2,6 +2,13 @@
 #include "server_app.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <signal.h>
+#include <string.h>
+
+void handleSigInt(int sig) {
+    printf("\nSIGINT received! Shutting down server...\n");
+    triggerShutdown(); 
+}
 
 int main(int argc, char *argv[]) {
     int workerCount;
@@ -13,15 +20,22 @@ int main(int argc, char *argv[]) {
     }
     workers = (pthread_t *) malloc(workerCount * sizeof(pthread_t));
 
+    signal(SIGINT, handleSigInt);
+
     init();
     registerService(PRIMALITY);
 
     for (int i = 0; i < workerCount; i++)
         pthread_create(&workers[i], NULL, runWorker, NULL);
 
+    printf("Server running with %d workers. Press Ctrl+C to stop.\n", workerCount);
+
+    for (int i = 0; i < workerCount; i++) {
+        pthread_join(workers[i], NULL);
+    }
+
     unregisterService(PRIMALITY);
     cleanUp();
-
     free(workers);
 
     return 0;
@@ -32,6 +46,8 @@ void *runWorker(void *args) {
         char buf[MAX_PAYLOAD_SIZE];
         int length;
         int requestId = getRequest(PRIMALITY, buf, &length);
+        if(requestId == -1)
+            break;
 
         AppRequestT *req = deserializeAppPacket(buf, length);
         AppResponseT *res = (AppResponseT *) malloc(sizeof(AppResponseT));
