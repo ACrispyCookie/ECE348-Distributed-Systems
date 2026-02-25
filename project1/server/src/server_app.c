@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <string.h>
+#include <unistd.h>
 
 void handleSigInt(int sig) {
     printf("\nSIGINT received! Shutting down server...\n");
@@ -30,9 +31,8 @@ int main(int argc, char *argv[]) {
 
     printf("Server running with %d workers. Press Ctrl+C to stop.\n", workerCount);
 
-    for (int i = 0; i < workerCount; i++) {
+    for (int i = 0; i < workerCount; i++)
         pthread_join(workers[i], NULL);
-    }
 
     unregisterService(PRIMALITY);
     cleanUp();

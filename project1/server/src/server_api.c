@@ -10,7 +10,7 @@
 
 #define MAX_BUFFER_SIZE (5 * sizeof(uint32_t) + MAX_PAYLOAD_SIZE)
 
-volatile int isShuttingDown = 0;
+int isShuttingDown = 0;
 int socketFd;
 char ip[INET_ADDRSTRLEN];
 int port;
@@ -128,6 +128,9 @@ int unregisterService(int serviceId) {
     LL_SEARCH_SCALAR(registry, el, serviceId, serviceId);
     if (el) {
         LL_DELETE(registry,el);
+        pthread_cond_destroy(&el->queueCond);
+        pthread_mutex_destroy(&el->queueLock);
+        cleanRequestList(el->queue);
         free(el);
         pthread_mutex_unlock(&registryLock);
         return 0;
@@ -203,7 +206,7 @@ void *runDispatcherThread(void *args) {
         RequestT *req = malloc(sizeof(RequestT));
         req->clientAddrLen = sizeof(req->clientAddr);
         char buf[MAX_BUFFER_SIZE];
-        if(recvfrom(socketFd, buf, MAX_BUFFER_SIZE, 0, (struct sockaddr *) &req->clientAddr, &req->clientAddrLen) == -1) {
+        if(recvfrom(socketFd, buf, MAX_BUFFER_SIZE, 0, (struct sockaddr *) &req->clientAddr, &req->clientAddrLen) <= 0) {
             free(req);
             break;
         }
@@ -239,6 +242,17 @@ void *runDispatcherThread(void *args) {
             free(req);
         }
     }
+
+    // Broadcast wake up to all waiting threads
+    pthread_mutex_lock(&registryLock);
+    ServiceRegistryT *el;
+    LL_FOREACH(registry, el) {
+        pthread_mutex_lock(&el->queueLock);
+        pthread_cond_broadcast(&el->queueCond);
+        pthread_mutex_unlock(&el->queueLock);
+    }
+    pthread_mutex_unlock(&registryLock);
+
     return NULL;
 }
 
@@ -420,16 +434,8 @@ void cleanRequestList(RequestElementT *list) {
 
 void triggerShutdown() {
     isShuttingDown = 1;
-    close(socketFd); 
-
-    pthread_mutex_lock(&registryLock);
-    ServiceRegistryT *el;
-    LL_FOREACH(registry, el) {
-        pthread_mutex_lock(&el->queueLock);
-        pthread_cond_broadcast(&el->queueCond);
-        pthread_mutex_unlock(&el->queueLock);
-    }
-    pthread_mutex_unlock(&registryLock);
+    shutdown(socketFd, SHUT_RDWR);
+    close(socketFd);
 }
 
 void cleanUp() {
