@@ -32,8 +32,9 @@ int getNextRequestId();
 ServiceRegistryT *getService(int serviceId);
 int addToService(RequestT *req);
 RequestT *popActiveRequest(int requestId);
-RequestT *getInFlightRequest(int clientId, int sequenceNumber);
-int removeInFlightRequest(int clientId, int sequenceNumber);
+
+RequestT *getInFlightRequest(in_addr_t clientAddr, int sequenceNumber);
+int removeInFlightRequest(in_addr_t clientAddr, int sequenceNumber);
 int addInFlightRequest(RequestT *req);
 
 void cleanRequestList(RequestElementT *list);

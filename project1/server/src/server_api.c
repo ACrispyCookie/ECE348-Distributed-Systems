@@ -364,12 +364,12 @@ int addInFlightRequest(RequestT *req) {
     return 0;
 }
 
-int removeInFlightRequest(int clientId, int sequenceNumber) {
+int removeInFlightRequest(in_addr_t clientAddr, int sequenceNumber) {
     pthread_mutex_lock(&inFlightRequestsLock);
     
     RequestElementT *el, *tmp1, *tmp2;
     CDL_FOREACH_SAFE(inFlightRequests, el, tmp1, tmp2) {
-        if (el->req->packet.clientId == clientId && 
+        if (el->req->clientAddr.sin_addr.s_addr == clientAddr && 
             el->req->packet.sequenceNumber == sequenceNumber) {
             CDL_DELETE(inFlightRequests, el);
             free(el->req->packet.payload);
@@ -384,14 +384,14 @@ int removeInFlightRequest(int clientId, int sequenceNumber) {
     return -1;
 }
 
-RequestT *getInFlightRequest(int clientId, int sequenceNumber) {
+RequestT *getInFlightRequest(in_addr_t clientAddr, int sequenceNumber) {
     pthread_mutex_lock(&inFlightRequestsLock);
     
     RequestElementT *el;
     RequestT* req = NULL;
 
     CDL_FOREACH(inFlightRequests, el) {
-        if (el->req->packet.clientId == clientId && 
+        if (el->req->clientAddr.sin_addr.s_addr == clientAddr && 
             el->req->packet.sequenceNumber == sequenceNumber) {
             req = el->req;
             break;

@@ -51,11 +51,11 @@ void init();
 // Start shutdown process
 void triggerShutdown();
 
-// Clean up
+// Clean up. Should be called only after the shutdown process
 void cleanUp();
 
 /*
-    Registers the specified service
+    Registers the specified service.
 
     Returns:
     0 - If the registration is successful
@@ -64,7 +64,10 @@ void cleanUp();
 int registerService(int serviceId);
 
 /*
-    Unregisters the specified service
+    Unregisters the specified service. Can only
+    be called when every thread waiting on getRequest
+    for the specific service has finished execution.
+    TODO Make this thread-safe
 
     Returns:
     0 - If the registration is successful

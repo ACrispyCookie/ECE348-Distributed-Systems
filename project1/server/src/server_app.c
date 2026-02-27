@@ -7,8 +7,8 @@
 #include <unistd.h>
 
 void handleSigInt(int sig) {
-    printf("\nSIGINT received! Shutting down server...\n");
-    triggerShutdown(); 
+    printf("\nShutting down server...\n");
+    triggerShutdown();
 }
 
 int main(int argc, char *argv[]) {
@@ -46,7 +46,7 @@ void *runWorker(void *args) {
         char buf[MAX_PAYLOAD_SIZE];
         int length;
         int requestId = getRequest(PRIMALITY, buf, &length);
-        if(requestId == -1)
+        if(requestId <= 0)
             break;
 
         AppRequestT *req = deserializeAppPacket(buf, length);
