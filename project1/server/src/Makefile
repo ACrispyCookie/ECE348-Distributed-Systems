@@ -6,8 +6,8 @@ ifeq ($(DEBUG), 1)
 endif
 
 TARGET = server_app
-OBJS = server_app.o server_api.o
-HEADERS = server_api.h internal_server.h
+OBJS = server_app.o server_api.o threadsafe_list_s.o threadsafe_list_d.o
+HEADERS = server_api.h internal_server.h threadsafe_list_s.h threadsafe_list_d.h
 
 all: $(TARGET)
 
