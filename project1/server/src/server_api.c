@@ -38,7 +38,7 @@ void init() {
     
     socketFd = socket(AF_INET, SOCK_DGRAM, 0);
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    server_addr.sin_port = htons(0);
+    server_addr.sin_port = htons(25565);
     server_addr.sin_family = AF_INET;
 
     // Bind to port and get info on address
