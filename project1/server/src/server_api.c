@@ -206,18 +206,39 @@ void *runDispatcherThread(void *args) {
         RequestT *req = malloc(sizeof(RequestT));
         req->clientAddrLen = sizeof(req->clientAddr);
         char buf[MAX_BUFFER_SIZE];
+#ifdef DEBUG
+        printf("\n-----------------------\n");
+        printf("Waiting for a packet...\n");
+#endif
         if(recvfrom(socketFd, buf, MAX_BUFFER_SIZE, 0, (struct sockaddr *) &req->clientAddr, &req->clientAddrLen) <= 0) {
             free(req);
             break;
         }
-        
+    
         PacketT *packet = &req->packet;
         deserializePacket(buf, packet);
+
+#ifdef DEBUG
+        char clientIp[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &(req->clientAddr.sin_addr), clientIp, INET_ADDRSTRLEN);
+        int clientPort = ntohs(req->clientAddr.sin_port);
+        printf("\nReceived packet from %s:%d ->\n", clientIp, clientPort);
+        printf("  Type: %d\n", packet->type);
+        printf("  Client ID: %d\n", packet->clientId);
+        printf("  Service ID: %d\n", packet->serviceId);
+        printf("  Seq: %d\n", packet->sequenceNumber);
+        printf("  Length: %d\n", packet->payloadLength);
+        printf("\n");
+#endif
 
         cleanOrphanedRequests(req->clientAddr.sin_addr.s_addr, packet->clientId);
 
         // Remove previous cached response and continue if request was just an ACK
         if (packet->type == ACKNOWLEDGE) {
+#ifdef DEBUG
+        printf("Was ACK so removing current from cache...\n");
+        printf("-----------------------\n");
+#endif
             removeInFlightRequest(req->clientAddr.sin_addr.s_addr, packet->sequenceNumber);
             free(packet->payload);
             free(req);
@@ -226,6 +247,10 @@ void *runDispatcherThread(void *args) {
 
         // Invalid request
         if (packet->type == REPLY) {
+#ifdef DEBUG
+        printf("Invalid request...\n");
+        printf("-----------------------\n");
+#endif
             free(packet->payload);
             free(req);
             continue;
@@ -234,6 +259,10 @@ void *runDispatcherThread(void *args) {
         // Duplicate currently in process
         RequestT *active = getActiveRequest(req->clientAddr.sin_addr.s_addr, packet->sequenceNumber);
         if (active != NULL) {
+#ifdef DEBUG
+        printf("Request was active so dropping...\n");
+        printf("-----------------------\n");
+#endif
             free(packet->payload);
             free(req);
             continue;
@@ -248,9 +277,17 @@ void *runDispatcherThread(void *args) {
             free(packet->payload);
             free(req);
             free(serialized);
+#ifdef DEBUG
+        printf("Reply was cached...\n");
+        printf("-----------------------\n");
+#endif
             continue;
         }
 
+#ifdef DEBUG
+        printf("Creating new request...\n");
+        printf("-----------------------\n");
+#endif
         removeInFlightRequest(req->clientAddr.sin_addr.s_addr, packet->sequenceNumber - 1);
 
         // New request
