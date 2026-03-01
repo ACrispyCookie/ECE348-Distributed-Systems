@@ -13,7 +13,7 @@ MAX_BUFFER_SIZE = MAX_PAYLOAD_LENGTH + 5 * 4
 class MessageType(Enum):
     REQUEST = 0
     REPLY = 1
-    ACKNOWLEDGE = 3
+    ACKNOWLEDGE = 2
 
 sock = None
 serverAddress = None
