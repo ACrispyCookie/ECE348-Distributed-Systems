@@ -236,6 +236,7 @@ void servicelist_destroy(AppServiceListT *list) {
         free(el);
     }
 
+    pthread_mutex_destroy(&list->lock);
     free(list);
 }
 
@@ -244,8 +245,10 @@ AppServiceT *getService(int serviceId) {
     
     AppServiceElementT *el;
     LL_SEARCH_SCALAR(serviceRegistry->list, el, service.id, serviceId);
-    if (!el)
+    if (!el) {
+        pthread_mutex_unlock(&serviceRegistry->lock);
         return NULL;
+    }
 
     AppServiceT *service = &(el->service);
 
