@@ -2,9 +2,12 @@
 #include "server_app.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <signal.h>
 #include <string.h>
 #include <unistd.h>
+#include <pthread.h>
+#include <arpa/inet.h>
 
 void handleSigInt(int sig) {
     printf("\nShutting down server...\n");
