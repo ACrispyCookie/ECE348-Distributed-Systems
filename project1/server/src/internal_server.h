@@ -6,14 +6,14 @@
 
 #define MAX_BUFFER_SIZE (5 * sizeof(uint32_t) + MAX_PAYLOAD_SIZE)
 
-typedef enum MessageType {
+typedef enum Message {
     REQUEST,
     REPLY,
     ACKNOWLEDGE
-} MessageTypeT;
+} MessageT;
 
 typedef struct Packet {
-    enum MessageType type;
+    MessageT type;
     int clientId;
     int serviceId;
     unsigned int sequenceNumber;
@@ -24,56 +24,66 @@ typedef struct Packet {
 typedef struct Request {
     PacketT packet;
 
-    int requestId;
+    int id;
     struct sockaddr_in clientAddr;
     socklen_t clientAddrLen;
 } RequestT;
 
-typedef struct RequestList {
+typedef struct RequestElement {
     RequestT *req;
-    struct RequestList *prev, *next;
+    struct RequestElement *prev, *next;
 } RequestElementT;
 
-typedef struct ServiceRegistryElement {
-    int serviceId;
+typedef struct RequestList {
+    RequestElementT *list;
+    pthread_mutex_t lock;
+    pthread_cond_t cond;
+} RequestListT;
 
-    // Circular doubly-linked list
-    RequestElementT *queue;
+typedef struct AppService {
+    int id;
+    RequestListT *queue;
+} AppServiceT;
 
-    pthread_mutex_t queueLock;
-    pthread_cond_t queueCond;
+typedef struct AppServiceElement {
+    AppServiceT service;
+    struct AppServiceElement *next;
+} AppServiceElementT;
 
-    struct ServiceRegistryElement *next;
-} ServiceRegistryT;
+typedef struct AppServiceList {
+    AppServiceElementT *list;
+    pthread_mutex_t lock;
+} AppServiceListT;
+
+extern char ip[INET_ADDRSTRLEN];
+extern int port;
+extern int socketFd;
 
 extern int isShuttingDown;
-extern int socketFd;
-extern int port;
-extern char ip[INET_ADDRSTRLEN];
-
 extern int nextReqId;
-
-// Singly-linked list for all services
-extern ServiceRegistryT *registry;
-extern pthread_mutex_t registryLock;
-
-// Circular doubly-linked list for requests currently being processed
-extern RequestElementT *activeRequests;
-extern pthread_mutex_t activeRequestsLock;
-
-// Circular doubly-linked list for requests already sent but not ack'ed
-extern RequestElementT *inFlightRequests;
-extern pthread_mutex_t inFlightRequestsLock;
-
 extern pthread_t dispatcherThread;
 
-void *runDispatcherThread(void *args);
+// Linked list for all services
+extern AppServiceListT *serviceRegistry;
+// Linked list for requests currently being processed
+extern RequestListT *activeRequests;
+// Linked list for requests already sent but not ack'ed
+extern RequestListT *inFlightRequests;
 
+void *runDispatcherThread(void *args);
 void *serializePacket(PacketT *packet, int *length);
 void deserializePacket(void *buffer, PacketT *packet);
 int getNextRequestId();
 
-ServiceRegistryT *getService(int serviceId);
+// RequestT list functions
+RequestListT *reqlist_create();
+void reqlist_destroy(RequestListT *list);
+
+// AppServiceT list functions
+AppServiceListT *servicelist_create();
+void servicelist_destroy(AppServiceListT *list);
+
+AppServiceT *getService(int serviceId);
 int addToService(RequestT *req);
 
 RequestT *getActiveRequest(in_addr_t clientAddr, int sequenceNumber);
@@ -83,8 +93,5 @@ RequestT *getInFlightRequest(in_addr_t clientAddr, int sequenceNumber);
 int cleanOrphanedRequests(in_addr_t clientAddr, int clientId);
 int removeInFlightRequest(in_addr_t clientAddr, int sequenceNumber);
 int addInFlightRequest(RequestT *req);
-
-void cleanRequestList(RequestElementT *list);
-void cleanUp();
 
 #endif

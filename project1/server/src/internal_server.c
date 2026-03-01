@@ -4,23 +4,17 @@
 #include <string.h>
 #include <stdio.h>
 
-int isShuttingDown = 0;
-int socketFd;
 char ip[INET_ADDRSTRLEN];
 int port;
+int socketFd;
 
+int isShuttingDown = 0;
 int nextReqId = 0;
-
-ServiceRegistryT *registry = NULL;
-pthread_mutex_t registryLock;
-
-RequestElementT *activeRequests = NULL;
-pthread_mutex_t activeRequestsLock;
-
-RequestElementT *inFlightRequests = NULL;
-pthread_mutex_t inFlightRequestsLock;
-
 pthread_t dispatcherThread;
+
+AppServiceListT *serviceRegistry;
+RequestListT *activeRequests;
+RequestListT *inFlightRequests;
 
 void *runDispatcherThread(void *args) {
     while (1) {
@@ -112,7 +106,7 @@ void *runDispatcherThread(void *args) {
         removeInFlightRequest(req->clientAddr.sin_addr.s_addr, packet->sequenceNumber - 1);
 
         // New request
-        req->requestId = getNextRequestId();
+        req->id = getNextRequestId();
         if (addToService(req) == -1) {
             free(packet->payload);
             free(req);
@@ -120,14 +114,14 @@ void *runDispatcherThread(void *args) {
     }
 
     // Broadcast wake up to all waiting threads
-    pthread_mutex_lock(&registryLock);
-    ServiceRegistryT *el;
-    LL_FOREACH(registry, el) {
-        pthread_mutex_lock(&el->queueLock);
-        pthread_cond_broadcast(&el->queueCond);
-        pthread_mutex_unlock(&el->queueLock);
+    pthread_mutex_lock(&serviceRegistry->lock);
+    AppServiceElementT *el;
+    LL_FOREACH(serviceRegistry->list, el) {
+        pthread_mutex_lock(&el->service.queue->lock);
+        pthread_cond_broadcast(&el->service.queue->cond);
+        pthread_mutex_unlock(&el->service.queue->lock);
     }
-    pthread_mutex_unlock(&registryLock);
+    pthread_mutex_unlock(&serviceRegistry->lock);
 
     return NULL;
 }
@@ -197,151 +191,193 @@ int getNextRequestId() {
     return nextReqId++;
 }
 
-ServiceRegistryT *getService(int serviceId) {
-    pthread_mutex_lock(&registryLock);
-    
-    ServiceRegistryT *el;
-    LL_SEARCH_SCALAR(registry, el, serviceId, serviceId);
+RequestListT *reqlist_create() {
+    RequestListT *list = (RequestListT *) malloc(sizeof(RequestListT));
+    if (list == NULL)
+        return NULL;
 
-    pthread_mutex_unlock(&registryLock);
-    return el;
+    list->list = NULL;
+    pthread_mutex_init(&list->lock, NULL);
+    pthread_cond_init(&list->cond, NULL);
+
+    return list;
 }
 
-int addToService(RequestT *req) {
-    ServiceRegistryT *service = getService(req->packet.serviceId); 
-    if (service == NULL)
-        return -1;
-
-    pthread_mutex_lock(&service->queueLock);
-
-    RequestElementT *el = (RequestElementT *) malloc(sizeof(RequestElementT));
-    if (el == NULL) {
-        pthread_mutex_unlock(&service->queueLock);
-        return -1;
-    }
-
-    el->req = req;
-    CDL_APPEND(service->queue, el);
-    pthread_cond_signal(&service->queueCond);
-
-    pthread_mutex_unlock(&service->queueLock);
-    return 0;
-}
-
-RequestT *getActiveRequest(in_addr_t clientAddr, int sequenceNumber) {
-    pthread_mutex_lock(&activeRequestsLock);
-    
-    RequestElementT *el;
-    RequestT* req = NULL;
-    
-    CDL_FOREACH(activeRequests, el) {
-        if (el->req->clientAddr.sin_addr.s_addr == clientAddr && 
-            el->req->packet.sequenceNumber == sequenceNumber) {
-            req = el->req;
-            break;
-        }
-    }
-
-    pthread_mutex_unlock(&activeRequestsLock);
-    return req;
-}
-
-RequestT *popActiveRequest(int requestId) {
-    pthread_mutex_lock(&activeRequestsLock);
-    
-    RequestElementT *el;
-    RequestT* req = NULL;
-    CDL_SEARCH_SCALAR(activeRequests, el, req->requestId, requestId);
-    if (el) {
-        req = el->req;
-        CDL_DELETE(activeRequests, el);
-        free(el);
-    }
-
-    pthread_mutex_unlock(&activeRequestsLock);
-    return req;
-}
-
-int addInFlightRequest(RequestT *req) {
-    pthread_mutex_lock(&inFlightRequestsLock);
-
-    RequestElementT *el = (RequestElementT *) malloc(sizeof(RequestElementT));
-    if (el == NULL) {
-        pthread_mutex_unlock(&inFlightRequestsLock);
-        return -1;
-    }
-
-    el->req = req;
-    CDL_APPEND(inFlightRequests, el);
-
-    pthread_mutex_unlock(&inFlightRequestsLock);
-    return 0;
-}
-
-int removeInFlightRequest(in_addr_t clientAddr, int sequenceNumber) {
-    pthread_mutex_lock(&inFlightRequestsLock);
-    
+void reqlist_destroy(RequestListT *list) {
     RequestElementT *el, *tmp1, *tmp2;
-    CDL_FOREACH_SAFE(inFlightRequests, el, tmp1, tmp2) {
-        if (el->req->clientAddr.sin_addr.s_addr == clientAddr && 
-            el->req->packet.sequenceNumber == sequenceNumber) {
-            CDL_DELETE(inFlightRequests, el);
-            free(el->req->packet.payload);
-            free(el->req);
-            free(el);
-            pthread_mutex_unlock(&inFlightRequestsLock);
-            return 0;
-        }
-    }
-
-    pthread_mutex_unlock(&inFlightRequestsLock);
-    return -1;
-}
-
-int cleanOrphanedRequests(in_addr_t clientAddr, int clientId) {
-    pthread_mutex_lock(&inFlightRequestsLock);
-    
-    RequestElementT *el, *tmp1, *tmp2;
-    CDL_FOREACH_SAFE(inFlightRequests, el, tmp1, tmp2) {
-        if (el->req->clientAddr.sin_addr.s_addr == clientAddr && 
-            el->req->packet.clientId != clientId) {
-            CDL_DELETE(inFlightRequests, el);
-            free(el->req->packet.payload);
-            free(el->req);
-            free(el);
-            pthread_mutex_unlock(&inFlightRequestsLock);
-            return 0;
-        }
-    }
-
-    pthread_mutex_unlock(&inFlightRequestsLock);
-    return -1;
-}
-
-RequestT *getInFlightRequest(in_addr_t clientAddr, int sequenceNumber) {
-    pthread_mutex_lock(&inFlightRequestsLock);
-    
-    RequestElementT *el;
-    RequestT* req = NULL;
-
-    CDL_FOREACH(inFlightRequests, el) {
-        if (el->req->clientAddr.sin_addr.s_addr == clientAddr && 
-            el->req->packet.sequenceNumber == sequenceNumber) {
-            req = el->req;
-            break;
-        }
-    }
-
-    pthread_mutex_unlock(&inFlightRequestsLock);
-    return req;
-}
-
-void cleanRequestList(RequestElementT *list) {
-    RequestElementT *el, *tmp1, *tmp2;
-    CDL_FOREACH_SAFE(list,el,tmp1,tmp2) {
-        CDL_DELETE(list,el);
+    CDL_FOREACH_SAFE(list->list,el,tmp1,tmp2) {
+        CDL_DELETE(list->list,el);
         free(el->req->packet.payload);
         free(el->req);
         free(el);
     }
+
+    pthread_mutex_destroy(&list->lock);
+    pthread_cond_destroy(&list->cond);
+    free(list);
+}
+
+AppServiceListT *servicelist_create() {
+    AppServiceListT *list = (AppServiceListT *) malloc(sizeof(AppServiceListT));
+    if (list == NULL)
+        return NULL;
+
+    list->list = NULL;
+    pthread_mutex_init(&list->lock, NULL);
+
+    return list;
+}
+
+void servicelist_destroy(AppServiceListT *list) {
+    AppServiceElementT *el, *tmp1;
+    LL_FOREACH_SAFE(list->list,el,tmp1) {
+        LL_DELETE(list->list,el);
+        reqlist_destroy(el->service.queue);
+        free(el);
+    }
+
+    free(list);
+}
+
+AppServiceT *getService(int serviceId) {
+    pthread_mutex_lock(&serviceRegistry->lock);
+    
+    AppServiceElementT *el;
+    LL_SEARCH_SCALAR(serviceRegistry->list, el, service.id, serviceId);
+    if (!el)
+        return NULL;
+
+    AppServiceT *service = &(el->service);
+
+    pthread_mutex_unlock(&serviceRegistry->lock);
+    return service;
+}
+
+int addToService(RequestT *req) {
+    AppServiceT *service = getService(req->packet.serviceId); 
+    if (service == NULL)
+        return -1;
+
+    pthread_mutex_lock(&service->queue->lock);
+
+    RequestElementT *el = (RequestElementT *) malloc(sizeof(RequestElementT));
+    if (el == NULL) {
+        pthread_mutex_unlock(&service->queue->lock);
+        return -1;
+    }
+
+    el->req = req;
+    CDL_APPEND(service->queue->list, el);
+    pthread_cond_signal(&service->queue->cond);
+
+    pthread_mutex_unlock(&service->queue->lock);
+    return 0;
+}
+
+RequestT *getActiveRequest(in_addr_t clientAddr, int sequenceNumber) {
+    pthread_mutex_lock(&activeRequests->lock);
+    
+    RequestElementT *el;
+    RequestT* req = NULL;
+    
+    CDL_FOREACH(activeRequests->list, el) {
+        if (el->req->clientAddr.sin_addr.s_addr == clientAddr && 
+            el->req->packet.sequenceNumber == sequenceNumber) {
+            req = el->req;
+            break;
+        }
+    }
+
+    pthread_mutex_unlock(&activeRequests->lock);
+    return req;
+}
+
+RequestT *popActiveRequest(int requestId) {
+    pthread_mutex_lock(&activeRequests->lock);
+    
+    RequestElementT *el;
+    RequestT* req = NULL;
+    CDL_SEARCH_SCALAR(activeRequests->list, el, req->id, requestId);
+    if (el) {
+        req = el->req;
+        CDL_DELETE(activeRequests->list, el);
+        free(el);
+    }
+
+    pthread_mutex_unlock(&activeRequests->lock);
+    return req;
+}
+
+int addInFlightRequest(RequestT *req) {
+    pthread_mutex_lock(&inFlightRequests->lock);
+
+    RequestElementT *el = (RequestElementT *) malloc(sizeof(RequestElementT));
+    if (el == NULL) {
+        pthread_mutex_unlock(&inFlightRequests->lock);
+        return -1;
+    }
+
+    el->req = req;
+    CDL_APPEND(inFlightRequests->list, el);
+
+    pthread_mutex_unlock(&inFlightRequests->lock);
+    return 0;
+}
+
+int removeInFlightRequest(in_addr_t clientAddr, int sequenceNumber) {
+    pthread_mutex_lock(&inFlightRequests->lock);
+    
+    RequestElementT *el, *tmp1, *tmp2;
+    CDL_FOREACH_SAFE(inFlightRequests->list, el, tmp1, tmp2) {
+        if (el->req->clientAddr.sin_addr.s_addr == clientAddr && 
+            el->req->packet.sequenceNumber == sequenceNumber) {
+            CDL_DELETE(inFlightRequests->list, el);
+            free(el->req->packet.payload);
+            free(el->req);
+            free(el);
+            pthread_mutex_unlock(&inFlightRequests->lock);
+            return 0;
+        }
+    }
+
+    pthread_mutex_unlock(&inFlightRequests->lock);
+    return -1;
+}
+
+int cleanOrphanedRequests(in_addr_t clientAddr, int clientId) {
+    pthread_mutex_lock(&inFlightRequests->lock);
+    
+    RequestElementT *el, *tmp1, *tmp2;
+    CDL_FOREACH_SAFE(inFlightRequests->list, el, tmp1, tmp2) {
+        if (el->req->clientAddr.sin_addr.s_addr == clientAddr && 
+            el->req->packet.clientId != clientId) {
+            CDL_DELETE(inFlightRequests->list, el);
+            free(el->req->packet.payload);
+            free(el->req);
+            free(el);
+            pthread_mutex_unlock(&inFlightRequests->lock);
+            return 0;
+        }
+    }
+
+    pthread_mutex_unlock(&inFlightRequests->lock);
+    return -1;
+}
+
+RequestT *getInFlightRequest(in_addr_t clientAddr, int sequenceNumber) {
+    pthread_mutex_lock(&inFlightRequests->lock);
+    
+    RequestElementT *el;
+    RequestT* req = NULL;
+
+    CDL_FOREACH(inFlightRequests->list, el) {
+        if (el->req->clientAddr.sin_addr.s_addr == clientAddr && 
+            el->req->packet.sequenceNumber == sequenceNumber) {
+            req = el->req;
+            break;
+        }
+    }
+
+    pthread_mutex_unlock(&inFlightRequests->lock);
+    return req;
 }

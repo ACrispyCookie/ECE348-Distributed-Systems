@@ -39,21 +39,21 @@ void init() {
     }
     port = ntohs(server_addr.sin_port);
 
-    // Initialize mutexes
-    if (pthread_mutex_init(&registryLock, NULL) != 0) {
-        perror("pthread_mutex_init failed");
+    // Initialize lists
+    if ((serviceRegistry = servicelist_create()) == NULL) {
+        perror("servicelist_create failed");
         close(socketFd);
         exit(EXIT_FAILURE);
     }
 
-    if (pthread_mutex_init(&activeRequestsLock, NULL) != 0) {
-        perror("pthread_mutex_init failed");
+    if ((activeRequests = reqlist_create()) == NULL) {
+        perror("reqlist_create failed");
         close(socketFd);
         exit(EXIT_FAILURE);
     }
 
-    if (pthread_mutex_init(&inFlightRequestsLock, NULL) != 0) {
-        perror("pthread_mutex_init failed");
+    if ((inFlightRequests = reqlist_create()) == NULL) {
+        perror("reqlist_create failed");
         close(socketFd);
         exit(EXIT_FAILURE);
     }
@@ -68,75 +68,73 @@ void init() {
 }
 
 int registerService(int serviceId) {
-    pthread_mutex_lock(&registryLock);
+    pthread_mutex_lock(&serviceRegistry->lock);
 
     // Check for existing registry with same ID
-    ServiceRegistryT *el;
-    LL_SEARCH_SCALAR(registry, el, serviceId, serviceId);
+    AppServiceElementT *el;
+    LL_SEARCH_SCALAR(serviceRegistry->list, el, service.id, serviceId);
     if (el) {
-        pthread_mutex_unlock(&registryLock);
+        pthread_mutex_unlock(&serviceRegistry->lock);
         return -1;
     }
 
     // Allocate new node
-    ServiceRegistryT *newNode = (ServiceRegistryT *) malloc(sizeof(ServiceRegistryT));
+    AppServiceElementT *newNode = (AppServiceElementT *) malloc(sizeof(AppServiceElementT));
     if (newNode == NULL) {
-        pthread_mutex_unlock(&registryLock);
+        pthread_mutex_unlock(&serviceRegistry->lock);
         return -1;
     }
     
     // Initialize new node
-    newNode->serviceId = serviceId;
-    newNode->queue = NULL;
-    pthread_mutex_init(&(newNode->queueLock), NULL);
-    pthread_cond_init(&(newNode->queueCond), NULL);
+    newNode->service.id = serviceId;
+    newNode->service.queue = reqlist_create();
+    if (newNode->service.queue == NULL)
+        return -1;
 
-    // Add to the registry
-    LL_PREPEND(registry, newNode);
+    // Add to the service registry
+    LL_PREPEND(serviceRegistry->list, newNode);
 
-    pthread_mutex_unlock(&registryLock);
+    pthread_mutex_unlock(&serviceRegistry->lock);
     return 0;
 }
 
 int unregisterService(int serviceId) {
-    pthread_mutex_lock(&registryLock);
+    pthread_mutex_lock(&serviceRegistry->lock);
 
     // Search and remove the registry
-    ServiceRegistryT *el;
-    LL_SEARCH_SCALAR(registry, el, serviceId, serviceId);
+    AppServiceElementT *el;
+    LL_SEARCH_SCALAR(serviceRegistry->list, el, service.id, serviceId);
     if (el) {
-        LL_DELETE(registry,el);
-        pthread_cond_destroy(&el->queueCond);
-        pthread_mutex_destroy(&el->queueLock);
-        cleanRequestList(el->queue);
+        LL_DELETE(serviceRegistry->list,el);
+        reqlist_destroy(el->service.queue);
         free(el);
-        pthread_mutex_unlock(&registryLock);
+        pthread_mutex_unlock(&serviceRegistry->lock);
         return 0;
     }
 
-    pthread_mutex_unlock(&registryLock);
+    pthread_mutex_unlock(&serviceRegistry->lock);
     return -1;
 }
 
 int getRequest(int serviceId, void *buf, int *len) {
-    ServiceRegistryT *service = getService(serviceId);
+    AppServiceT *service = getService(serviceId);
     if (service == NULL) 
         return -1;
 
-    pthread_mutex_lock(&service->queueLock);
+    pthread_mutex_lock(&service->queue->lock);
     // Wait for a packet to arrive
-    while (service->queue == NULL && !isShuttingDown)
-        pthread_cond_wait(&service->queueCond, &service->queueLock);
+    while (service->queue->list == NULL && !isShuttingDown)
+        pthread_cond_wait(&service->queue->cond, &service->queue->lock);
 
     if (isShuttingDown) {
-        pthread_mutex_unlock(&service->queueLock);
+        pthread_mutex_unlock(&service->queue->lock);
         return -1;
     }
 
     // Remove packet from queue
-    RequestElementT *el = service->queue;
-    CDL_DELETE(service->queue, el);
-    pthread_mutex_unlock(&service->queueLock);
+    RequestElementT *el = service->queue->list;
+    CDL_DELETE(service->queue->list, el);
+    pthread_mutex_unlock(&service->queue->lock);
 
     // Copy to user buffers and free payload
     PacketT *packet = &el->req->packet;
@@ -148,11 +146,11 @@ int getRequest(int serviceId, void *buf, int *len) {
     packet->payloadLength = 0;
 
     // Move packet to active requests
-    pthread_mutex_lock(&activeRequestsLock);
-    CDL_APPEND(activeRequests, el);
-    pthread_mutex_unlock(&activeRequestsLock);
+    pthread_mutex_lock(&activeRequests->lock);
+    CDL_APPEND(activeRequests->list, el);
+    pthread_mutex_unlock(&activeRequests->lock);
 
-    return el->req->requestId;
+    return el->req->id;
 }
 
 void sendReply(int requestId, void *buf, int len) {
@@ -188,19 +186,7 @@ void triggerShutdown() {
 void cleanUp() {
     pthread_join(dispatcherThread, NULL);
 
-    ServiceRegistryT *el, *tmp;
-    LL_FOREACH_SAFE(registry,el,tmp) {
-        LL_DELETE(registry,el);
-        pthread_cond_destroy(&el->queueCond);
-        pthread_mutex_destroy(&el->queueLock);
-        cleanRequestList(el->queue);
-        free(el);
-    }
-
-    cleanRequestList(activeRequests);
-    cleanRequestList(inFlightRequests);
-
-    pthread_mutex_destroy(&registryLock);
-    pthread_mutex_destroy(&activeRequestsLock);
-    pthread_mutex_destroy(&inFlightRequestsLock);
+    servicelist_destroy(serviceRegistry);
+    reqlist_destroy(activeRequests);
+    reqlist_destroy(inFlightRequests);
 }
