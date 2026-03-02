@@ -6,7 +6,7 @@ typedef enum Service {
 } ServiceT;
 
 typedef struct AppRequest {
-    int *numbers;
+    unsigned long long *numbers;
     int count;
 } AppRequestT;
 
@@ -16,7 +16,7 @@ typedef struct AppResponse {
 } AppResponseT;
 
 void *runWorker(void *args);
-int isPrime(int num);
+int isPrime(const unsigned long long num);
 
 AppRequestT *deserializeAppPacket(void *request, int length);
 void *serializeAppPacket(AppResponseT *response, int *length);

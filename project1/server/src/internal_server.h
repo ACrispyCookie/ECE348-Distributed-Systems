@@ -90,8 +90,9 @@ RequestT *getActiveRequest(in_addr_t clientAddr, int sequenceNumber);
 RequestT *popActiveRequest(int requestId);
 
 RequestT *getInFlightRequest(in_addr_t clientAddr, int sequenceNumber);
-int cleanOrphanedRequests(in_addr_t clientAddr, int clientId);
 int removeInFlightRequest(in_addr_t clientAddr, int sequenceNumber);
 int addInFlightRequest(RequestT *req);
+
+int cleanOrphanedRequests(in_addr_t clientAddr, int clientId);
 
 #endif

@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <arpa/inet.h>
+#include <endian.h>
 
 void handleSigInt(int sig) {
     printf("\nShutting down server...\n");
@@ -81,10 +82,10 @@ AppRequestT *deserializeAppPacket(void *request, int length) {
     req->count = ntohl(*(uint32_t *)(buf + offset));
     offset += sizeof(uint32_t);
 
-    req->numbers = (int *) malloc(req->count * sizeof(int));
+    req->numbers = (unsigned long long *) malloc(req->count * sizeof(unsigned long long));
     for (int i = 0; i < req->count; i++) {
-        req->numbers[i] = ntohl(*(uint32_t *)(buf + offset));
-        offset += sizeof(uint32_t);
+        req->numbers[i] = be64toh(*(uint64_t *)(buf + offset));
+        offset += sizeof(uint64_t);
     }
 
     return req;
@@ -110,9 +111,9 @@ void *serializeAppPacket(AppResponseT *response, int *length) {
     return (void *) buffer;
 }
 
-int isPrime(int num) {
+int isPrime(const unsigned long long num) {
     if (num <= 1) return 0;
-    for (int i = 2; i * i <= num; i++) {
+    for (unsigned long long i = 2; i * i <= num; i++) {
         if (num % i == 0)
             return 0;
     }

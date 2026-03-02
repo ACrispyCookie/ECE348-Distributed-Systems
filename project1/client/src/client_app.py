@@ -6,7 +6,7 @@ PRIMALITY_SERVICE = 0
 def serializeRequest(numbers):
     """Packs a list of Python integers into the AppRequestT format."""
     count = len(numbers)
-    fmt = f"!I{count}I" 
+    fmt = f"!I{count}Q" 
     return struct.pack(fmt, count, *numbers)
 
 def deserializeRequest(payload):
@@ -21,22 +21,35 @@ def deserializeRequest(payload):
 
 def main():
     client_api.init("config.txt")
-    
-    numbersToTest = [7, 10, 13, 100, 997]
-    print(f"[APP] Asking server to check: {numbersToTest}")
 
-    payload = serializeRequest(numbersToTest)    
     try:
-        responsePayload = client_api.doRequestReply(PRIMALITY_SERVICE, payload)
-        results = deserializeRequest(responsePayload)
-        
-        print("\n--- Results ---")
-        for num, isPrime in zip(numbersToTest, results):
-            status = "Prime" if isPrime else "Not Prime"
-            print(f"{num:4} : {status}")
+        while True:
+            user_input = input("\nEnter numbers to test (comma-separated) or 'q' to quit: ").strip()
             
-    except TimeoutError as e:
-        print(f"[APP] Failed: {e}")
+            if user_input.lower() == 'q':
+                print("Exiting client...")
+                break
+            if not user_input:
+                continue
+                
+            try:
+                numbersToTest = [int(x.strip()) for x in user_input.split(',')]
+            except ValueError:
+                print("[APP] Invalid input! Please enter only integers separated by commas.")
+                continue
+            print(f"[APP] Asking server to check: {numbersToTest}")
+            payload = serializeRequest(numbersToTest)    
+            
+            try:
+                responsePayload = client_api.doRequestReply(PRIMALITY_SERVICE, payload)
+                results = deserializeRequest(responsePayload)
+                
+                print("--- Results ---")
+                for num, isPrime in zip(numbersToTest, results):
+                    status = "Prime" if isPrime else "Not Prime"
+                    print(f"{num:4} : {status}")        
+            except TimeoutError as e:
+                print(f"[APP] Network Request Failed: {e}")
     finally:
         client_api.cleanUp()
 

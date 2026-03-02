@@ -2,6 +2,7 @@ import socket
 import struct
 from enum import Enum
 
+DEBUG = False
 MEMORY_FILE = "memory.txt"
 
 TIMEOUT_SECONDS = 10.0
@@ -31,7 +32,8 @@ def init(config_filename="config.txt"):
             port = int(f.readline().strip())
             serverAddress = (ip, port)
     except FileNotFoundError:
-        print(f"Error: Could not find {config_filename}")
+        if DEBUG:
+            print(f"[API] Error: Could not find {config_filename}")
         exit(1)
         
     # Read persistent memory for incarnation number
@@ -48,7 +50,8 @@ def init(config_filename="config.txt"):
     # Create the UDP socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     
-    print(f"[API] Initialized. Client ID: {clientId}, Server: {serverAddress}")
+    if DEBUG:
+        print(f"[API] Initialized. Client ID: {clientId}, Server: {serverAddress}")
 
 def doRequestReply(serviceId, payload):
     """
@@ -71,7 +74,7 @@ def doRequestReply(serviceId, payload):
             sock.sendto(packet, serverAddress)
             sock.settimeout(TIMEOUT_SECONDS)
             
-            response_data, _ = sock.recvfrom(MAX_BUFFER_SIZE) 
+            response_data, server = sock.recvfrom(MAX_BUFFER_SIZE)
             
             resp_header = response_data[:20]
             r_type, r_client_id, r_service_id, r_seq_num, r_len = struct.unpack("!IIIII", resp_header)
@@ -84,10 +87,11 @@ def doRequestReply(serviceId, payload):
                 
                 sequenceNumber += 1 
 
-                return response_data[20:]
+            return response_data[20:]
                 
         except socket.timeout:
-            print(f"[API] Timeout on attempt {attempt + 1}. Retrying...")
+            if DEBUG:
+                print(f"[API] Timeout on attempt {attempt + 1}. Retrying...")
             continue
             
     raise TimeoutError("Server is unresponsive after maximum retries.")
