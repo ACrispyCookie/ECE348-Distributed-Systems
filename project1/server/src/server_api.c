@@ -13,6 +13,7 @@ void init() {
     struct sockaddr_in server_addr;
     socklen_t len = sizeof(server_addr);
     memset(&server_addr, 0, sizeof(server_addr)); // TODO figure out if this is needed
+    srand(time(NULL));
     
     socketFd = socket(AF_INET, SOCK_DGRAM, 0);
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -65,6 +66,9 @@ void init() {
     }
 
     printf("Started server at %s:%d\n", ip, port);
+#ifdef DEBUG
+    printf("Virtual packet loss: REQ=%d, REP=%d\n", REQUEST_LOSS, REPLY_LOSS);
+#endif
 }
 
 int registerService(int serviceId) {
@@ -171,6 +175,14 @@ void sendReply(int requestId, void *buf, int len) {
         return;
     }
     
+#ifdef DEBUG
+    if (checkChance(REPLY_LOSS)) {
+        printf("\n!!! Randomly dropped reply!\n");
+        free(req);
+        return;
+    }
+#endif
+
     int serializedLength;
     void *serialized = serializePacket(packet, &serializedLength);
     sendto(socketFd, serialized, serializedLength, 0, (struct sockaddr *) &req->clientAddr, req->clientAddrLen);

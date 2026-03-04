@@ -2,10 +2,10 @@ import socket
 import struct
 from enum import Enum
 
-DEBUG = False
+DEBUG = True
 MEMORY_FILE = "memory.txt"
 
-TIMEOUT_SECONDS = 10.0
+TIMEOUT_SECONDS = 2.0
 MAX_RETRIES = 5
 
 MAX_PAYLOAD_LENGTH = 4096
@@ -22,7 +22,6 @@ clientId = 1
 sequenceNumber = 1
 
 def init(config_filename="config.txt"):
-    """Reads the config, sets up the socket, and generates the new Client ID."""
     global sock, serverAddress, clientId
     
     # Read the config file for the server address and port
@@ -36,7 +35,7 @@ def init(config_filename="config.txt"):
             print(f"[API] Error: Could not find {config_filename}")
         exit(1)
         
-    # Read persistent memory for incarnation number
+    # Read persistent memory for incarnation number and client port
     try:
         with open(MEMORY_FILE, 'r') as f:
             clientId = int(f.readline().strip()) + 1
@@ -47,16 +46,12 @@ def init(config_filename="config.txt"):
         f.write(str(clientId))
         f.close()
     
-    # Create the UDP socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     
     if DEBUG:
         print(f"[API] Initialized. Client ID: {clientId}, Server: {serverAddress}")
 
 def doRequestReply(serviceId, payload):
-    """
-    Sends a payload, handles timeouts/retries, and returns the reply payload.
-    """
     global sequenceNumber, clientId
     
     # Serialize packet

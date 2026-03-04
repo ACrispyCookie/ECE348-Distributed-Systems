@@ -29,6 +29,15 @@ void *runDispatcherThread(void *args) {
             free(req);
             break;
         }
+
+#ifdef DEBUG
+        if (checkChance(REQUEST_LOSS)) {
+            printf("!!! Randomly dropped request!\n");
+            printf("-----------------------\n");
+            free(req);
+            continue;
+        }
+#endif
     
         PacketT *packet = &req->packet;
         deserializePacket(buf, packet);
@@ -46,7 +55,7 @@ void *runDispatcherThread(void *args) {
         printf("\n");
 #endif
 
-        cleanOrphanedRequests(req->clientAddr.sin_addr.s_addr, packet->clientId);
+        // cleanOrphanedRequests(req->clientAddr.sin_addr.s_addr, packet->clientId);
 
         // Remove previous cached response and continue if request was just an ACK
         if (packet->type == ACKNOWLEDGE) {
@@ -189,6 +198,10 @@ void deserializePacket(void *buffer, PacketT *packet) {
 
 int getNextRequestId() {
     return nextReqId++;
+}
+
+int checkChance(int chance) {
+    return (rand() % 100) < chance;
 }
 
 RequestListT *reqlist_create() {

@@ -4,6 +4,10 @@
 #include <pthread.h>
 #include <arpa/inet.h>
 
+// Percentage of virtual packet loss
+#define REQUEST_LOSS 50
+#define REPLY_LOSS 100
+
 #define MAX_BUFFER_SIZE (5 * sizeof(uint32_t) + MAX_PAYLOAD_SIZE)
 
 typedef enum Message {
@@ -74,6 +78,7 @@ void *runDispatcherThread(void *args);
 void *serializePacket(PacketT *packet, int *length);
 void deserializePacket(void *buffer, PacketT *packet);
 int getNextRequestId();
+int checkChance(int chance);
 
 // RequestT list functions
 RequestListT *reqlist_create();
