@@ -178,7 +178,6 @@ void sendReply(int requestId, void *buf, int len) {
 #ifdef DEBUG
     if (checkChance(REPLY_LOSS)) {
         printf("\n!!! Randomly dropped reply!\n");
-        free(req);
         return;
     }
 #endif

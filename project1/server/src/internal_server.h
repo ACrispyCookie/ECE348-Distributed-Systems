@@ -5,21 +5,29 @@
 #include <arpa/inet.h>
 
 // Percentage of virtual packet loss
-#define REQUEST_LOSS 50
-#define REPLY_LOSS 100
+#define REQUEST_LOSS 0
+#define REPLY_LOSS 0
 
 #define MAX_BUFFER_SIZE (5 * sizeof(uint32_t) + MAX_PAYLOAD_SIZE)
 
+typedef enum ID {
+    CLIENT,
+    REQ
+} IdentifierT;
+
 typedef enum Message {
+    DISCOVER,
+    HANDSHAKE,
     REQUEST,
     REPLY,
-    ACKNOWLEDGE
+    ACKNOWLEDGE,
+    CANCEL
 } MessageT;
 
 typedef struct Packet {
     MessageT type;
-    int clientId;
-    int serviceId;
+    unsigned int clientId;
+    unsigned int serviceId;
     unsigned int sequenceNumber;
     unsigned int payloadLength;
     void *payload;
@@ -28,7 +36,7 @@ typedef struct Packet {
 typedef struct Request {
     PacketT packet;
 
-    int id;
+    unsigned int id;
     struct sockaddr_in clientAddr;
     socklen_t clientAddrLen;
 } RequestT;
@@ -45,7 +53,7 @@ typedef struct RequestList {
 } RequestListT;
 
 typedef struct AppService {
-    int id;
+    unsigned int id;
     RequestListT *queue;
 } AppServiceT;
 
@@ -64,7 +72,7 @@ extern int port;
 extern int socketFd;
 
 extern int isShuttingDown;
-extern int nextReqId;
+extern int nextReqId, nextClientId;
 extern pthread_t dispatcherThread;
 
 // Linked list for all services
@@ -77,8 +85,6 @@ extern RequestListT *inFlightRequests;
 void *runDispatcherThread(void *args);
 void *serializePacket(PacketT *packet, int *length);
 void deserializePacket(void *buffer, PacketT *packet);
-int getNextRequestId();
-int checkChance(int chance);
 
 // RequestT list functions
 RequestListT *reqlist_create();
@@ -88,16 +94,19 @@ void reqlist_destroy(RequestListT *list);
 AppServiceListT *servicelist_create();
 void servicelist_destroy(AppServiceListT *list);
 
-AppServiceT *getService(int serviceId);
+AppServiceT *getService(unsigned int serviceId);
 int addToService(RequestT *req);
 
-RequestT *getActiveRequest(in_addr_t clientAddr, int sequenceNumber);
-RequestT *popActiveRequest(int requestId);
+RequestT *getActiveRequest(unsigned int clientId, unsigned int sequenceNumber);
+RequestT *popActiveRequest(unsigned int requestId);
 
-RequestT *getInFlightRequest(in_addr_t clientAddr, int sequenceNumber);
-int removeInFlightRequest(in_addr_t clientAddr, int sequenceNumber);
+RequestT *getInFlightRequest(unsigned int clientId, unsigned int sequenceNumber);
 int addInFlightRequest(RequestT *req);
 
-int cleanOrphanedRequests(in_addr_t clientAddr, int clientId);
+int cleanAckedRequests(unsigned int clientId, unsigned int sequenceNumber);
+int cleanOrphanedRequests(unsigned int clientId);
+
+int generateId(IdentifierT type);
+int checkChance(int chance);
 
 #endif
