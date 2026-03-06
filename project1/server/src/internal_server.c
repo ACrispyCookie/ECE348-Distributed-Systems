@@ -1,22 +1,24 @@
 #include "internal_server.h"
+#include "utilities.h"
 #include "utlist.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 
 char ip[INET_ADDRSTRLEN];
-int port;
-int socketFd;
+int port, discoveryPort;
+int mainSocket, discoverySocket;
 
 int isShuttingDown = 0;
-int nextReqId = 0, nextClientId = 0;
-pthread_t dispatcherThread;
+int nextReqId = 0, nextClientId;
+pthread_t receiverThread, senderThread, discoveryThread;
 
 AppServiceListT *serviceRegistry;
 RequestListT *activeRequests;
-RequestListT *inFlightRequests;
+RequestListT *cachedRequests;
+RequestListT *replies;
 
-void *runDispatcherThread(void *args) {
+void *runReceivingThread(void *args) {
     while (1) {
         RequestT *req = malloc(sizeof(RequestT));
         req->clientAddrLen = sizeof(req->clientAddr);
@@ -25,11 +27,10 @@ void *runDispatcherThread(void *args) {
         printf("\n-----------------------\n");
         printf("Waiting for a packet...\n");
 #endif
-        if(recvfrom(socketFd, buf, MAX_BUFFER_SIZE, 0, (struct sockaddr *) &req->clientAddr, &req->clientAddrLen) <= 0) {
+        if(recvfrom(mainSocket, buf, MAX_BUFFER_SIZE, 0, (struct sockaddr *) &req->clientAddr, &req->clientAddrLen) <= 0) {
             free(req);
             break;
         }
-
 #ifdef DEBUG
         if (checkChance(REQUEST_LOSS)) {
             printf("!!! Randomly dropped request!\n");
@@ -38,11 +39,10 @@ void *runDispatcherThread(void *args) {
             continue;
         }
 #endif
-    
-        PacketT *packet = &req->packet;
-        deserializePacket(buf, packet);
 
+        deserializePacket(buf, &req->packet);
 #ifdef DEBUG
+        PacketT *packet = &req->packet;
         char clientIp[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &(req->clientAddr.sin_addr), clientIp, INET_ADDRSTRLEN);
         int clientPort = ntohs(req->clientAddr.sin_port);
@@ -55,69 +55,29 @@ void *runDispatcherThread(void *args) {
         printf("\n");
 #endif
 
-        cleanOrphanedRequests(packet->clientId);
-
-        // Remove previous cached response and continue if request was just an ACK
-        if (packet->type == ACKNOWLEDGE) {
-#ifdef DEBUG
-        printf("Was ACK so removing current from cache...\n");
-        printf("-----------------------\n");
-#endif
-            cleanAckedRequests(packet->clientId, packet->sequenceNumber);
-            free(packet->payload);
-            free(req);
-            continue;
-        }
-
-        // Invalid request
-        if (packet->type == REPLY) {
+        int clean = 0;
+        switch (req->packet.type) {
+            case REQUEST:
+                clean = receiveRequest(req);
+                break;
+            case ACKNOWLEDGE:
+                clean = receiveAck(req);
+                break;
+            case CANCEL:
+                clean = receiveCancel(req);
+                break;
+            default: { // Invalid request
 #ifdef DEBUG
         printf("Invalid request...\n");
         printf("-----------------------\n");
 #endif
-            free(packet->payload);
-            free(req);
-            continue;
+                clean = 1;
+                break;
+            }
         }
 
-        // Duplicate currently in process
-        RequestT *active = getActiveRequest(packet->clientId, packet->sequenceNumber);
-        if (active != NULL) {
-#ifdef DEBUG
-        printf("Request was active so dropping...\n");
-        printf("-----------------------\n");
-#endif
-            free(packet->payload);
-            free(req);
-            continue;
-        }
-
-        // Duplicate with cached response
-        RequestT *cached = getInFlightRequest(packet->clientId, packet->sequenceNumber);
-        if (cached != NULL) {
-            int serializedLength;
-            void *serialized = serializePacket(&cached->packet, &serializedLength);
-            sendto(socketFd, serialized, serializedLength, 0, (struct sockaddr *) &req->clientAddr, req->clientAddrLen);
-            free(packet->payload);
-            free(req);
-            free(serialized);
-#ifdef DEBUG
-        printf("Reply was cached...\n");
-        printf("-----------------------\n");
-#endif
-            continue;
-        }
-
-#ifdef DEBUG
-        printf("Creating new request...\n");
-        printf("-----------------------\n");
-#endif
-        cleanAckedRequests(packet->clientId, packet->sequenceNumber - 1);
-
-        // New request
-        req->id = generateId(REQ);
-        if (addToService(req) == -1) {
-            free(packet->payload);
+        if (clean) {
+            free(req->packet.payload);
             free(req);
         }
     }
@@ -126,11 +86,172 @@ void *runDispatcherThread(void *args) {
     pthread_mutex_lock(&serviceRegistry->lock);
     AppServiceElementT *el;
     LL_FOREACH(serviceRegistry->list, el) {
-        pthread_mutex_lock(&el->service.queue->lock);
-        pthread_cond_broadcast(&el->service.queue->cond);
-        pthread_mutex_unlock(&el->service.queue->lock);
+        pthread_mutex_lock(&el->service->queue->lock);
+        pthread_cond_broadcast(&el->service->queue->cond);
+        pthread_mutex_unlock(&el->service->queue->lock);
     }
     pthread_mutex_unlock(&serviceRegistry->lock);
+
+    return NULL;
+}
+
+int receiveRequest(RequestT *req) {
+    // Request is a handshake
+    if (req->packet.clientId == 0) 
+        return receiveHandshake(req);
+
+    // Duplicate already acknowledged
+    if (reqlist_containsNewer(cachedRequests, req)){
+#ifdef DEBUG
+    printf("Request was duplicate and older...\n");
+    printf("-----------------------\n");
+#endif
+        return 1;
+    }
+
+    // Duplicate currently in process
+    if (servicelist_containsReq(serviceRegistry, req) || reqlist_contains(activeRequests, req, NULL)) {
+#ifdef DEBUG
+    printf("Request was active so dropping...\n");
+    printf("-----------------------\n");
+#endif
+        return 1;
+    }
+
+    // Duplicate already processed
+    RequestT *cached;
+    int success = reqlist_contains(cachedRequests, req, &cached);
+    if (success) {
+#ifdef DEBUG
+    printf("Reply was cached, resending...\n");
+    printf("-----------------------\n");
+#endif
+        if (cached->packet.type == REPLY || cached->packet.type == EXPIRED)
+            reqlist_add(replies, cached);
+        return 1;
+    }
+
+#ifdef DEBUG
+    printf("Creating new request...\n");
+    printf("-----------------------\n");
+#endif
+    reqlist_update(cachedRequests, req, &req->packet, 1);
+    updateMemory(cachedRequests);
+
+    // New request
+    req->id = generateId(REQ);
+    if (servicelist_addReq(serviceRegistry, req) == -1)
+        return 1;
+    return 0;
+}
+
+int receiveHandshake(RequestT *req) {
+#ifdef DEBUG
+        printf("Was handshake so generating new ID...\n");
+        printf("-----------------------\n");
+#endif
+
+    req->packet.clientId = generateId(CLIENT);
+    reqlist_add(replies, req);
+    reqlist_add(cachedRequests, deepCopy(req));
+    updateMemory(cachedRequests);
+
+    return 0;
+}
+
+int receiveAck(RequestT *req) {
+#ifdef DEBUG
+        printf("Was ACK so checking cached...\n");
+        printf("-----------------------\n");
+#endif
+
+    reqlist_update(cachedRequests, req, &req->packet, 1);
+    updateMemory(cachedRequests);
+
+    return 1;
+}
+
+int receiveCancel(RequestT *req) {
+#ifdef DEBUG
+        printf("Was ACK so removing current from cache...\n");
+        printf("-----------------------\n");
+#endif
+    RequestT *existing = servicelist_popReq(serviceRegistry, req);
+    if (existing) {
+        free(existing->packet.payload);
+        free(existing);
+
+        req->packet.type = REPLY;
+        reqlist_add(replies, req);
+        return 0;
+    }
+
+    int error = reqlist_remove(activeRequests, req);
+    if (!error) {
+        req->packet.type = REPLY;
+        reqlist_add(replies, req);
+        return 0;
+    }
+
+    reqlist_update(cachedRequests, req, &req->packet, 1);
+    updateMemory(cachedRequests);
+    req->packet.type = REPLY;
+    reqlist_add(replies, req);
+
+    return 0;
+}
+
+void *runSenderThread(void *args) {
+    while (1) {
+        pthread_mutex_lock(&replies->lock);
+        while (replies->list == NULL && !isShuttingDown)
+            pthread_cond_wait(&replies->cond, &replies->lock);
+
+        if (isShuttingDown) {
+            pthread_mutex_unlock(&replies->lock);
+            break;
+        }
+
+        RequestElementT *el = replies->list;
+        CDL_DELETE(replies->list, el);
+        pthread_mutex_unlock(&replies->lock);
+
+        RequestT *req = el->req;
+        free(el);
+#ifdef DEBUG
+        if (checkChance(REPLY_LOSS)) {
+            printf("\n!!! Randomly dropped reply!\n");
+            continue;
+        }
+#endif
+
+        int serializedLength;
+        void *serialized = serializePacket(&req->packet, &serializedLength);
+        sendto(mainSocket, serialized, serializedLength, 0, (struct sockaddr *) &req->clientAddr, req->clientAddrLen);
+        free(serialized);
+    }
+
+    return NULL;
+}
+
+void *runDiscoveryThread(void *args) {
+    while (1) {
+        char buf[MAX_BUFFER_SIZE];
+        struct sockaddr_in clientAddr;
+        socklen_t clientAddrLen = sizeof(clientAddr);
+        if(recvfrom(discoverySocket, buf, MAX_BUFFER_SIZE, 0, (struct sockaddr *) &clientAddr, &clientAddrLen) <= 0)
+            break;
+
+        if (strcmp(buf, "DISCOVER") != 0)
+            continue;
+        
+        char *reply = "DISCOVER_RPL";
+        strcpy(buf, reply);
+        memcpy(buf + strlen(reply) + 1, &port, sizeof(int));
+        
+        int size = strlen(reply) + 1 + sizeof(int);
+        sendto(discoverySocket, buf, size, 0, (struct sockaddr *) &clientAddr, clientAddrLen);
+    }
 
     return NULL;
 }
@@ -196,210 +317,16 @@ void deserializePacket(void *buffer, PacketT *packet) {
     }
 }
 
-int generateId(IdentifierT type) {
-    switch (type) {
-    case 0:
-        return nextReqId++;
-    case 1:
-        return nextClientId++;
-    default:
-        return -1;
-    }
-}
-
-int checkChance(int chance) {
-    return (rand() % 100) < chance;
-}
-
-RequestListT *reqlist_create() {
-    RequestListT *list = (RequestListT *) malloc(sizeof(RequestListT));
-    if (list == NULL)
+RequestT *deepCopy(RequestT *req) {
+    RequestT *copy = malloc(sizeof(RequestT));
+    if (!copy)
         return NULL;
-
-    list->list = NULL;
-    pthread_mutex_init(&list->lock, NULL);
-    pthread_cond_init(&list->cond, NULL);
-
-    return list;
-}
-
-void reqlist_destroy(RequestListT *list) {
-    RequestElementT *el, *tmp1, *tmp2;
-    CDL_FOREACH_SAFE(list->list,el,tmp1,tmp2) {
-        CDL_DELETE(list->list,el);
-        free(el->req->packet.payload);
-        free(el->req);
-        free(el);
-    }
-
-    pthread_mutex_destroy(&list->lock);
-    pthread_cond_destroy(&list->cond);
-    free(list);
-}
-
-AppServiceListT *servicelist_create() {
-    AppServiceListT *list = (AppServiceListT *) malloc(sizeof(AppServiceListT));
-    if (list == NULL)
-        return NULL;
-
-    list->list = NULL;
-    pthread_mutex_init(&list->lock, NULL);
-
-    return list;
-}
-
-void servicelist_destroy(AppServiceListT *list) {
-    AppServiceElementT *el, *tmp1;
-    LL_FOREACH_SAFE(list->list,el,tmp1) {
-        LL_DELETE(list->list,el);
-        reqlist_destroy(el->service.queue);
-        free(el);
-    }
-
-    pthread_mutex_destroy(&list->lock);
-    free(list);
-}
-
-AppServiceT *getService(unsigned int serviceId) {
-    pthread_mutex_lock(&serviceRegistry->lock);
     
-    AppServiceElementT *el;
-    LL_SEARCH_SCALAR(serviceRegistry->list, el, service.id, serviceId);
-    if (!el) {
-        pthread_mutex_unlock(&serviceRegistry->lock);
-        return NULL;
+    *copy = *req;
+    if (copy->packet.payloadLength > 0) {
+        copy->packet.payload = malloc(copy->packet.payloadLength);
+        memcpy(copy->packet.payload, req->packet.payload, req->packet.payloadLength);
     }
 
-    AppServiceT *service = &(el->service);
-
-    pthread_mutex_unlock(&serviceRegistry->lock);
-    return service;
-}
-
-int addToService(RequestT *req) {
-    AppServiceT *service = getService(req->packet.serviceId); 
-    if (service == NULL)
-        return -1;
-
-    pthread_mutex_lock(&service->queue->lock);
-
-    RequestElementT *el = (RequestElementT *) malloc(sizeof(RequestElementT));
-    if (el == NULL) {
-        pthread_mutex_unlock(&service->queue->lock);
-        return -1;
-    }
-
-    el->req = req;
-    CDL_APPEND(service->queue->list, el);
-    pthread_cond_signal(&service->queue->cond);
-
-    pthread_mutex_unlock(&service->queue->lock);
-    return 0;
-}
-
-RequestT *getActiveRequest(unsigned int clientId, unsigned int sequenceNumber) {
-    pthread_mutex_lock(&activeRequests->lock);
-    
-    RequestElementT *el;
-    RequestT* req = NULL;
-    
-    CDL_FOREACH(activeRequests->list, el) {
-        if (el->req->packet.clientId == clientId && 
-            el->req->packet.sequenceNumber == sequenceNumber) {
-            req = el->req;
-            break;
-        }
-    }
-
-    pthread_mutex_unlock(&activeRequests->lock);
-    return req;
-}
-
-RequestT *popActiveRequest(unsigned int requestId) {
-    pthread_mutex_lock(&activeRequests->lock);
-    
-    RequestElementT *el;
-    RequestT* req = NULL;
-    CDL_SEARCH_SCALAR(activeRequests->list, el, req->id, requestId);
-    if (el) {
-        req = el->req;
-        CDL_DELETE(activeRequests->list, el);
-        free(el);
-    }
-
-    pthread_mutex_unlock(&activeRequests->lock);
-    return req;
-}
-
-int addInFlightRequest(RequestT *req) {
-    pthread_mutex_lock(&inFlightRequests->lock);
-
-    RequestElementT *el = (RequestElementT *) malloc(sizeof(RequestElementT));
-    if (el == NULL) {
-        pthread_mutex_unlock(&inFlightRequests->lock);
-        return -1;
-    }
-
-    el->req = req;
-    CDL_APPEND(inFlightRequests->list, el);
-
-    pthread_mutex_unlock(&inFlightRequests->lock);
-    return 0;
-}
-
-RequestT *getInFlightRequest(unsigned int clientId, unsigned int sequenceNumber) {
-    pthread_mutex_lock(&inFlightRequests->lock);
-    
-    RequestElementT *el;
-    RequestT* req = NULL;
-
-    CDL_FOREACH(inFlightRequests->list, el) {
-        if (el->req->packet.clientId == clientId && 
-            el->req->packet.sequenceNumber == sequenceNumber) {
-            req = el->req;
-            break;
-        }
-    }
-
-    pthread_mutex_unlock(&inFlightRequests->lock);
-    return req;
-}
-
-int cleanAckedRequests(unsigned int clientId, unsigned int sequenceNumber) {
-    pthread_mutex_lock(&inFlightRequests->lock);
-    
-    RequestElementT *el, *tmp1, *tmp2;
-    CDL_FOREACH_SAFE(inFlightRequests->list, el, tmp1, tmp2) {
-        if (el->req->packet.clientId == clientId && 
-            el->req->packet.sequenceNumber <= sequenceNumber) {
-            CDL_DELETE(inFlightRequests->list, el);
-            free(el->req->packet.payload);
-            free(el->req);
-            free(el);
-            pthread_mutex_unlock(&inFlightRequests->lock);
-            return 0;
-        }
-    }
-
-    pthread_mutex_unlock(&inFlightRequests->lock);
-    return -1;
-}
-
-int cleanOrphanedRequests(unsigned int clientId) {
-    pthread_mutex_lock(&inFlightRequests->lock);
-    
-    RequestElementT *el, *tmp1, *tmp2;
-    CDL_FOREACH_SAFE(inFlightRequests->list, el, tmp1, tmp2) {
-        if (el->req->packet.clientId != clientId) {
-            CDL_DELETE(inFlightRequests->list, el);
-            free(el->req->packet.payload);
-            free(el->req);
-            free(el);
-            pthread_mutex_unlock(&inFlightRequests->lock);
-            return 0;
-        }
-    }
-
-    pthread_mutex_unlock(&inFlightRequests->lock);
-    return -1;
+    return copy;
 }

@@ -1,6 +1,7 @@
 #ifndef INTERNAL_SERVER_H
 #define INTERNAL_SERVER_H
 #include "server_api.h"
+#include <stdatomic.h>
 #include <pthread.h>
 #include <arpa/inet.h>
 
@@ -8,6 +9,7 @@
 #define REQUEST_LOSS 0
 #define REPLY_LOSS 0
 
+#define MEMORY_FILE "memory.txt"
 #define MAX_BUFFER_SIZE (5 * sizeof(uint32_t) + MAX_PAYLOAD_SIZE)
 
 typedef enum ID {
@@ -16,10 +18,9 @@ typedef enum ID {
 } IdentifierT;
 
 typedef enum Message {
-    DISCOVER,
-    HANDSHAKE,
     REQUEST,
     REPLY,
+    EXPIRED,
     ACKNOWLEDGE,
     CANCEL
 } MessageT;
@@ -54,11 +55,13 @@ typedef struct RequestList {
 
 typedef struct AppService {
     unsigned int id;
+    unsigned int refCount;
+    unsigned int destroyed;
     RequestListT *queue;
 } AppServiceT;
 
 typedef struct AppServiceElement {
-    AppServiceT service;
+    AppServiceT *service;
     struct AppServiceElement *next;
 } AppServiceElementT;
 
@@ -68,45 +71,38 @@ typedef struct AppServiceList {
 } AppServiceListT;
 
 extern char ip[INET_ADDRSTRLEN];
-extern int port;
-extern int socketFd;
+extern int port, discoveryPort;
+extern int mainSocket, discoverySocket;
 
 extern int isShuttingDown;
 extern int nextReqId, nextClientId;
-extern pthread_t dispatcherThread;
+extern pthread_t receiverThread, senderThread, discoveryThread;
 
 // Linked list for all services
 extern AppServiceListT *serviceRegistry;
 // Linked list for requests currently being processed
 extern RequestListT *activeRequests;
 // Linked list for requests already sent but not ack'ed
-extern RequestListT *inFlightRequests;
+extern RequestListT *cachedRequests;
+// Linked list for all replies
+extern RequestListT *replies;
 
-void *runDispatcherThread(void *args);
+// Handlers for receiver thread
+void *runReceivingThread(void *args);
+int receiveHandshake(RequestT *req);
+int receiveRequest(RequestT *req);
+int receiveAck(RequestT *req);
+int receiveCancel(RequestT *req);
+
+// Handlers for sender thread
+void *runSenderThread(void *args);
+
+// Handlers for discovery thread
+void *runDiscoveryThread(void *args);
+
+// Serialization functions
 void *serializePacket(PacketT *packet, int *length);
 void deserializePacket(void *buffer, PacketT *packet);
-
-// RequestT list functions
-RequestListT *reqlist_create();
-void reqlist_destroy(RequestListT *list);
-
-// AppServiceT list functions
-AppServiceListT *servicelist_create();
-void servicelist_destroy(AppServiceListT *list);
-
-AppServiceT *getService(unsigned int serviceId);
-int addToService(RequestT *req);
-
-RequestT *getActiveRequest(unsigned int clientId, unsigned int sequenceNumber);
-RequestT *popActiveRequest(unsigned int requestId);
-
-RequestT *getInFlightRequest(unsigned int clientId, unsigned int sequenceNumber);
-int addInFlightRequest(RequestT *req);
-
-int cleanAckedRequests(unsigned int clientId, unsigned int sequenceNumber);
-int cleanOrphanedRequests(unsigned int clientId);
-
-int generateId(IdentifierT type);
-int checkChance(int chance);
+RequestT *deepCopy(RequestT *req);
 
 #endif

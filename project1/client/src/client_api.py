@@ -17,7 +17,7 @@ MAX_BUFFER_SIZE = MAX_PAYLOAD_LENGTH + 5 * 4
 class MessageType(Enum):
     REQUEST = 0
     REPLY = 1
-    REPLY_EXPIRED = 2
+    EXPIRED = 2
     ACKNOWLEDGE = 3
     CANCEL = 4
 
@@ -190,7 +190,7 @@ def tryRequest(request: ClientRequest, check_id, send_ack, track_cancel) -> Opti
                 
                 # Check if this is exactly the reply we are waiting for
                 if r_seq_num == server.sequence_number and (not check_id or r_client_id == server.client_id):
-                    if r_type == MessageType.REPLY_EXPIRED.value:
+                    if r_type == MessageType.EXPIRED.value:
                         if track_cancel:
                             server.cancellable = False
                             updateMemory()
