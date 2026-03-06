@@ -1,12 +1,15 @@
 import socket
 import struct
 from enum import Enum
+from dataclasses import dataclass
+from typing import Optional
 
 DEBUG = True
-MEMORY_FILE = "memory.txt"
-
 TIMEOUT_SECONDS = 2.0
 MAX_RETRIES = 5
+
+DISCOVERY_PORT = 12345
+DISCOVERY_TIMEOUT = 2.0
 
 MAX_PAYLOAD_LENGTH = 4096
 MAX_BUFFER_SIZE = MAX_PAYLOAD_LENGTH + 5 * 4
@@ -14,82 +17,216 @@ MAX_BUFFER_SIZE = MAX_PAYLOAD_LENGTH + 5 * 4
 class MessageType(Enum):
     REQUEST = 0
     REPLY = 1
-    ACKNOWLEDGE = 2
+    REPLY_EXPIRED = 2
+    ACKNOWLEDGE = 3
+    CANCEL = 4
+
+@dataclass
+class ServerEntry:
+    cancellable: bool
+    address: tuple
+    client_id: int
+    sequence_number: int
+
+@dataclass
+class ClientRequest:
+    server: ServerEntry
+    message_type: MessageType
+    service_id: int
+    payload: bytes
+
+@dataclass
+class ServerResponse:
+    message_type: int
+    client_id: int
+    service_id: int
+    length: int
+    payload: bytes
 
 sock = None
-serverAddress = None
-clientId = 1
-sequenceNumber = 1
+servers: list[ServerEntry] = []
+memory_file = None
 
 def init(config_filename="config.txt"):
-    global sock, serverAddress, clientId
+    global servers, sock, memory_file
+
+    memory_file = config_filename
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     
     # Read the config file for the server address and port
     try:
-        with open(config_filename, 'r') as f:
-            ip = f.readline().strip()
-            port = int(f.readline().strip())
-            serverAddress = (ip, port)
+        with open(memory_file, 'r') as file:
+            for line in file:
+                parts = line.strip().split()
+                
+                if not parts:
+                    continue
+
+                if len(parts) == 5:
+                    entry = ServerEntry(
+                        cancellable=(parts[0] == 'C'),
+                        address=(parts[1], int(parts[2])),
+                        client_id=int(parts[3]),
+                        sequence_number=int(parts[4])
+                    )
+
+                servers.append(entry)
     except FileNotFoundError:
-        if DEBUG:
-            print(f"[API] Error: Could not find {config_filename}")
-        exit(1)
-        
-    # Read persistent memory for incarnation number and client port
-    try:
-        with open(MEMORY_FILE, 'r') as f:
-            clientId = int(f.readline().strip()) + 1
-        with open(MEMORY_FILE, 'w') as f:
-            f.write(str(clientId))
-    except FileNotFoundError:
-        f = open(MEMORY_FILE, 'a')
-        f.write(str(clientId))
-        f.close()
+        print(f"[API] Error: Could not find {memory_file}")
+        return None
     
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    if len(servers) == 0:
+        if doDiscovery() == None:
+            print(f"[Discovery] Error: Could not communicate with server")
+            return None
+    
+    
+    for server in servers:
+        if(initializeConnection(server) == None):
+            print(f"[API] Error: Could not initialize server connections")
+            return None
     
     if DEBUG:
-        print(f"[API] Initialized. Client ID: {clientId}, Server: {serverAddress}")
+        print(f"[API] Initialized.")
+
+def initializeConnection(server: ServerEntry):
+    if (server.cancellable): # Clean any old request
+        request = ClientRequest(server=server, message_type=MessageType.CANCEL, service_id=0, payload=None)
+        response = tryRequest(request, True, False, False)
+        if (response == None):
+            return None
+
+        server.cancellable = False
+        server.sequence_number += 1
+        updateMemory()
+    elif (server.client_id == 0): # Initial handshake with server
+        request = ClientRequest(server=server, message_type=MessageType.REQUEST, service_id=0, payload=None)
+        response = tryRequest(request, False, False, False)
+        if (response == None or response.client_id == 0):
+            return None
+        
+        server.client_id = response.client_id
+        server.sequence_number += 1
+        updateMemory()
+
+    return True
+
+def doDiscovery():
+    global servers
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    sock.settimeout(DISCOVERY_TIMEOUT)
+    
+    discovery_msg = b"DISCOVER\0"
+    expected_reply_prefix = b"DISCOVER_RPL\0"
+    
+    try:
+        sock.sendto(discovery_msg, ('<broadcast>', DISCOVERY_PORT))
+        
+        while True:
+            data, addr = sock.recvfrom(1024)
+            
+            if data.startswith(expected_reply_prefix):
+                port_offset = len(expected_reply_prefix)
+                port_bytes = data[port_offset : port_offset + 4]
+                
+                if len(port_bytes) == 4:
+                    server_port = struct.unpack("i", port_bytes)[0]
+                    server_ip = addr[0]
+
+                    servers.append(ServerEntry(
+                        cancellable=False,
+                        address=(server_ip, server_port),
+                        client_id=0,
+                        sequence_number=0
+                    ))
+                    
+    except socket.timeout:
+        return None
+    finally:
+        sock.close()
 
 def doRequestReply(serviceId, payload):
-    global sequenceNumber, clientId
+    server = servers[0]
+    request = ClientRequest(server=server, message_type=MessageType.REQUEST, service_id=serviceId, payload=payload)
+
+    response = tryRequest(request, True, True, True)
+    if (response == None):
+        return None
     
-    # Serialize packet
+    server.sequence_number += 1
+    updateMemory()
+
+    return response.payload
+
+def tryRequest(request: ClientRequest, check_id, send_ack, track_cancel) -> Optional[ServerResponse]:
+    # Serialize request
+    server = request.server
+
+    payload_len = len(request.payload) if request.payload is not None else 0
     header = struct.pack("!IIIII", 
-                         MessageType.REQUEST.value, 
-                         clientId, 
-                         serviceId, 
-                         sequenceNumber, 
-                         len(payload))
-    packet = header + payload
-    
+                         request.message_type.value, 
+                         server.client_id, 
+                         request.service_id, 
+                         server.sequence_number,
+                         payload_len)
+    packet = header + request.payload if request.payload is not None else header
+
     # Try MAX_RETRIES times
     for attempt in range(MAX_RETRIES):
         try:
-            sock.sendto(packet, serverAddress)
+            if track_cancel:
+                server.cancellable = True
+                updateMemory()
+            sock.sendto(packet, server.address)
             sock.settimeout(TIMEOUT_SECONDS)
-            
-            response_data, server = sock.recvfrom(MAX_BUFFER_SIZE)
-            
-            resp_header = response_data[:20]
-            r_type, r_client_id, r_service_id, r_seq_num, r_len = struct.unpack("!IIIII", resp_header)
-            
-            # Check if this is exactly the reply we are waiting for
-            if r_type == MessageType.REPLY.value and r_client_id == clientId and r_seq_num == sequenceNumber:
-                
-                ackHeader = struct.pack("!IIIII", MessageType.ACKNOWLEDGE.value, clientId, serviceId, sequenceNumber, 0)
-                sock.sendto(ackHeader, serverAddress)
-                
-                sequenceNumber += 1 
 
-            return response_data[20:]
+            while True:    
+                response_data, server_addr = sock.recvfrom(MAX_BUFFER_SIZE)
+                
+                resp_header = response_data[:20]
+                r_type, r_client_id, r_service_id, r_seq_num, r_len = struct.unpack("!IIIII", resp_header)
+                
+                # Check if this is exactly the reply we are waiting for
+                if r_seq_num == server.sequence_number and (not check_id or r_client_id == server.client_id):
+                    if r_type == MessageType.REPLY_EXPIRED.value:
+                        if track_cancel:
+                            server.cancellable = False
+                            updateMemory()
+                        return None
+                    if r_type != MessageType.REPLY.value:
+                        continue
+
+                    if track_cancel:
+                        server.cancellable = False
+                        updateMemory()
+                    
+                    if send_ack:
+                        ack_header = struct.pack("!IIIII", MessageType.ACKNOWLEDGE.value, server.client_id, request.service_id, server.sequence_number, 0)
+                        sock.sendto(ack_header, server.address)
+
+                    return ServerResponse(
+                        message_type=r_type,
+                        client_id=r_client_id,
+                        service_id=r_service_id,
+                        length=r_len,
+                        payload=response_data[20:]
+                    )
                 
         except socket.timeout:
             if DEBUG:
                 print(f"[API] Timeout on attempt {attempt + 1}. Retrying...")
             continue
             
-    raise TimeoutError("Server is unresponsive after maximum retries.")
+    return None
+
+def updateMemory():
+    with open(memory_file, 'w') as f:
+        for entry in servers:
+            ip, port = entry.address
+            char = 'C' if entry.cancellable else 'S' 
+            f.write(f"{char} {ip} {port} {entry.client_id} {entry.sequence_number}\n")
 
 def cleanUp():
     """Closes the socket."""

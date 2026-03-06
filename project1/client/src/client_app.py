@@ -4,13 +4,11 @@ import client_api
 PRIMALITY_SERVICE = 0
 
 def serializeRequest(numbers):
-    """Packs a list of Python integers into the AppRequestT format."""
     count = len(numbers)
     fmt = f"!I{count}Q" 
     return struct.pack(fmt, count, *numbers)
 
 def deserializeRequest(payload):
-    """Unpacks the C AppResponseT payload into a list of Python booleans/ints."""
     # Header that contains the count
     count = struct.unpack("!I", payload[:4])[0]
     
@@ -20,7 +18,9 @@ def deserializeRequest(payload):
     return booleans
 
 def main():
-    client_api.init("config.txt")
+    print("Initializing API...")
+    if (client_api.init("config.txt") == None):
+        return
 
     try:
         while True:
