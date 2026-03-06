@@ -126,8 +126,11 @@ int receiveRequest(RequestT *req) {
     printf("Reply was cached, resending...\n");
     printf("-----------------------\n");
 #endif
-        if (cached->packet.type == REPLY || cached->packet.type == EXPIRED)
+        if (cached->packet.type == REPLY || cached->packet.type == EXPIRED) {
             reqlist_add(replies, cached);
+            return 1;
+        }
+        free(cached);
         return 1;
     }
 
@@ -229,6 +232,8 @@ void *runSenderThread(void *args) {
         void *serialized = serializePacket(&req->packet, &serializedLength);
         sendto(mainSocket, serialized, serializedLength, 0, (struct sockaddr *) &req->clientAddr, req->clientAddrLen);
         free(serialized);
+        free(req);
+        free(req->packet.payload);
     }
 
     return NULL;
@@ -247,7 +252,8 @@ void *runDiscoveryThread(void *args) {
         
         char *reply = "DISCOVER_RPL";
         strcpy(buf, reply);
-        memcpy(buf + strlen(reply) + 1, &port, sizeof(int));
+        uint32_t portn = htonl(port);
+        memcpy(buf + strlen(reply) + 1, &portn, sizeof(uint32_t));
         
         int size = strlen(reply) + 1 + sizeof(int);
         sendto(discoverySocket, buf, size, 0, (struct sockaddr *) &clientAddr, clientAddrLen);

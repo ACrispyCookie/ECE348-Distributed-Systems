@@ -45,22 +45,9 @@ int fetchMemory(RequestListT *cached) {
 }
 
 int updateMemory(RequestListT *cached) {
-    FILE *file = fopen(MEMORY_FILE, "w");
+    FILE *file = fopen(MEMORY_FILE, "w+");
     if (file == NULL) {
         return -1;
-    }
-
-    char line[256];
-    unsigned int id, seqNum;
-    while (fgets(line, sizeof(line), file) != NULL) {
-        if (sscanf(line, " C %d %d", &id, &seqNum) == 3) {
-            RequestT *req = malloc(sizeof(RequestT));
-            if (!req)
-                return -1;
-            req->packet.clientId = id;
-            req->packet.sequenceNumber = seqNum;
-            reqlist_add(cached, req);
-        }
     }
 
     pthread_mutex_lock(&cached->lock);
