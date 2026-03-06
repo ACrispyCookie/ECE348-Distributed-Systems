@@ -30,7 +30,7 @@ int fetchMemory(RequestListT *cached) {
     char line[256];
     unsigned int id, seqNum;
     while (fgets(line, sizeof(line), file) != NULL) {
-        if (sscanf(line, " C %d %d", &id, &seqNum) == 3) {
+        if (sscanf(line, " C %u %u", &id, &seqNum) == 2) {
             RequestT *req = malloc(sizeof(RequestT));
             if (!req)
                 return -1;
