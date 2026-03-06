@@ -232,8 +232,8 @@ void *runSenderThread(void *args) {
         void *serialized = serializePacket(&req->packet, &serializedLength);
         sendto(mainSocket, serialized, serializedLength, 0, (struct sockaddr *) &req->clientAddr, req->clientAddrLen);
         free(serialized);
-        free(req);
         free(req->packet.payload);
+        free(req);
     }
 
     return NULL;
