@@ -1,0 +1,24 @@
+import sys
+import os
+import demo_lib
+
+demo_lib.init()
+import client_api
+
+print("Initializing client API and discovering server...")
+if client_api.init(demo_lib.CONFIG_FILENAME) is None:
+    print("Failed to initialize API. Is the server running?")
+    sys.exit(1)
+
+server = client_api.servers[0]
+
+req = client_api.ClientRequest(server, client_api.MessageType.REQUEST, 0, b'\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x07')
+
+print("\n--- Sending First Request ---")
+demo_lib.print_packet_info(req)
+client_api.tryRequest(req, check_id=True, send_ack=True, track_cancel=False)
+
+print("\n--- Sending Duplicate Request after ACK ---")
+demo_lib.print_packet_info(req)
+client_api.tryRequest(req, check_id=True, send_ack=True, track_cancel=False)
+demo_lib.cleanUp()
