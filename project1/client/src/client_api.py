@@ -9,7 +9,7 @@ TIMEOUT_SECONDS = 2.0
 MAX_RETRIES = 5
 
 DISCOVERY_PORT = 12345
-DISCOVERY_TIMEOUT = 2.0
+DISCOVERY_TIMEOUT = 1.0
 
 MAX_PAYLOAD_LENGTH = 4096
 MAX_BUFFER_SIZE = MAX_PAYLOAD_LENGTH + 5 * 4
@@ -76,10 +76,11 @@ def init(config_filename="config.txt"):
         return None
     
     if len(servers) == 0:
-        if doDiscovery() == None:
-            print(f"[Discovery] Error: Could not communicate with server")
-            return None
-    
+        doDiscovery()
+        
+    if len(servers) == 0:
+        print(f"[Discovery] Error: Could not find any servers")
+        return None
     
     for server in servers:
         if(initializeConnection(server) == None):
@@ -87,7 +88,9 @@ def init(config_filename="config.txt"):
             return None
     
     if DEBUG:
+        print(servers)
         print(f"[API] Initialized.")
+    return True
 
 def initializeConnection(server: ServerEntry):
     if (server.cancellable): # Clean any old request
@@ -132,7 +135,7 @@ def doDiscovery():
                 port_bytes = data[port_offset : port_offset + 4]
                 
                 if len(port_bytes) == 4:
-                    server_port = struct.unpack("i", port_bytes)[0]
+                    server_port = struct.unpack("!i", port_bytes)[0]
                     server_ip = addr[0]
 
                     servers.append(ServerEntry(
@@ -141,9 +144,8 @@ def doDiscovery():
                         client_id=0,
                         sequence_number=0
                     ))
-                    
     except socket.timeout:
-        return None
+        return
     finally:
         sock.close()
 

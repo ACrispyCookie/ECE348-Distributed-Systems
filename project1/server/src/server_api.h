@@ -5,7 +5,7 @@
 #define DISCOVERY_PORT 12345
 
 // Initialize server
-void init(int port);
+void init(unsigned int port);
 
 // Start shutdown process
 void triggerShutdown();

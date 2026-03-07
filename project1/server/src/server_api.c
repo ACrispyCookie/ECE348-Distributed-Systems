@@ -10,7 +10,7 @@
 #include <pthread.h>
 #include "utlist.h"
 
-void init(int mainPort) {
+void init(unsigned int mainPort) {
     struct sockaddr_in server_addr;
     socklen_t len = sizeof(server_addr);
     memset(&server_addr, 0, sizeof(server_addr)); // TODO figure out if this is needed
@@ -28,13 +28,27 @@ void init(int mainPort) {
         close(mainSocket);
         exit(EXIT_FAILURE);
     }
+    if (getsockname(mainSocket, (struct sockaddr *)&server_addr, &len) < 0) {
+        perror("getsockname");
+        close(mainSocket);
+        exit(EXIT_FAILURE);
+    }
+    port = ntohs(server_addr.sin_port);
 
     server_addr.sin_port = htons(DISCOVERY_PORT);
     if (bind(discoverySocket, (struct sockaddr *) &server_addr, len) < 0) {
         perror("Bind failed");
+        close(mainSocket);
         close(discoverySocket);
         exit(EXIT_FAILURE);
     }
+    if (getsockname(discoverySocket, (struct sockaddr *)&server_addr, &len) < 0) {
+        perror("getsockname");
+        close(mainSocket);
+        close(discoverySocket);
+        exit(EXIT_FAILURE);
+    }
+    discoveryPort = ntohs(server_addr.sin_port);
 
     if (getsockname(mainSocket, (struct sockaddr *) &server_addr, &len) < 0) {
         perror("getsockname failed");
@@ -49,7 +63,6 @@ void init(int mainPort) {
         close(discoverySocket);
         exit(EXIT_FAILURE);
     }
-    port = ntohs(server_addr.sin_port);
 
     // Initialize lists
     if ((serviceRegistry = servicelist_create()) == NULL) {

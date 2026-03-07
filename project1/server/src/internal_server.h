@@ -13,8 +13,8 @@
 #define MAX_BUFFER_SIZE (5 * sizeof(uint32_t) + MAX_PAYLOAD_SIZE)
 
 typedef enum ID {
-    CLIENT,
-    REQ
+    CLIENT_ID,
+    REQUEST_ID
 } IdentifierT;
 
 typedef enum Message {

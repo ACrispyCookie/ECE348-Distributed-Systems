@@ -8,9 +8,9 @@ static pthread_mutex_t fileLock = PTHREAD_MUTEX_INITIALIZER;
 
 int generateId(IdentifierT type) {
     switch (type) {
-    case 0:
+    case REQUEST_ID:
         return nextReqId++;
-    case 1:
+    case CLIENT_ID:
         return nextClientId++;
     default:
         return -1;
@@ -36,8 +36,13 @@ int fetchMemory(RequestListT *cached) {
             RequestT *req = malloc(sizeof(RequestT));
             if (!req)
                 return -1;
+            nextClientId = (nextClientId < id) ? id + 1 : nextClientId;
             req->packet.clientId = id;
             req->packet.sequenceNumber = seqNum;
+            req->packet.type = REQUEST;
+            req->packet.serviceId = 0;
+            req->packet.payloadLength = 0;
+            req->packet.payload = NULL;
             reqlist_add(cached, req);
         }
     }
@@ -50,21 +55,19 @@ int updateMemory(RequestListT *cached) {
     pthread_mutex_lock(&fileLock);
     FILE *file = fopen(MEMORY_FILE, "w+");
     if (file == NULL) {
+        pthread_mutex_unlock(&fileLock);
         return -1;
     }
 
     pthread_mutex_lock(&cached->lock);
-    if (cached->list != NULL) {
-        RequestElementT *el = cached->list;
-        
-        do {
-            if (el->req != NULL) {
-                fprintf(file, "C %u %u\n", 
-                        el->req->packet.clientId, 
-                        el->req->packet.sequenceNumber);
-            }
-            el = el->next;
-        } while (el != cached->list);
+    RequestElementT *el;
+    
+    CDL_FOREACH(cached->list, el) {
+        if (el->req != NULL) {
+            fprintf(file, "C %u %u\n", 
+                    el->req->packet.clientId, 
+                    el->req->packet.sequenceNumber);
+        }
     }
     pthread_mutex_unlock(&cached->lock);
 
@@ -120,6 +123,7 @@ int reqlist_remove(RequestListT *list, RequestT *key) {
     pthread_mutex_lock(&list->lock);
     
     RequestElementT *el, *tmp1, *tmp2;
+    int ret = -1;
     
     CDL_FOREACH_SAFE(list->list, el, tmp1, tmp2) {
         if (el->req->packet.clientId == key->packet.clientId && 
@@ -128,46 +132,51 @@ int reqlist_remove(RequestListT *list, RequestT *key) {
             free(el->req->packet.payload);
             free(el->req);
             free(el);
-            return 0;
+            ret = 0;
+            break;
         }
     }
 
     pthread_mutex_unlock(&list->lock);
-    return -1;
+    return ret;
 }
 
 int reqlist_contains(RequestListT *list, RequestT *key, RequestT **copy) {
     pthread_mutex_lock(&list->lock);
     
     RequestElementT *el;
+    int ret = 0;
     
     CDL_FOREACH(list->list, el) {
         if (el->req->packet.clientId == key->packet.clientId && 
             el->req->packet.sequenceNumber == key->packet.sequenceNumber) {
             if (copy)
                 *copy = deepCopy(el->req);
-            return 1;
+            ret = 1;
+            break;
         }
     }
 
     pthread_mutex_unlock(&list->lock);
-    return 0;
+    return ret;
 }
 
 int reqlist_containsNewer(RequestListT *list, RequestT *key) {
     pthread_mutex_lock(&list->lock);
     
     RequestElementT *el;
+    int ret = 0;
     
     CDL_FOREACH(list->list, el) {
         if (el->req->packet.clientId == key->packet.clientId && 
             el->req->packet.sequenceNumber > key->packet.sequenceNumber) {
-            return 1;
+            ret = 1;
+            break;
         }
     }
 
     pthread_mutex_unlock(&list->lock);
-    return 0;
+    return ret;
 }
 
 int reqlist_update(RequestListT *list, RequestT *key, PacketT *packet, int copyNewPayload) {
@@ -176,8 +185,7 @@ int reqlist_update(RequestListT *list, RequestT *key, PacketT *packet, int copyN
     RequestElementT *el;
     
     CDL_FOREACH(list->list, el) {
-        if (el->req->packet.clientId == key->packet.clientId && 
-            el->req->packet.sequenceNumber == key->packet.sequenceNumber) {
+        if (el->req->packet.clientId == key->packet.clientId) {
             free(el->req->packet.payload);
             el->req->packet.payloadLength = 0;
             el->req->packet.payload = NULL;
@@ -185,16 +193,18 @@ int reqlist_update(RequestListT *list, RequestT *key, PacketT *packet, int copyN
             el->req->packet = *packet;
             if (copyNewPayload) {
                 el->req->packet.payload = malloc(packet->payloadLength);
-                if (el->req->packet.payload == NULL)
-                    return -1;
+                if (el->req->packet.payload == NULL) {
+                    el = NULL;
+                    break;
+                }
                 el->req->packet.payloadLength = packet->payloadLength;
             }
-            return 0;
+            break;
         }
     }
 
     pthread_mutex_unlock(&list->lock);
-    return -1;
+    return el != NULL ? 0 : -1;
 }
 
 RequestT *reqlist_pop(RequestListT *list, RequestT *key) {

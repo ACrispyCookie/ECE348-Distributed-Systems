@@ -10,7 +10,7 @@ int port, discoveryPort;
 int mainSocket, discoverySocket;
 
 int isShuttingDown = 0;
-int nextReqId = 0, nextClientId;
+int nextReqId = 0, nextClientId = 1;
 pthread_t receiverThread, senderThread, discoveryThread;
 
 AppServiceListT *serviceRegistry;
@@ -23,25 +23,17 @@ void *runReceivingThread(void *args) {
         RequestT *req = malloc(sizeof(RequestT));
         req->clientAddrLen = sizeof(req->clientAddr);
         char buf[MAX_BUFFER_SIZE];
-#ifdef DEBUG
-        printf("\n-----------------------\n");
-        printf("Waiting for a packet...\n");
-#endif
         if(recvfrom(mainSocket, buf, MAX_BUFFER_SIZE, 0, (struct sockaddr *) &req->clientAddr, &req->clientAddrLen) <= 0) {
             free(req);
             break;
         }
-#ifdef DEBUG
-        if (checkChance(REQUEST_LOSS)) {
-            printf("!!! Randomly dropped request!\n");
-            printf("-----------------------\n");
-            free(req);
-            continue;
-        }
-#endif
 
         deserializePacket(buf, &req->packet);
+
 #ifdef DEBUG
+        printf("\n==================== REQUEST ====================\n");
+        printf("Received the following packet...\n");
+
         PacketT *packet = &req->packet;
         char clientIp[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &(req->clientAddr.sin_addr), clientIp, INET_ADDRSTRLEN);
@@ -53,6 +45,13 @@ void *runReceivingThread(void *args) {
         printf("  Seq: %d\n", packet->sequenceNumber);
         printf("  Length: %d\n", packet->payloadLength);
         printf("\n");
+
+        if (checkChance(REQUEST_LOSS)) {
+            printf("!!! Randomly dropped request!\n");
+            printf("=================================================\n");
+            free(req);
+            continue;
+        }
 #endif
 
         int clean = 0;
@@ -61,15 +60,20 @@ void *runReceivingThread(void *args) {
                 clean = receiveRequest(req);
                 break;
             case ACKNOWLEDGE:
+#ifdef DEBUG
+        printf("Was ACK so checking cached...\n");
+#endif
                 clean = receiveAck(req);
                 break;
             case CANCEL:
+#ifdef DEBUG
+        printf("Was CANCEL so removing from everywhere...\n");
+#endif
                 clean = receiveCancel(req);
                 break;
             default: { // Invalid request
 #ifdef DEBUG
         printf("Invalid request...\n");
-        printf("-----------------------\n");
 #endif
                 clean = 1;
                 break;
@@ -80,6 +84,9 @@ void *runReceivingThread(void *args) {
             free(req->packet.payload);
             free(req);
         }
+#ifdef DEBUG
+        printf("=================================================\n");
+#endif
     }
 
     // Broadcast wake up to all waiting threads
@@ -104,7 +111,6 @@ int receiveRequest(RequestT *req) {
     if (reqlist_containsNewer(cachedRequests, req)){
 #ifdef DEBUG
     printf("Request was duplicate and older...\n");
-    printf("-----------------------\n");
 #endif
         return 1;
     }
@@ -113,7 +119,6 @@ int receiveRequest(RequestT *req) {
     if (servicelist_containsReq(serviceRegistry, req) || reqlist_contains(activeRequests, req, NULL)) {
 #ifdef DEBUG
     printf("Request was active so dropping...\n");
-    printf("-----------------------\n");
 #endif
         return 1;
     }
@@ -124,7 +129,6 @@ int receiveRequest(RequestT *req) {
     if (success) {
 #ifdef DEBUG
     printf("Reply was cached, resending...\n");
-    printf("-----------------------\n");
 #endif
         if (cached->packet.type == REPLY || cached->packet.type == EXPIRED) {
             reqlist_add(replies, cached);
@@ -136,38 +140,35 @@ int receiveRequest(RequestT *req) {
 
 #ifdef DEBUG
     printf("Creating new request...\n");
-    printf("-----------------------\n");
 #endif
     reqlist_update(cachedRequests, req, &req->packet, 0);
     updateMemory(cachedRequests);
 
     // New request
-    req->id = generateId(REQ);
+    req->id = generateId(REQUEST_ID);
     if (servicelist_addReq(serviceRegistry, req) == -1)
         return 1;
     return 0;
 }
 
 int receiveHandshake(RequestT *req) {
+
 #ifdef DEBUG
         printf("Was handshake so generating new ID...\n");
-        printf("-----------------------\n");
 #endif
 
-    req->packet.clientId = generateId(CLIENT);
-    reqlist_add(replies, req);
+    req->packet.clientId = generateId(CLIENT_ID);
     reqlist_add(cachedRequests, deepCopy(req));
     updateMemory(cachedRequests);
+
+    req->packet.type = REPLY;
+    reqlist_add(replies, req);
 
     return 0;
 }
 
 int receiveAck(RequestT *req) {
-#ifdef DEBUG
-        printf("Was ACK so checking cached...\n");
-        printf("-----------------------\n");
-#endif
-
+    
     reqlist_update(cachedRequests, req, &req->packet, 0);
     updateMemory(cachedRequests);
 
@@ -175,10 +176,6 @@ int receiveAck(RequestT *req) {
 }
 
 int receiveCancel(RequestT *req) {
-#ifdef DEBUG
-        printf("Was ACK so removing current from cache...\n");
-        printf("-----------------------\n");
-#endif
     RequestT *existing = servicelist_popReq(serviceRegistry, req);
     if (existing) {
         free(existing->packet.payload);
@@ -221,11 +218,29 @@ void *runSenderThread(void *args) {
 
         RequestT *req = el->req;
         free(el);
+
 #ifdef DEBUG
-        if (checkChance(REPLY_LOSS)) {
-            printf("\n!!! Randomly dropped reply!\n");
+        printf("\n==================== REPLY ====================\n");
+        printf("Sending the following reply...\n");
+
+        PacketT *packet = &req->packet;
+        char clientIp[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &(req->clientAddr.sin_addr), clientIp, INET_ADDRSTRLEN);
+        int clientPort = ntohs(req->clientAddr.sin_port);
+        printf("\nSending packet to %s:%d ->\n", clientIp, clientPort);
+        printf("  Type: %d\n", packet->type);
+        printf("  Client ID: %d\n", packet->clientId);
+        printf("  Service ID: %d\n", packet->serviceId);
+        printf("  Seq: %d\n", packet->sequenceNumber);
+        printf("  Length: %d\n", packet->payloadLength);
+        printf("\n");
+
+        if (checkChance(REQUEST_LOSS)) {
+            printf("!!! Randomly dropped request!\n");
+            printf("\n===============================================\n");
             continue;
         }
+        printf("\n===============================================\n");
 #endif
 
         int serializedLength;

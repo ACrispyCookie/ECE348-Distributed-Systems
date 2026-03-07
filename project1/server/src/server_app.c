@@ -16,11 +16,16 @@ void handleSigInt(int sig) {
 }
 
 int main(int argc, char *argv[]) {
-    int workerCount, port;
+    int workerCount;
+    unsigned int port = 0;
     pthread_t *workers;
 
-    if (argc != 3 || sscanf(argv[1], "%d", &port) != 1 || sscanf(argv[2], "%d", &workerCount) != 1) {
-        printf("Usage: %s <port> <worker count>\n", argv[0]);
+    if (argc < 2 || sscanf(argv[1], "%d", &workerCount) != 1) {
+        printf("Usage: %s <worker count> [port]\n", argv[0]);
+        return 1;
+    }
+    if (argc == 3 && sscanf(argv[2], "%d", &port) != 1) {
+        printf("Usage: %s <worker count> [port]\n", argv[0]);
         return 1;
     }
     workers = (pthread_t *) malloc(workerCount * sizeof(pthread_t));

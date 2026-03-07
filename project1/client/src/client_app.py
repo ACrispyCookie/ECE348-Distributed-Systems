@@ -40,16 +40,16 @@ def main():
             print(f"[APP] Asking server to check: {numbersToTest}")
             payload = serializeRequest(numbersToTest)    
             
-            try:
-                responsePayload = client_api.doRequestReply(PRIMALITY_SERVICE, payload)
-                results = deserializeRequest(responsePayload)
-                
-                print("--- Results ---")
-                for num, isPrime in zip(numbersToTest, results):
-                    status = "Prime" if isPrime else "Not Prime"
-                    print(f"{num:4} : {status}")        
-            except TimeoutError as e:
-                print(f"[APP] Network Request Failed: {e}")
+            responsePayload = client_api.doRequestReply(PRIMALITY_SERVICE, payload)
+            if (responsePayload == None):
+                print("[APP] Failed to get response!")
+                continue
+            results = deserializeRequest(responsePayload)
+            
+            print("--- Results ---")
+            for num, isPrime in zip(numbersToTest, results):
+                status = "Prime" if isPrime else "Not Prime"
+                print(f"{num:4} : {status}")        
     finally:
         client_api.cleanUp()
 
