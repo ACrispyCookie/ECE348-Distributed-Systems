@@ -198,7 +198,7 @@ int reqlist_update(RequestListT *list, RequestT *key, RequestT *updated, int cop
             el->req->id = updated->id;
 
             PacketT *packet = &updated->packet;
-            if (copyNewPayload) {
+            if (copyNewPayload && packet->payloadLength > 0) {
                 el->req->packet.payload = malloc(packet->payloadLength);
                 if (el->req->packet.payload == NULL) {
                     el = NULL;

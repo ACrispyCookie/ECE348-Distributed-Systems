@@ -143,8 +143,13 @@ int receiveRequest(RequestT *req) {
 #ifdef DEBUG
     printf("Reply was cached, resending...\n");
 #endif
+        cached->clientAddr = req->clientAddr;
+        cached->clientAddrLen = req->clientAddrLen;
+        cached->id = req->id;
         if (cached->packet.payload == NULL)
             cached->packet.type = EXPIRED;
+        updateCachedRequest(cached, 0);
+        
         reqlist_add(replies, cached);
         return 1;
     }
