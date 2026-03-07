@@ -440,15 +440,27 @@ int updateCachedRequest(RequestT *req, int copyPayload) {
 void getRealIp(char *ip) {
     struct sockaddr_in temp;
     int tempSock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (tempSock < 0) {
+        strncpy(ip, "0.0.0.0", INET_ADDRSTRLEN);
+        return;
+    }
+
     memset(&temp, 0, sizeof(temp));
     temp.sin_family = AF_INET;
     temp.sin_port = htons(80);
     inet_pton(AF_INET, "8.8.8.8", &temp.sin_addr);
 
-    connect(tempSock, (struct sockaddr *)&temp, sizeof(temp));
+    if (connect(tempSock, (struct sockaddr *)&temp, sizeof(temp)) < 0) {
+        strncpy(ip, "0.0.0.0", INET_ADDRSTRLEN);
+        close(tempSock);
+        return;
+    }
 
     socklen_t tempLen = sizeof(temp);
-    getsockname(tempSock, (struct sockaddr *)&temp, &tempLen);
-    inet_ntop(AF_INET, &temp.sin_addr, ip, INET_ADDRSTRLEN);
+    if (getsockname(tempSock, (struct sockaddr *)&temp, &tempLen) < 0 ||
+        inet_ntop(AF_INET, &temp.sin_addr, ip, INET_ADDRSTRLEN) == NULL) {
+        strncpy(ip, "0.0.0.0", INET_ADDRSTRLEN);
+    }
+    
     close(tempSock);
 }

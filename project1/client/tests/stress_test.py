@@ -6,13 +6,16 @@ import random
 def run_stress_test():
     print("Launching client_app.py in subprocess...")
     process = subprocess.Popen(
-        [sys.executable, "-u", "../client_app.py"],
+        [sys.executable, "-u", "../src/client_app.py"],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
         bufsize=0
     )
+
+    CONFIG_FILENAME = "config.txt"
+    open(CONFIG_FILENAME, "a").close()
 
     passed = 0
     failed = 0

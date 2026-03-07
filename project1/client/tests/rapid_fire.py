@@ -14,6 +14,9 @@ def run_spam_test():
         bufsize=0
     )
 
+    CONFIG_FILENAME = "config.txt"
+    open(CONFIG_FILENAME, "a").close()
+    
     passed = 0
     failed = 0
     errors = 0
