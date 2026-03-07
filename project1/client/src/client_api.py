@@ -10,7 +10,7 @@ TIMEOUT_SECONDS = 2.0
 MAX_RETRIES = 5
 
 DISCOVERY_PORT = 12345
-DISCOVERY_TIMEOUT = 1.0
+DISCOVERY_TIMEOUT = 2.0
 
 MAX_PAYLOAD_LENGTH = 4096
 MAX_BUFFER_SIZE = MAX_PAYLOAD_LENGTH + 5 * 4
@@ -78,8 +78,7 @@ def init(config_filename="config.txt"):
         print(f"[API] Error: Could not find {memory_file}")
         return None
     
-    if len(servers) == 0:
-        doDiscovery()
+    doDiscovery()
         
     if len(servers) == 0:
         print(f"[Discovery] Error: Could not find any servers")
