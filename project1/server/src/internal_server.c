@@ -130,18 +130,16 @@ int receiveRequest(RequestT *req) {
 #ifdef DEBUG
     printf("Reply was cached, resending...\n");
 #endif
-        if (cached->packet.type == REPLY || cached->packet.type == EXPIRED) {
-            reqlist_add(replies, cached);
-            return 1;
-        }
-        free(cached);
+        if (cached->packet.payload == NULL)
+            cached->packet.type = EXPIRED;
+        reqlist_add(replies, cached);
         return 1;
     }
 
 #ifdef DEBUG
     printf("Creating new request...\n");
 #endif
-    reqlist_update(cachedRequests, req, &req->packet, 0);
+    updateCachedRequest(req, 0);
     updateMemory(cachedRequests);
 
     // New request
@@ -157,11 +155,15 @@ int receiveHandshake(RequestT *req) {
         printf("Was handshake so generating new ID...\n");
 #endif
 
+    free(req->packet.payload);
+    req->packet.type = REPLY;
+    req->packet.serviceId = 0;
+    req->packet.payloadLength = 0;
+    req->packet.payload = NULL;
     req->packet.clientId = generateId(CLIENT_ID);
     reqlist_add(cachedRequests, deepCopy(req));
     updateMemory(cachedRequests);
 
-    req->packet.type = REPLY;
     reqlist_add(replies, req);
 
     return 0;
@@ -169,7 +171,7 @@ int receiveHandshake(RequestT *req) {
 
 int receiveAck(RequestT *req) {
     
-    reqlist_update(cachedRequests, req, &req->packet, 0);
+    updateCachedRequest(req, 0);
     updateMemory(cachedRequests);
 
     return 1;
@@ -193,7 +195,7 @@ int receiveCancel(RequestT *req) {
         return 0;
     }
 
-    reqlist_update(cachedRequests, req, &req->packet, 0);
+    updateCachedRequest(req, 0);
     updateMemory(cachedRequests);
     req->packet.type = REPLY;
     reqlist_add(replies, req);

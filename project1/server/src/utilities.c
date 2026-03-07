@@ -3,6 +3,7 @@
 #include "internal_server.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 static pthread_mutex_t fileLock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -197,6 +198,7 @@ int reqlist_update(RequestListT *list, RequestT *key, PacketT *packet, int copyN
                     el = NULL;
                     break;
                 }
+                memcpy(el->req->packet.payload, packet->payload, packet->payloadLength);
                 el->req->packet.payloadLength = packet->payloadLength;
             } else {
                 el->req->packet.payloadLength = 0;
@@ -375,6 +377,21 @@ RequestT *servicelist_popFirstBlocking(AppServiceListT *list, unsigned int servi
     }
     
     return req;
+}
+
+int updateCachedRequest(RequestT *req, int copyPayload) {
+    RequestT key, updated;
+    key.packet.clientId = req->packet.clientId;
+
+    updated.id = 0;
+    updated.clientAddr = req->clientAddr;
+    updated.clientAddrLen = req->clientAddrLen;
+    updated.packet.clientId = req->packet.clientId;
+    updated.packet.sequenceNumber = req->packet.sequenceNumber;
+    updated.packet.serviceId = 0;
+    updated.packet.type = REPLY;
+
+    return reqlist_update(cachedRequests, &key, &updated.packet, copyPayload);
 }
 
 // AppServiceT *getService(unsigned int serviceId) {

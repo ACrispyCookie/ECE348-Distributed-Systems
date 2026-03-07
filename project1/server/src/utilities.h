@@ -12,6 +12,7 @@ int reqlist_containsNewer(RequestListT *list, RequestT *key);
 int reqlist_update(RequestListT *list, RequestT *key, PacketT *updated, int copyNewPayload);
 RequestT *reqlist_pop(RequestListT *list, RequestT *key);
 RequestT *reqlist_popByReqId(RequestListT *list, unsigned int requestId);
+int updateCachedRequest(RequestT *req, int copyPayload);
 
 AppServiceListT *servicelist_create();
 void servicelist_destroy(AppServiceListT *list);
