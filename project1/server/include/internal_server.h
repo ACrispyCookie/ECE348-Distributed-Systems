@@ -84,7 +84,7 @@ extern AppServiceListT *serviceRegistry;
 // Linked list for requests currently being processed
 extern RequestListT *activeRequests;
 // Linked list for requests already sent but not ack'ed
-extern RequestListT *cachedRequests;
+extern RequestListT *cachedRequests; // TODO Make it timeout
 // Linked list for all replies
 extern RequestListT *replies;
 

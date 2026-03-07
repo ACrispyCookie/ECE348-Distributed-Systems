@@ -181,7 +181,7 @@ int reqlist_containsNewer(RequestListT *list, RequestT *key) {
     return ret;
 }
 
-int reqlist_update(RequestListT *list, RequestT *key, PacketT *packet, int copyNewPayload) {
+int reqlist_update(RequestListT *list, RequestT *key, RequestT *updated, int copyNewPayload) {
     pthread_mutex_lock(&list->lock);
     
     RequestElementT *el;
@@ -192,7 +192,12 @@ int reqlist_update(RequestListT *list, RequestT *key, PacketT *packet, int copyN
             el->req->packet.payloadLength = 0;
             el->req->packet.payload = NULL;
 
-            el->req->packet = *packet;
+            el->req->packet = updated->packet;
+            el->req->clientAddr = updated->clientAddr;
+            el->req->clientAddrLen = updated->clientAddrLen;
+            el->req->id = updated->id;
+
+            PacketT *packet = &updated->packet;
             if (copyNewPayload) {
                 el->req->packet.payload = malloc(packet->payloadLength);
                 if (el->req->packet.payload == NULL) {

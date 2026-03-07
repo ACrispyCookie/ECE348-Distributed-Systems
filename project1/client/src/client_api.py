@@ -60,8 +60,10 @@ def init(config_filename="config.txt"):
     try:
         with open(memory_file, 'r') as file:
             for line in file:
+                if line.startswith('#'):
+                    continue
+
                 parts = line.strip().split()
-                
                 if not parts:
                     continue
 
@@ -143,12 +145,17 @@ def doDiscovery():
                     server_port = struct.unpack("!i", port_bytes)[0]
                     server_ip = addr[0]
 
-                    servers.append(ServerEntry(
-                        cancellable=False,
-                        address=(server_ip, server_port),
-                        client_id=0,
-                        sequence_number=0
-                    ))
+                    for server in servers:
+                        if server.address[0] == server_ip:
+                            server.address = (server_ip, server_port)
+                            break
+                    else:
+                        servers.append(ServerEntry(
+                            cancellable=False,
+                            address=(server_ip, server_port),
+                            client_id=0,
+                            sequence_number=0
+                        ))
     except socket.timeout:
         return
     finally:

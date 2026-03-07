@@ -361,6 +361,10 @@ RequestT *deepCopy(RequestT *req) {
     *copy = *req;
     if (copy->packet.payloadLength > 0) {
         copy->packet.payload = malloc(copy->packet.payloadLength);
+        if (!copy->packet.payload) {
+            free(copy);
+            return NULL;
+        }
         memcpy(copy->packet.payload, req->packet.payload, req->packet.payloadLength);
     }
 
