@@ -4,11 +4,11 @@ import demo_lib
 import random
 
 # Requires 2 servers running - update these lines in config.txt accordingly
-SERVERS_CONFIG = """S 10.0.0.8 55188 0 1
-S 10.0.0.8 25565 0 1
+SERVERS_CONFIG = """S 10.64.16.94 38574 0 1
+S 10.64.16.94 42824 0 1
 """
 
-demo_lib.init()
+demo_lib.init(SERVERS_CONFIG)
 import client_api
 
 servers = client_api.servers

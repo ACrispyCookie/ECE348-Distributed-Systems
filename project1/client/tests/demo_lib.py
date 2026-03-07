@@ -3,12 +3,12 @@ import sys
 import os
 
 CONFIG_FILENAME = None
-DEFAULT_LINE = "S 10.0.0.8 13456 0 0"
+DEFAULT_LINE = "S 10.64.16.94 38574 0 0"
 DEMO_DEBUG = False
 
 import sys
 
-def init(default_config_line=None):
+def init(default_config_line=DEFAULT_LINE):
     global CONFIG_FILENAME
 
     CONFIG_FILENAME = "config.txt"
@@ -47,7 +47,7 @@ def print_packet_info(req):
     print(f"  Service ID : {req.service_id}")
     print(f"  Seq Number : {server.sequence_number}")
     print(f"  Length     : {payload_len}")
-    print(f"  Raw Bytes  : {' ' if req.payload == None else req.payload.hex(' ')}")
+    print(f"  Raw Bytes  : {' ' if req.payload == None else req.payload.hex()}")
     print("-" * 40)
 
 def print_response_info(rsp, server):
@@ -61,7 +61,7 @@ def print_response_info(rsp, server):
     print(f"  Service ID : {rsp.service_id}")
     print(f"  Seq Number : {server.sequence_number}")
     print(f"  Length     : {payload_len}")
-    print(f"  Raw Bytes  : {rsp if rsp.payload == None else rsp.payload.hex(' ')}")
+    print(f"  Raw Bytes  : {rsp if rsp.payload == None else rsp.payload.hex()}")
     print("-" * 40)
 
 def print_discovery_info(found_servers):

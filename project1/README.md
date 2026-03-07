@@ -17,6 +17,7 @@
 Μεταγλώττιση:
 Καθώς το πρόγραμμα είναι γραμμένο σε Python είναι απευθείας εκτελέσιμο μέσω
 του interpreter της Python π.χ. python3 client_app.py
+Απαιτείται το πακέτο dataclasses: pip install dataclasses
 
 Υλοποίηση:
 Χωρίζεται σε 2 διαφορετικά αρχεία:

@@ -2,7 +2,7 @@ import socket
 import struct
 from enum import Enum
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, List, Union
 import random
 
 DEBUG = True
@@ -52,7 +52,7 @@ class ServerResponse:
     payload: bytes
 
 sock = None
-servers: list[ServerEntry] = []
+servers: List[ServerEntry] = []
 memory_file = None
 current_server_index = 0
 
@@ -167,7 +167,7 @@ def doDiscovery():
     finally:
         sock.close()
 
-def doRequestReply(serviceId, payload) -> Optional[str] | Optional[bytes]:
+def doRequestReply(serviceId, payload) -> Union[Optional[str], Optional[bytes]]:
     for _ in range(len(servers)):
         server = getNextServer()
         request = ClientRequest(server=server, message_type=MessageType.REQUEST, service_id=serviceId, payload=payload)
@@ -187,7 +187,7 @@ def doRequestReply(serviceId, payload) -> Optional[str] | Optional[bytes]:
         
     return error, None
 
-def tryRequest(request: ClientRequest, check_id, send_ack, track_cancel) -> Optional[ServerError] | Optional[ServerResponse] :
+def tryRequest(request: ClientRequest, check_id, send_ack, track_cancel) -> Union[Optional[ServerError], Optional[ServerResponse]] :
     # Serialize request
     server = request.server
 
