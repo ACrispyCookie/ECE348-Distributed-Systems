@@ -164,7 +164,7 @@ def doRequestReply(serviceId, payload) -> Optional[str] | Optional[bytes]:
         if (error == None):
             server.sequence_number += 1
             updateMemory()
-            return response.payload 
+            return None, response.payload
         
     return error, None
 
