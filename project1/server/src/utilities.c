@@ -276,7 +276,7 @@ int servicelist_addReq(AppServiceListT *list, RequestT *req) {
     pthread_mutex_lock(&list->lock);
 
     AppServiceElementT *found;
-    LL_SEARCH_SCALAR(list->list, found, service->id, req->id);
+    LL_SEARCH_SCALAR(list->list, found, service->id, req->packet.serviceId);
     if (!found) {
         pthread_mutex_unlock(&list->lock);
         return -1;
@@ -297,7 +297,7 @@ int servicelist_containsReq(AppServiceListT *list, RequestT *key) {
     pthread_mutex_lock(&list->lock);
 
     AppServiceElementT *found;
-    LL_SEARCH_SCALAR(list->list, found, service->id, key->id);
+    LL_SEARCH_SCALAR(list->list, found, service->id, key->packet.serviceId);
     if (!found) {
         pthread_mutex_unlock(&list->lock);
         return 0;
@@ -315,7 +315,7 @@ RequestT *servicelist_popReq(AppServiceListT *list, RequestT *key) {
     pthread_mutex_lock(&list->lock);
 
     AppServiceElementT *found;
-    LL_SEARCH_SCALAR(list->list, found, service->id, key->id);
+    LL_SEARCH_SCALAR(list->list, found, service->id, key->packet.serviceId);
     if (!found) {
         pthread_mutex_unlock(&list->lock);
         return NULL;
