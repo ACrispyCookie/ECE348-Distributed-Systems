@@ -13,6 +13,10 @@ CONFIG_FILENAME = "config.txt"
 def run_spam_test():
     global CONFIG_FILENAME, SERVERS_CONFIG
 
+    if not os.path.isfile(CONFIG_FILENAME):
+        with open(CONFIG_FILENAME, "w") as f:
+            f.write(SERVERS_CONFIG + "\n")
+
     print("Launching client_app.py in subprocess...")
     process = subprocess.Popen(
         [sys.executable, "-u", "../src/client_app.py"],
@@ -22,10 +26,6 @@ def run_spam_test():
         universal_newlines=True,
         bufsize=0
     )
-
-    if not os.path.isfile(CONFIG_FILENAME):
-        with open(CONFIG_FILENAME, "w") as f:
-            f.write(SERVERS_CONFIG + "\n")
     
     passed = 0
     failed = 0
