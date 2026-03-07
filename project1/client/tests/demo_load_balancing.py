@@ -6,6 +6,7 @@ import random
 # Requires 2 servers running - update these lines in config.txt accordingly
 SERVERS_CONFIG = """S 10.64.16.94 38574 0 1
 S 10.64.16.94 42824 0 1
+S 193.70.36.200 51946 0 1
 """
 
 demo_lib.init(SERVERS_CONFIG)

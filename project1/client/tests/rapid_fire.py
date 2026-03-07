@@ -2,20 +2,30 @@ import subprocess
 import sys
 import random
 import time
+import os
+
+SERVERS_CONFIG = """S 10.64.16.94 38574 0 1
+S 10.64.16.94 42824 0 1
+S 193.70.36.200 51946 0 1
+"""
+CONFIG_FILENAME = "config.txt"
 
 def run_spam_test():
+    global CONFIG_FILENAME, SERVERS_CONFIG
+
     print("Launching client_app.py in subprocess...")
     process = subprocess.Popen(
         [sys.executable, "-u", "../src/client_app.py"],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True,
+        universal_newlines=True,
         bufsize=0
     )
 
-    CONFIG_FILENAME = "config.txt"
-    open(CONFIG_FILENAME, "a").close()
+    if not os.path.isfile(CONFIG_FILENAME):
+        with open(CONFIG_FILENAME, "w") as f:
+            f.write(SERVERS_CONFIG + "\n")
     
     passed = 0
     failed = 0
