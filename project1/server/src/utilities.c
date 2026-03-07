@@ -266,7 +266,6 @@ void servicelist_destroy(AppServiceListT *list) {
     AppServiceElementT *el, *tmp1;
     LL_FOREACH_SAFE(list->list,el,tmp1) {
         LL_DELETE(list->list,el);
-        reqlist_destroy(el->service->queue);
         free(el);
     }
 
