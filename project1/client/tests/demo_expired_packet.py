@@ -14,6 +14,7 @@ demo_lib.print_packet_info(req)
 client_api.tryRequest(req, check_id=True, send_ack=True, track_cancel=False)
 
 print("\n[3] Sending duplicate request after ACK...")
+input("\n[PAUSE] Press Enter...")
 demo_lib.print_packet_info(req)
 error, response = client_api.tryRequest(req, check_id=True, send_ack=True, track_cancel=False)
 

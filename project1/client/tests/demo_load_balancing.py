@@ -8,7 +8,7 @@ SERVERS_CONFIG = """S 10.0.0.8 55188 0 1
 S 10.0.0.8 25565 0 1
 """
 
-demo_lib.init(default_config_line=SERVERS_CONFIG.strip())
+demo_lib.init()
 import client_api
 
 servers = client_api.servers
@@ -29,6 +29,7 @@ routing_log = []
 numbers = [random.randint(2, 10000) for _ in range(NUM_REQUESTS)]
 
 print(f"[4] Sending {NUM_REQUESTS} requests and tracking which server handles each...\n")
+input("\n[PAUSE] Press Enter...")
 
 for i, num in enumerate(numbers):
     target_server = servers[client_api.current_server_index]

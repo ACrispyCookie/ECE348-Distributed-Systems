@@ -43,12 +43,7 @@ void init(unsigned int mainPort) {
     }
     discoveryPort = ntohs(server_addr.sin_port);
 
-    if (inet_ntop(AF_INET, &(server_addr.sin_addr), ip, INET_ADDRSTRLEN) == NULL) {
-        perror("inet_ntop failed");
-        close(mainSocket);
-        close(discoverySocket);
-        exit(EXIT_FAILURE);
-    }
+    getRealIp(ip);
 
     // Initialize lists
     if ((serviceRegistry = servicelist_create()) == NULL) {

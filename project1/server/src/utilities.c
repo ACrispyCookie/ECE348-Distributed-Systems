@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 static pthread_mutex_t fileLock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -436,104 +437,18 @@ int updateCachedRequest(RequestT *req, int copyPayload) {
     return reqlist_update(cachedRequests, &key, &updated, copyPayload);
 }
 
-// AppServiceT *getService(unsigned int serviceId) {
-//     pthread_mutex_lock(&serviceRegistry->lock);
-    
-//     AppServiceElementT *el;
-//     LL_SEARCH_SCALAR(serviceRegistry->list, el, service->id, serviceId);
-//     if (!el) {
-//         pthread_mutex_unlock(&serviceRegistry->lock);
-//         return NULL;
-//     }
+void getRealIp(char *ip) {
+    struct sockaddr_in temp;
+    int tempSock = socket(AF_INET, SOCK_DGRAM, 0);
+    memset(&temp, 0, sizeof(temp));
+    temp.sin_family = AF_INET;
+    temp.sin_port = htons(80);
+    inet_pton(AF_INET, "8.8.8.8", &temp.sin_addr);
 
-//     AppServiceT *service = el->service;
-//     pthread_mutex_lock(&service->queue->lock);
-//     service->refCount++; 
-//     pthread_mutex_unlock(&service->queue->lock);
+    connect(tempSock, (struct sockaddr *)&temp, sizeof(temp));
 
-//     pthread_mutex_unlock(&serviceRegistry->lock);
-//     return service;
-// }
-
-// int addToService(RequestT *req) {
-//     AppServiceT *service = getService(req->packet.serviceId); 
-//     if (service == NULL)
-//         return -1;
-
-//     RequestListT *queue = service->queue;
-//     pthread_mutex_lock(&queue->lock);
-
-//     RequestElementT *el = (RequestElementT *) malloc(sizeof(RequestElementT));
-//     if (el == NULL) {
-//         pthread_mutex_unlock(&queue->lock);
-//         return -1;
-//     }
-
-//     el->req = req;
-//     CDL_APPEND(queue->list, el);
-//     pthread_cond_signal(&queue->cond);
-
-//     int destroy = --(service->refCount) == 0;
-//     pthread_mutex_unlock(&queue->lock);
-
-//     if (destroy) {
-//         reqlist_destroy(service->queue);
-//         free(service);
-//     }
-//     return 0;
-// }
-
-// RequestT *popActiveRequest(unsigned int requestId) {
-//     pthread_mutex_lock(&activeRequests->lock);
-    
-//     RequestElementT *el;
-//     RequestT* req = NULL;
-//     CDL_SEARCH_SCALAR(activeRequests->list, el, req->id, requestId);
-//     if (el) {
-//         req = el->req;
-//         CDL_DELETE(activeRequests->list, el);
-//         free(el);
-//     }
-
-//     pthread_mutex_unlock(&activeRequests->lock);
-//     return req;
-// }
-
-// int cleanAckedRequests(unsigned int clientId, unsigned int sequenceNumber) {
-//     pthread_mutex_lock(&cachedRequests->lock);
-    
-//     RequestElementT *el, *tmp1, *tmp2;
-//     CDL_FOREACH_SAFE(cachedRequests->list, el, tmp1, tmp2) {
-//         if (el->req->packet.clientId == clientId && 
-//             el->req->packet.sequenceNumber <= sequenceNumber) {
-//             CDL_DELETE(cachedRequests->list, el);
-//             free(el->req->packet.payload);
-//             free(el->req);
-//             free(el);
-//             pthread_mutex_unlock(&cachedRequests->lock);
-//             return 0;
-//         }
-//     }
-
-//     pthread_mutex_unlock(&cachedRequests->lock);
-//     return -1;
-// }
-
-// int cleanOrphanedRequests(unsigned int clientId) {
-//     pthread_mutex_lock(&cachedRequests->lock);
-    
-//     RequestElementT *el, *tmp1, *tmp2;
-//     CDL_FOREACH_SAFE(cachedRequests->list, el, tmp1, tmp2) {
-//         if (el->req->packet.clientId != clientId) {
-//             CDL_DELETE(cachedRequests->list, el);
-//             free(el->req->packet.payload);
-//             free(el->req);
-//             free(el);
-//             pthread_mutex_unlock(&cachedRequests->lock);
-//             return 0;
-//         }
-//     }
-
-//     pthread_mutex_unlock(&cachedRequests->lock);
-//     return -1;
-// }
+    socklen_t tempLen = sizeof(temp);
+    getsockname(tempSock, (struct sockaddr *)&temp, &tempLen);
+    inet_ntop(AF_INET, &temp.sin_addr, ip, INET_ADDRSTRLEN);
+    close(tempSock);
+}

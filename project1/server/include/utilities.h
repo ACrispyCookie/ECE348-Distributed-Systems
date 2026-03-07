@@ -28,5 +28,6 @@ int updateMemory(RequestListT *cached);
 
 int generateId(IdentifierT type);
 int checkChance(int chance);
+void getRealIp(char *ip);
 
 #endif

@@ -12,7 +12,7 @@ payload = b'\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x07'
 
 req = client_api.ClientRequest(server, client_api.MessageType.REQUEST, INVALID_SERVICE_ID, payload)
 
-print("\n[2] Sending eequest to unsupported service")
+print("\n[2] Sending request to unsupported service")
 demo_lib.print_packet_info(req)
 
 error, response = client_api.tryRequest(req, check_id=True, send_ack=True, track_cancel=False)

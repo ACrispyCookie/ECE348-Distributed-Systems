@@ -10,11 +10,13 @@ server.cancellable = True
 client_api.updateMemory()
 
 print("\n[2] Simulating a hard crash...")
+input("\n[PAUSE] Press Enter...")
 print(f"    [File State] config.txt now marks this connection as Cancellable (C).")
 client_api.servers = []
 client_api.cleanUp()
 
 print("\n[3] Restarting client API...")
+input("\n[PAUSE] Press Enter...")
 if client_api.init(demo_lib.CONFIG_FILENAME) is None:
     print("Failed to re-initialize API.")
     sys.exit(1)
@@ -22,6 +24,7 @@ if client_api.init(demo_lib.CONFIG_FILENAME) is None:
 print("    [Recovery Success] Client successfully sent CANCEL for last request!")
 
 print("\n[4] We can continue with normal requests...")
+input("\n[PAUSE] Press Enter...")
 server = client_api.servers[0]
 payload = b'\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x07'
 req = client_api.ClientRequest(server, client_api.MessageType.REQUEST, 0, payload)

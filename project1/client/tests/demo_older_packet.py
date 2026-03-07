@@ -19,6 +19,7 @@ server.sequence_number = 0
 req_older = client_api.ClientRequest(server, client_api.MessageType.REQUEST, 0, payload)
 
 print(f"\n[3] Sending older duplicate request (Seq = {server.sequence_number}) ---")
+input("\n[PAUSE] Press Enter...")
 demo_lib.print_packet_info(req_older)
 
 old_retries = client_api.MAX_RETRIES
