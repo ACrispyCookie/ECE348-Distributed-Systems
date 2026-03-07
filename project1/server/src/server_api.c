@@ -13,7 +13,7 @@
 void init(unsigned int mainPort) {
     struct sockaddr_in server_addr;
     socklen_t len = sizeof(server_addr);
-    memset(&server_addr, 0, sizeof(server_addr)); // TODO figure out if this is needed
+    memset(&server_addr, 0, sizeof(server_addr));
     srand(time(NULL));
     
     mainSocket = socket(AF_INET, SOCK_DGRAM, 0);

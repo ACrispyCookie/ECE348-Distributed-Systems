@@ -3,6 +3,7 @@ import struct
 from enum import Enum
 from dataclasses import dataclass
 from typing import Optional
+import random
 
 DEBUG = True
 TIMEOUT_SECONDS = 2.0
@@ -47,9 +48,10 @@ class ServerResponse:
 sock = None
 servers: list[ServerEntry] = []
 memory_file = None
+current_server_index = 0
 
 def init(config_filename="config.txt"):
-    global servers, sock, memory_file
+    global servers, sock, memory_file, current_server_index
 
     memory_file = config_filename
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -87,6 +89,9 @@ def init(config_filename="config.txt"):
         if(initializeConnection(server) == None):
             print(f"[API] Error: Could not initialize server connections")
             return None
+        
+    if len(servers) > 0:
+        current_server_index = random.randint(0, len(servers) - 1)
     
     if DEBUG:
         print(servers)
@@ -151,17 +156,17 @@ def doDiscovery():
         sock.close()
 
 def doRequestReply(serviceId, payload) -> Optional[str] | Optional[bytes]:
-    server = servers[0]
-    request = ClientRequest(server=server, message_type=MessageType.REQUEST, service_id=serviceId, payload=payload)
+    for _ in range(len(servers)):
+        server = getNextServer()
+        request = ClientRequest(server=server, message_type=MessageType.REQUEST, service_id=serviceId, payload=payload)
 
-    error, response = tryRequest(request, True, True, True)
-    if (error != None):
-        return error, None
-    
-    server.sequence_number += 1
-    updateMemory()
-
-    return None, response.payload
+        error, response = tryRequest(request, True, True, True)
+        if (error == None):
+            server.sequence_number += 1
+            updateMemory()
+            return response.payload 
+        
+    return error, None
 
 def tryRequest(request: ClientRequest, check_id, send_ack, track_cancel) -> Optional[str] | Optional[ServerResponse] :
     # Serialize request
@@ -230,6 +235,12 @@ def updateMemory():
             ip, port = entry.address
             char = 'C' if entry.cancellable else 'S' 
             f.write(f"{char} {ip} {port} {entry.client_id} {entry.sequence_number}\n")
+
+def getNextServer() -> ServerEntry:
+    global current_server_index
+    server = servers[current_server_index]
+    current_server_index = (current_server_index + 1) % len(servers)
+    return server
 
 def cleanUp():
     """Closes the socket."""
