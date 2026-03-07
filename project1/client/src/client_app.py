@@ -40,11 +40,11 @@ def main():
             print(f"[APP] Asking server to check: {numbersToTest}")
             payload = serializeRequest(numbersToTest)    
             
-            responsePayload = client_api.doRequestReply(PRIMALITY_SERVICE, payload)
-            if (responsePayload == None):
-                print("[APP] Failed to get response!")
+            error, response = client_api.doRequestReply(PRIMALITY_SERVICE, payload)
+            if (error != None):
+                print("[APP] Failed to get response: " + error)
                 continue
-            results = deserializeRequest(responsePayload)
+            results = deserializeRequest(response)
             
             print("--- Results ---")
             for num, isPrime in zip(numbersToTest, results):

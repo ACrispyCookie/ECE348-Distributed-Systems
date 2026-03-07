@@ -21,6 +21,7 @@ typedef enum Message {
     REQUEST,
     REPLY,
     EXPIRED,
+    NOT_SERVING,
     ACKNOWLEDGE,
     CANCEL
 } MessageT;

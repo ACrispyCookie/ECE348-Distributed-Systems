@@ -18,8 +18,9 @@ class MessageType(Enum):
     REQUEST = 0
     REPLY = 1
     EXPIRED = 2
-    ACKNOWLEDGE = 3
-    CANCEL = 4
+    NOT_SERVING = 3
+    ACKNOWLEDGE = 4
+    CANCEL = 5
 
 @dataclass
 class ServerEntry:
@@ -95,8 +96,8 @@ def init(config_filename="config.txt"):
 def initializeConnection(server: ServerEntry):
     if (server.cancellable): # Clean any old request
         request = ClientRequest(server=server, message_type=MessageType.CANCEL, service_id=0, payload=None)
-        response = tryRequest(request, True, False, False)
-        if (response == None):
+        error, response = tryRequest(request, True, False, False)
+        if (error != None):
             return None
 
         server.cancellable = False
@@ -104,8 +105,8 @@ def initializeConnection(server: ServerEntry):
         updateMemory()
     elif (server.client_id == 0): # Initial handshake with server
         request = ClientRequest(server=server, message_type=MessageType.REQUEST, service_id=0, payload=None)
-        response = tryRequest(request, False, False, False)
-        if (response == None or response.client_id == 0):
+        error, response = tryRequest(request, False, False, False)
+        if (error != None or response.client_id == 0):
             return None
         
         server.client_id = response.client_id
@@ -149,20 +150,20 @@ def doDiscovery():
     finally:
         sock.close()
 
-def doRequestReply(serviceId, payload):
+def doRequestReply(serviceId, payload) -> Optional[str] | Optional[bytes]:
     server = servers[0]
     request = ClientRequest(server=server, message_type=MessageType.REQUEST, service_id=serviceId, payload=payload)
 
-    response = tryRequest(request, True, True, True)
-    if (response == None):
-        return None
+    error, response = tryRequest(request, True, True, True)
+    if (error != None):
+        return error, None
     
     server.sequence_number += 1
     updateMemory()
 
-    return response.payload
+    return None, response.payload
 
-def tryRequest(request: ClientRequest, check_id, send_ack, track_cancel) -> Optional[ServerResponse]:
+def tryRequest(request: ClientRequest, check_id, send_ack, track_cancel) -> Optional[str] | Optional[ServerResponse] :
     # Serialize request
     server = request.server
 
@@ -192,11 +193,11 @@ def tryRequest(request: ClientRequest, check_id, send_ack, track_cancel) -> Opti
                 
                 # Check if this is exactly the reply we are waiting for
                 if r_seq_num == server.sequence_number and (not check_id or r_client_id == server.client_id):
-                    if r_type == MessageType.EXPIRED.value:
+                    if r_type == MessageType.EXPIRED.value or r_type == MessageType.NOT_SERVING.value:
                         if track_cancel:
                             server.cancellable = False
                             updateMemory()
-                        return None
+                        return "Not serving." if r_type == MessageType.NOT_SERVING.value else "Timeout.", None
                     if r_type != MessageType.REPLY.value:
                         continue
 
@@ -208,7 +209,7 @@ def tryRequest(request: ClientRequest, check_id, send_ack, track_cancel) -> Opti
                         ack_header = struct.pack("!IIIII", MessageType.ACKNOWLEDGE.value, server.client_id, request.service_id, server.sequence_number, 0)
                         sock.sendto(ack_header, server.address)
 
-                    return ServerResponse(
+                    return None, ServerResponse(
                         message_type=r_type,
                         client_id=r_client_id,
                         service_id=r_service_id,
@@ -221,7 +222,7 @@ def tryRequest(request: ClientRequest, check_id, send_ack, track_cancel) -> Opti
                 print(f"[API] Timeout on attempt {attempt + 1}. Retrying...")
             continue
             
-    return None
+    return "Timeout.", None
 
 def updateMemory():
     with open(memory_file, 'w') as f:

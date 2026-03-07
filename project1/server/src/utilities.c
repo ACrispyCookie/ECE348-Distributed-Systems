@@ -41,7 +41,7 @@ int fetchMemory(RequestListT *cached) {
             req->id = 0;
             req->packet.clientId = id;
             req->packet.sequenceNumber = seqNum;
-            req->packet.type = REQUEST;
+            req->packet.type = REPLY;
             req->packet.serviceId = 0;
             req->packet.payloadLength = 0;
             req->packet.payload = NULL;
@@ -273,6 +273,24 @@ void servicelist_destroy(AppServiceListT *list) {
     pthread_mutex_destroy(&list->lock);
     free(list);
 }
+
+int servicelist_contains(AppServiceListT *list, unsigned int serviceId) {
+    pthread_mutex_lock(&list->lock);
+
+    AppServiceElementT *el;
+    int ret = 0;
+
+    LL_FOREACH(list->list,el) {
+        if (el->service->id == serviceId && !el->service->destroyed) {
+            ret = 1;
+            break;
+        }
+    }
+
+    pthread_mutex_unlock(&list->lock);
+    return ret;
+}
+
 
 int servicelist_addReq(AppServiceListT *list, RequestT *req) {
     pthread_mutex_lock(&list->lock);

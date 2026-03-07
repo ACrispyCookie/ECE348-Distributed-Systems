@@ -115,6 +115,19 @@ int receiveRequest(RequestT *req) {
         return 1;
     }
 
+    if (!servicelist_contains(serviceRegistry, req->packet.serviceId)){
+#ifdef DEBUG
+    printf("Request is for unregistered service...\n");
+#endif
+        free(req->packet.payload);
+        req->packet.payloadLength = 0;
+        req->packet.payload = NULL;
+        req->packet.type = NOT_SERVING;
+
+        reqlist_add(replies, req);
+        return 0;
+    }
+
     // Duplicate currently in process
     if (servicelist_containsReq(serviceRegistry, req) || reqlist_contains(activeRequests, req, NULL)) {
 #ifdef DEBUG

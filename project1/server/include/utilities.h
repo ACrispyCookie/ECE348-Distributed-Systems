@@ -16,6 +16,7 @@ int updateCachedRequest(RequestT *req, int copyPayload);
 
 AppServiceListT *servicelist_create();
 void servicelist_destroy(AppServiceListT *list);
+int servicelist_contains(AppServiceListT *list, unsigned int serviceId);
 int servicelist_addReq(AppServiceListT *list, RequestT *req);
 int servicelist_containsReq(AppServiceListT *list, RequestT *key);
 RequestT *servicelist_popReq(AppServiceListT *list, RequestT *key);
