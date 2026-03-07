@@ -23,3 +23,6 @@ $(BUILD_DIR)/%.o: src/%.c $(HEADERS)
 
 clean:
 	rm -f $(TARGET) $(OBJS)
+
+clean-all: clean
+	rm -f $(BUILD_DIR)/*.txt
