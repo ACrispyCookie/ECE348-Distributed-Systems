@@ -216,7 +216,7 @@ void sendReply(int requestId, void *buf, int len) {
     packet->payload = malloc(len);
     memcpy(packet->payload, buf, len);
 
-    if (reqlist_update(cachedRequests, req, packet, 0) == -1) {
+    if (reqlist_update(cachedRequests, req, packet, 1) == -1) {
         free(packet->payload);
         free(req);
         return;
@@ -236,6 +236,8 @@ void triggerShutdown() {
     shutdown(discoverySocket, SHUT_RDWR);
     close(mainSocket);
     close(discoverySocket);
+    
+    pthread_cond_broadcast(&replies->cond);
 }
 
 void cleanUp() {
@@ -246,4 +248,5 @@ void cleanUp() {
     servicelist_destroy(serviceRegistry);
     reqlist_destroy(activeRequests);
     reqlist_destroy(cachedRequests);
+    reqlist_destroy(replies);
 }

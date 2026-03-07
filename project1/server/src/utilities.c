@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+static pthread_mutex_t fileLock = PTHREAD_MUTEX_INITIALIZER;
+
 int generateId(IdentifierT type) {
     switch (type) {
     case 0:
@@ -45,6 +47,7 @@ int fetchMemory(RequestListT *cached) {
 }
 
 int updateMemory(RequestListT *cached) {
+    pthread_mutex_lock(&fileLock);
     FILE *file = fopen(MEMORY_FILE, "w+");
     if (file == NULL) {
         return -1;
@@ -66,6 +69,7 @@ int updateMemory(RequestListT *cached) {
     pthread_mutex_unlock(&cached->lock);
 
     fclose(file);
+    pthread_mutex_unlock(&fileLock);
     return 0;
 }
 
@@ -166,7 +170,7 @@ int reqlist_containsNewer(RequestListT *list, RequestT *key) {
     return 0;
 }
 
-int reqlist_update(RequestListT *list, RequestT *key, PacketT *packet, int freePayload) {
+int reqlist_update(RequestListT *list, RequestT *key, PacketT *packet, int copyNewPayload) {
     pthread_mutex_lock(&list->lock);
     
     RequestElementT *el;
@@ -174,12 +178,17 @@ int reqlist_update(RequestListT *list, RequestT *key, PacketT *packet, int freeP
     CDL_FOREACH(list->list, el) {
         if (el->req->packet.clientId == key->packet.clientId && 
             el->req->packet.sequenceNumber == key->packet.sequenceNumber) {
-            if (freePayload) {
-                el->req->packet.payloadLength = 0;
-                free(el->req->packet.payload);
-                el->req->packet.payload = NULL;
-            }
+            free(el->req->packet.payload);
+            el->req->packet.payloadLength = 0;
+            el->req->packet.payload = NULL;
+
             el->req->packet = *packet;
+            if (copyNewPayload) {
+                el->req->packet.payload = malloc(packet->payloadLength);
+                if (el->req->packet.payload == NULL)
+                    return -1;
+                el->req->packet.payloadLength = packet->payloadLength;
+            }
             return 0;
         }
     }

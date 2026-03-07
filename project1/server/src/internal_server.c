@@ -138,7 +138,7 @@ int receiveRequest(RequestT *req) {
     printf("Creating new request...\n");
     printf("-----------------------\n");
 #endif
-    reqlist_update(cachedRequests, req, &req->packet, 1);
+    reqlist_update(cachedRequests, req, &req->packet, 0);
     updateMemory(cachedRequests);
 
     // New request
@@ -168,7 +168,7 @@ int receiveAck(RequestT *req) {
         printf("-----------------------\n");
 #endif
 
-    reqlist_update(cachedRequests, req, &req->packet, 1);
+    reqlist_update(cachedRequests, req, &req->packet, 0);
     updateMemory(cachedRequests);
 
     return 1;
@@ -196,7 +196,7 @@ int receiveCancel(RequestT *req) {
         return 0;
     }
 
-    reqlist_update(cachedRequests, req, &req->packet, 1);
+    reqlist_update(cachedRequests, req, &req->packet, 0);
     updateMemory(cachedRequests);
     req->packet.type = REPLY;
     reqlist_add(replies, req);
