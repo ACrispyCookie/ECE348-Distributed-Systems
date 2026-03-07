@@ -198,6 +198,9 @@ int reqlist_update(RequestListT *list, RequestT *key, PacketT *packet, int copyN
                     break;
                 }
                 el->req->packet.payloadLength = packet->payloadLength;
+            } else {
+                el->req->packet.payloadLength = 0;
+                el->req->packet.payload = NULL;
             }
             break;
         }
