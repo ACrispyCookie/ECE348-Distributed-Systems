@@ -24,7 +24,7 @@ for i, s in enumerate(servers):
 print(f"\n[3] Starting index: Server {client_api.current_server_index}")
 print(f"    (Randomized offset ensures clients don't all start on the same server)\n")
 
-NUM_REQUESTS = 10
+NUM_REQUESTS = 20
 routing_log = []
 numbers = [random.randint(2, 10000) for _ in range(NUM_REQUESTS)]
 
