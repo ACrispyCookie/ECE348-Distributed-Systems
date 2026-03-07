@@ -36,26 +36,12 @@ void init(unsigned int mainPort) {
     port = ntohs(server_addr.sin_port);
 
     server_addr.sin_port = htons(DISCOVERY_PORT);
-    if (bind(discoverySocket, (struct sockaddr *) &server_addr, len) < 0) {
-        perror("Bind failed");
-        close(mainSocket);
+    if (bind(discoverySocket, (struct sockaddr *) &server_addr, len) < 0 ||
+        getsockname(discoverySocket, (struct sockaddr *)&server_addr, &len) < 0) {
         close(discoverySocket);
-        exit(EXIT_FAILURE);
-    }
-    if (getsockname(discoverySocket, (struct sockaddr *)&server_addr, &len) < 0) {
-        perror("getsockname");
-        close(mainSocket);
-        close(discoverySocket);
-        exit(EXIT_FAILURE);
+        discoverySocket = -1;
     }
     discoveryPort = ntohs(server_addr.sin_port);
-
-    if (getsockname(mainSocket, (struct sockaddr *) &server_addr, &len) < 0) {
-        perror("getsockname failed");
-        close(mainSocket);
-        close(discoverySocket);
-        exit(EXIT_FAILURE);
-    }
 
     if (inet_ntop(AF_INET, &(server_addr.sin_addr), ip, INET_ADDRSTRLEN) == NULL) {
         perror("inet_ntop failed");
@@ -114,15 +100,18 @@ void init(unsigned int mainPort) {
         exit(EXIT_FAILURE);
     }
 
-    if (pthread_create(&discoveryThread, NULL, runDiscoveryThread, NULL)) {
-        perror("pthread_create failed");
-        close(mainSocket);
-        close(discoverySocket);
-        exit(EXIT_FAILURE);
+    if (discoverySocket != -1) {
+        if (pthread_create(&discoveryThread, NULL, runDiscoveryThread, NULL)) {
+            perror("pthread_create failed");
+            close(mainSocket);
+            close(discoverySocket);
+            exit(EXIT_FAILURE);
+        }
+
+        printf("Discovery service running on %s:%d\n", ip, discoveryPort);
     }
 
     printf("Started server at %s:%d\n", ip, port);
-    printf("Discovery service running on %s:%d\n", ip, discoveryPort);
 #ifdef DEBUG
     printf("Virtual packet loss: REQ=%d, REP=%d\n", REQUEST_LOSS, REPLY_LOSS);
 #endif
@@ -247,9 +236,12 @@ void sendReply(int requestId, void *buf, int len) {
 void triggerShutdown() {
     isShuttingDown = 1;
     shutdown(mainSocket, SHUT_RDWR);
-    shutdown(discoverySocket, SHUT_RDWR);
     close(mainSocket);
-    close(discoverySocket);
+
+    if (discoverySocket != -1) {
+        shutdown(discoverySocket, SHUT_RDWR);
+        close(discoverySocket);
+    }
     
     pthread_cond_broadcast(&replies->cond);
 }
@@ -257,7 +249,8 @@ void triggerShutdown() {
 void cleanUp() {
     pthread_join(receiverThread, NULL);
     pthread_join(senderThread, NULL);
-    pthread_join(discoveryThread, NULL);
+    if (discoverySocket != -1)
+        pthread_join(discoveryThread, NULL);
 
     servicelist_destroy(serviceRegistry);
     reqlist_destroy(activeRequests);
