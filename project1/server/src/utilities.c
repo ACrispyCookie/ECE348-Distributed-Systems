@@ -38,6 +38,7 @@ int fetchMemory(RequestListT *cached) {
             if (!req)
                 return -1;
             nextClientId = (nextClientId < id) ? id + 1 : nextClientId;
+            req->id = 0;
             req->packet.clientId = id;
             req->packet.sequenceNumber = seqNum;
             req->packet.type = REQUEST;
