@@ -251,7 +251,7 @@ void *runSenderThread(void *args) {
         printf("\n");
 
         if (checkChance(REQUEST_LOSS)) {
-            printf("!!! Randomly dropped request!\n");
+            printf("!!! Randomly dropped reply!\n");
             printf("\n===============================================\n");
             continue;
         }

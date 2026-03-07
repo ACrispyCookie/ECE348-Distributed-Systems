@@ -223,21 +223,22 @@ void sendReply(int requestId, void *buf, int len) {
         return;
 
     // Copy user buffer to our packet buffer
-    PacketT *packet = &req->packet;
-    packet->type = REPLY;
-    packet->payloadLength = len;
-    packet->payload = malloc(len);
-    memcpy(packet->payload, buf, len);
+    req->id = 0;
+    req->packet.type = REPLY;
 
-    if (reqlist_update(cachedRequests, req, packet, 1) == -1) {
-        free(packet->payload);
+    req->packet.payloadLength = len;
+    req->packet.payload = malloc(len);
+    memcpy(req->packet.payload, buf, len);
+
+    if (updateCachedRequest(req, 1) == -1) {
+        free(req->packet.payload);
         free(req);
         return;
     }
     updateMemory(cachedRequests);
 
     if (reqlist_add(replies, req) == -1) {
-        free(packet->payload);
+        free(req->packet.payload);
         free(req);
         return;
     }

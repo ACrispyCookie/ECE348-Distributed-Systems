@@ -407,14 +407,16 @@ int updateCachedRequest(RequestT *req, int copyPayload) {
     key.packet.clientId = req->packet.clientId;
 
     updated.id = 0;
+    updated.packet.type = REPLY;
     updated.clientAddr = req->clientAddr;
     updated.clientAddrLen = req->clientAddrLen;
     updated.packet.clientId = req->packet.clientId;
     updated.packet.sequenceNumber = req->packet.sequenceNumber;
-    updated.packet.serviceId = 0;
-    updated.packet.type = REPLY;
+    updated.packet.serviceId = req->packet.serviceId;
+    updated.packet.payloadLength = req->packet.payloadLength;
+    updated.packet.payload = req->packet.payload;
 
-    return reqlist_update(cachedRequests, &key, &updated.packet, copyPayload);
+    return reqlist_update(cachedRequests, &key, &updated, copyPayload);
 }
 
 // AppServiceT *getService(unsigned int serviceId) {
