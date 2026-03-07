@@ -6,7 +6,7 @@ from typing import Optional
 import random
 
 DEBUG = True
-TIMEOUT_SECONDS = 2.0
+TIMEOUT_SECONDS = 1
 MAX_RETRIES = 5
 
 DISCOVERY_PORT = 12345
@@ -14,6 +14,12 @@ DISCOVERY_TIMEOUT = 2.0
 
 MAX_PAYLOAD_LENGTH = 4096
 MAX_BUFFER_SIZE = MAX_PAYLOAD_LENGTH + 5 * 4
+
+class ServerError(Enum):
+    TIMEOUT = "Timeout."
+    NOT_SERVING = "Not serving."
+    EXPIRED = "Expired."
+    INVALID_USER = "Invalid user."
 
 class MessageType(Enum):
     REQUEST = 0
@@ -171,10 +177,17 @@ def doRequestReply(serviceId, payload) -> Optional[str] | Optional[bytes]:
             server.sequence_number += 1
             updateMemory()
             return None, response.payload
+        elif (error == ServerError.EXPIRED):
+            server.sequence_number += 1
+            updateMemory()
+        elif (error == ServerError.INVALID_USER):
+            server.client_id = 0
+            updateMemory()
+            initializeConnection(server)
         
     return error, None
 
-def tryRequest(request: ClientRequest, check_id, send_ack, track_cancel) -> Optional[str] | Optional[ServerResponse] :
+def tryRequest(request: ClientRequest, check_id, send_ack, track_cancel) -> Optional[ServerError] | Optional[ServerResponse] :
     # Serialize request
     server = request.server
 
@@ -208,7 +221,12 @@ def tryRequest(request: ClientRequest, check_id, send_ack, track_cancel) -> Opti
                         if track_cancel:
                             server.cancellable = False
                             updateMemory()
-                        return "Not serving." if r_type == MessageType.NOT_SERVING.value else "Timeout.", None
+                        return ServerError.NOT_SERVING if r_type == MessageType.NOT_SERVING.value else ServerError.EXPIRED, None
+                    if r_type == MessageType.CANCEL.value:
+                        if track_cancel:
+                            server.cancellable = False
+                            updateMemory()
+                        return ServerError.INVALID_USER, None
                     if r_type != MessageType.REPLY.value:
                         continue
 
@@ -233,7 +251,7 @@ def tryRequest(request: ClientRequest, check_id, send_ack, track_cancel) -> Opti
                 print(f"[API] Timeout on attempt {attempt + 1}. Retrying...")
             continue
             
-    return "Timeout.", None
+    return ServerError.TIMEOUT, None
 
 def updateMemory():
     with open(memory_file, 'w') as f:

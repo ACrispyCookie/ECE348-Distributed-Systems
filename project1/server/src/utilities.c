@@ -163,6 +163,23 @@ int reqlist_contains(RequestListT *list, RequestT *key, RequestT **copy) {
     return ret;
 }
 
+int reqlist_containsClient(RequestListT *list, RequestT *key) {
+    pthread_mutex_lock(&list->lock);
+    
+    RequestElementT *el;
+    int ret = 0;
+    
+    CDL_FOREACH(list->list, el) {
+        if (el->req->packet.clientId == key->packet.clientId) {
+            ret = 1;
+            break;
+        }
+    }
+
+    pthread_mutex_unlock(&list->lock);
+    return ret;
+}
+
 int reqlist_containsNewer(RequestListT *list, RequestT *key) {
     pthread_mutex_lock(&list->lock);
     

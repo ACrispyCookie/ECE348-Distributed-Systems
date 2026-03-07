@@ -42,7 +42,7 @@ def main():
             
             error, response = client_api.doRequestReply(PRIMALITY_SERVICE, payload)
             if (error != None):
-                print("[APP] Failed to get response: " + error)
+                print("[APP] Failed to get response: " + error.value)
                 continue
             results = deserializeRequest(response)
             

@@ -107,6 +107,19 @@ int receiveRequest(RequestT *req) {
     if (req->packet.clientId == 0) 
         return receiveHandshake(req);
 
+    if (!reqlist_containsClient(cachedRequests, req)) {
+#ifdef DEBUG
+    printf("User doesn't exist...\n");
+#endif
+        req->packet.type = CANCEL;
+        free(req->packet.payload);
+        req->packet.payload = NULL;
+        req->packet.payloadLength = 0;
+        
+        reqlist_add(replies, req);
+        return 0;
+    }
+
     // Duplicate already acknowledged
     if (reqlist_containsNewer(cachedRequests, req)){
 #ifdef DEBUG
@@ -148,8 +161,8 @@ int receiveRequest(RequestT *req) {
         cached->id = req->id;
         if (cached->packet.payload == NULL)
             cached->packet.type = EXPIRED;
-        updateCachedRequest(cached, 0);
-        
+        updateCachedRequest(cached, 1);
+
         reqlist_add(replies, cached);
         return 1;
     }

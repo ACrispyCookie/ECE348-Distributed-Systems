@@ -8,6 +8,7 @@ void reqlist_destroy(RequestListT *list);
 int reqlist_add(RequestListT *list, RequestT *req);
 int reqlist_remove(RequestListT *list, RequestT *key);
 int reqlist_contains(RequestListT *list, RequestT *key, RequestT **copy);
+int reqlist_containsClient(RequestListT *list, RequestT *key);
 int reqlist_containsNewer(RequestListT *list, RequestT *key);
 int reqlist_update(RequestListT *list, RequestT *key, RequestT *updated, int copyNewPayload);
 RequestT *reqlist_pop(RequestListT *list, RequestT *key);
