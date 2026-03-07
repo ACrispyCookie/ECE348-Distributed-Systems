@@ -6,8 +6,13 @@
 #include <arpa/inet.h>
 
 // Percentage of virtual packet loss
-#define REQUEST_LOSS 15
-#define REPLY_LOSS 15
+#ifndef REQUEST_LOSS
+#define REQUEST_LOSS 0
+#endif
+
+#ifndef REPLY_LOSS
+#define REPLY_LOSS 0
+#endif
 
 #define MEMORY_FILE "memory.txt"
 #define MAX_BUFFER_SIZE (5 * sizeof(uint32_t) + MAX_PAYLOAD_SIZE)

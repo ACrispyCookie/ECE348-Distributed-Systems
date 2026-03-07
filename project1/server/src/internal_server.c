@@ -154,13 +154,14 @@ int receiveRequest(RequestT *req) {
     int success = reqlist_contains(cachedRequests, req, &cached);
     if (success) {
 #ifdef DEBUG
-    printf("Reply was cached, resending...\n");
+    printf("Reply was cached, %s\n", cached->packet.payload == NULL ? "but expired..." : "so resending...");
 #endif
         cached->clientAddr = req->clientAddr;
         cached->clientAddrLen = req->clientAddrLen;
         cached->id = req->id;
         if (cached->packet.payload == NULL)
             cached->packet.type = EXPIRED;
+
         updateCachedRequest(cached, 1);
 
         reqlist_add(replies, cached);

@@ -5,6 +5,14 @@ ifeq ($(DEBUG), 1)
     CFLAGS += -DDEBUG
 endif
 
+ifdef REQUEST_LOSS
+    CFLAGS += -DREQUEST_LOSS=$(REQUEST_LOSS)
+endif
+
+ifdef REPLY_LOSS
+    CFLAGS += -DREPLY_LOSS=$(REPLY_LOSS)
+endif
+
 BUILD_DIR = build
 TARGET = $(BUILD_DIR)/server_app
 OBJS = $(BUILD_DIR)/utilities.o $(BUILD_DIR)/internal_server.o $(BUILD_DIR)/server_api.o $(BUILD_DIR)/server_app.o
