@@ -49,7 +49,6 @@ demo_lib.print_load_balancing_info(
     strategy="Round Robin (randomized start)"
 )
 
-# Print distribution summary
 print("\n[5] Distribution summary:")
 counts = {}
 for _, server_label, _ in routing_log:
