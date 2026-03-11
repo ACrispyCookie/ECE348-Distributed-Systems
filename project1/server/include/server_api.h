@@ -2,7 +2,7 @@
 #define SERVER_API_H
 
 #define MAX_PAYLOAD_SIZE 4096
-#define DISCOVERY_PORT 12345
+#define DISCOVERY_PORT 10123
 
 // Initialize server
 void init(unsigned int port);
