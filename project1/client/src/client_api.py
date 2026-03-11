@@ -4,6 +4,7 @@ from enum import Enum
 from dataclasses import dataclass
 from typing import Optional, List, Union
 import random
+import os
 
 DEBUG = True
 TIMEOUT_SECONDS = 1
@@ -61,6 +62,11 @@ def init(config_filename="config.txt"):
 
     memory_file = config_filename
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+    # If config doesn't exist create empty file
+    if not os.path.isfile(memory_file):
+        f = open(memory_file, "w")
+        f.close()
     
     # Read the config file for the server address and port
     try:
