@@ -1,0 +1,2 @@
+Server Type,Iterations Attempted,Successful Requests,Average Delay (ms),Standard Dev (ms),Min Delay (ms),Max Delay (ms)
+multi,1000,1000,2.148,1.324,1.198,9.640

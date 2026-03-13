@@ -1,0 +1,2 @@
+Server Type,Clients,Requests per Client,Payload Type,Total Requests Processed,Total Time Elapsed (s),Throughput (req/sec),Average Req Delay (ms),Standard Dev (ms),Min Req Delay (ms),Max Req Delay (ms)
+single,20,500,Big Primes,10000,7.078,1412.75,13.959,2.235,10.860,28.634
