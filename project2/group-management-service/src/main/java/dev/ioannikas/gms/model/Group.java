@@ -3,15 +3,16 @@ package dev.ioannikas.gms.model;
 import dev.ioannikas.gms.utility.AtomicIdGenerator;
 import dev.ioannikas.gms.utility.AtomicIndex;
 
+import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Set;
+import java.util.Map;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class Group {
     private final int id;
     private final String name;
-    private final Set<Client> clients;
+    private final Map<String, Client> clients;
     private final ReadWriteLock clientsLock = new ReentrantReadWriteLock();
 
     private static final AtomicIndex<Integer, Group> index = new AtomicIndex<>(Group::getId);
@@ -20,7 +21,7 @@ public class Group {
     public Group(String name) {
         this.name = name;
         this.id = idGen.getNext();
-        this.clients = new HashSet<>();
+        this.clients = new HashMap<>();
     }
 
     public int getId() {
@@ -31,10 +32,10 @@ public class Group {
         return name;
     }
 
-    public boolean containsClient(Client client) {
+    public boolean containsClient(String username) {
         clientsLock.readLock().lock();
         try {
-            return clients.contains(client);
+            return clients.containsKey(username);
         } finally {
             clientsLock.readLock().unlock();
         }
@@ -43,7 +44,7 @@ public class Group {
     public void addClient(Client client) {
         clientsLock.writeLock().lock();
         try {
-            clients.add(client);
+            clients.put(client.getUsername(), client);
         } finally {
             clientsLock.writeLock().unlock();
         }
@@ -52,7 +53,7 @@ public class Group {
     public void removeClient(Client client) {
         clientsLock.writeLock().lock();
         try {
-            clients.remove(client);
+            clients.remove(client.getUsername());
         } finally {
             clientsLock.writeLock().unlock();
         }

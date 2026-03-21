@@ -1,5 +1,7 @@
 package dev.ioannikas.gms.utility;
 
+import dev.ioannikas.gms.model.Group;
+
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -10,9 +12,12 @@ public class Printer {
         print("INFO", message);
     }
 
+    public static void printDebug(String message) {
+        print("DEBUG ", message);
+    }
 
-    public static void printClient(String message) {
-        print("CLIENT", message);
+    public static void printGroup(Group group, String message) {
+        print("GROUP " + group.getName(), message);
     }
 
     public static void printErr(String message) {

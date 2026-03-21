@@ -51,5 +51,6 @@ public class GMS {
 
     private static void onShutdown() {
         shuttingDown = true;
+        Receiver.onShutdown();
     }
 }
