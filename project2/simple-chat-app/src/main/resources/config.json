@@ -1,0 +1,6 @@
+{
+  "gms": {
+    "host": "localhost",
+    "port": 8080
+  }
+}
