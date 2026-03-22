@@ -46,7 +46,7 @@ public class Command {
         JOIN,
         LEAVE,
         SELECT,
-        EXIT,
-        HELP
+        INFO,
+        EXIT
     }
 }

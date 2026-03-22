@@ -1,10 +1,10 @@
-package dev.ioannikas.gms.packets;
+package dev.ioannikas.grouplib.network.serializable.gms.requests;
 
-import java.io.Serializable;
+import dev.ioannikas.grouplib.network.serializable.Packet;
 
-public class GMSPacket implements Serializable {
+public class RequestGMSPacket extends Packet {
 
-    private final PacketType type;
+    private final RequestType type;
     private final String username;
 
     /* Used on LEAVE packets */
@@ -15,7 +15,7 @@ public class GMSPacket implements Serializable {
     private final String ipAddress;
     private final int port;
 
-    public GMSPacket(PacketType type, String username, int groupId, String groupName, String ipAddress, int port) {
+    public RequestGMSPacket(RequestType type, String username, int groupId, String groupName, String ipAddress, int port) {
         this.type = type;
         this.username = username;
         this.groupId = groupId;
@@ -24,7 +24,7 @@ public class GMSPacket implements Serializable {
         this.port = port;
     }
 
-    public PacketType getType() {
+    public RequestType getType() {
         return type;
     }
 
@@ -48,7 +48,11 @@ public class GMSPacket implements Serializable {
         return port;
     }
 
-    public enum PacketType {
+    public static RequestGMSPacket simpleHeartbeat() {
+        return new RequestGMSPacket(RequestType.HEARTBEAT, null, -1, null, null, -1);
+    }
+
+    public enum RequestType {
         JOIN,
         LEAVE,
         HEARTBEAT

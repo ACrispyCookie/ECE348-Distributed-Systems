@@ -1,15 +1,15 @@
 package dev.ioannikas.chatapp.model;
 
 import java.io.Serializable;
-import java.util.Date;
+import java.time.LocalDateTime;
 
 public class Message implements Serializable {
 
     private final String author;
-    private final Date date;
+    private final LocalDateTime date;
     private final String message;
 
-    public Message(String author, Date date, String message) {
+    public Message(String author, LocalDateTime date, String message) {
         this.author = author;
         this.date = date;
         this.message = message;
@@ -19,7 +19,7 @@ public class Message implements Serializable {
         return author;
     }
 
-    public Date getDate() {
+    public LocalDateTime getDate() {
         return date;
     }
 

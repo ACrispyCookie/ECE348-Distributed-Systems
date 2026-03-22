@@ -1,17 +1,19 @@
 package dev.ioannikas.chatapp.model;
 
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.List;
 
 public class GroupChat {
 
     private final int id;
     private final String name;
-    private final BlockingQueue<Message> received = new LinkedBlockingQueue<>();
+    private final String username;
+    private final List<String> members;
 
-    public GroupChat(int id, String name) {
+    public GroupChat(int id, String name, String username, List<String> members) {
         this.id = id;
         this.name = name;
+        this.username = username;
+        this.members = members;
     }
 
     public int getId() {
@@ -22,7 +24,11 @@ public class GroupChat {
         return name;
     }
 
-    public BlockingQueue<Message> getReceived() {
-        return received;
+    public String getUsername() {
+        return username;
+    }
+
+    public List<String> getMembers() {
+        return members;
     }
 }

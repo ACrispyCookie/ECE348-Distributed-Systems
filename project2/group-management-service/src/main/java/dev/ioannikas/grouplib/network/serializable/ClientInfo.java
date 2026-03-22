@@ -1,13 +1,13 @@
-package dev.ioannikas.gms.model;
+package dev.ioannikas.grouplib.network.serializable;
 
 import java.io.Serializable;
 
-public class Client implements Serializable {
+public class ClientInfo implements Serializable {
     private final String username;
     private final String ipAddress;
     private final int port;
 
-    public Client(String username, String ipAddress, int port) {
+    public ClientInfo(String username, String ipAddress, int port) {
         this.username = username;
         this.ipAddress = ipAddress;
         this.port = port;
@@ -23,5 +23,10 @@ public class Client implements Serializable {
 
     public int getPort() {
         return port;
+    }
+
+    @Override
+    public String toString() {
+        return "Username: " + username + " IP: " + ipAddress + " Port: " + port;
     }
 }

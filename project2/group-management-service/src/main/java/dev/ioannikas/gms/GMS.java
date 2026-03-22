@@ -1,6 +1,7 @@
 package dev.ioannikas.gms;
 
-import dev.ioannikas.gms.thread.Receiver;
+import dev.ioannikas.gms.managers.GroupManager;
+import dev.ioannikas.gms.network.ReceiverThread;
 import dev.ioannikas.gms.utility.Printer;
 
 import java.io.IOException;
@@ -11,6 +12,7 @@ public class GMS {
 
     private static final int DEFAULT_PORT = 5000;
     private static boolean shuttingDown = false;
+    private static GroupManager groupManager;
 
     public static void main(String[] args) {
         int port = DEFAULT_PORT;
@@ -25,6 +27,9 @@ public class GMS {
 
         Printer.printInfo("GMS starting...");
 
+        groupManager = new GroupManager();
+        Printer.initialize(groupManager);
+
         try (ServerSocket serverSocket = new ServerSocket(port)) {
 
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -37,11 +42,11 @@ public class GMS {
                 onShutdown();
             }));
 
+            Printer.printInfo("Waiting for connections on port " + port + "...");
             while (!shuttingDown) {
-                Printer.printInfo("Waiting for connections on port " + port + "...");
                 Socket socket = serverSocket.accept();
 
-                Thread thread = new Receiver(socket);
+                Thread thread = new ReceiverThread(groupManager, socket);
                 thread.start();
             }
         } catch (IOException e) {
@@ -51,6 +56,6 @@ public class GMS {
 
     private static void onShutdown() {
         shuttingDown = true;
-        Receiver.onShutdown();
+        ReceiverThread.onShutdown();
     }
 }
