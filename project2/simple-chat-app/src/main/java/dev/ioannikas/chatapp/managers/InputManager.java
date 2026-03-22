@@ -2,7 +2,6 @@ package dev.ioannikas.chatapp.managers;
 
 import dev.ioannikas.chatapp.ChatApp;
 import dev.ioannikas.chatapp.model.Command;
-import dev.ioannikas.chatapp.model.GroupChat;
 import dev.ioannikas.chatapp.model.Message;
 import dev.ioannikas.chatapp.utility.Printer;
 import dev.ioannikas.grouplib.api.JoinLeaveResult;
@@ -51,7 +50,7 @@ public class InputManager extends Thread {
             case SELECT -> handleSelect(command);
             case INFO -> handleInfo();
             case EXIT -> handleExit();
-        };
+        }
     }
 
     private void handleJoin(Command command) {
@@ -72,8 +71,7 @@ public class InputManager extends Thread {
             return;
         }
 
-        GroupChat chat = new GroupChat(reply.getGroupId(), groupName, username, reply.getClients());
-        ChatApp.getChatManager().joinChat(chat);
+        ChatApp.getChatManager().joinChat(reply.getGroupId(), groupName, username, reply.getClients());
         Printer.printInfo("You have joined group " + groupName + "!");
     }
 

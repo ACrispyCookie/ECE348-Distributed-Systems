@@ -1,7 +1,5 @@
 package dev.ioannikas.chatapp.utility;
 
-import dev.ioannikas.chatapp.model.GroupChat;
-
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -16,8 +14,8 @@ public class Printer {
         print("DEBUG ", message);
     }
 
-    public static void printMessage(GroupChat groupChat, String message) {
-        print("GROUP " + groupChat.getName() + " (" + groupChat.getMembers().size() + ")", message);
+    public static void printMessage(String name, int members, String message) {
+        print("GROUP " + name + " (" + members + ")", message);
     }
 
     public static void printErr(String message) {
