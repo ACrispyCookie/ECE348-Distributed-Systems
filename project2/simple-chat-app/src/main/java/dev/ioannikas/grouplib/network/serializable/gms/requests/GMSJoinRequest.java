@@ -10,8 +10,8 @@ public class GMSJoinRequest extends GMSRequest {
     private final String ipAddress;
     private final int port;
 
-    public GMSJoinRequest(String username, String groupName, String ipAddress, int port) {
-        super(RequestType.JOIN, username);
+    public GMSJoinRequest(String username, int futureId, String groupName, String ipAddress, int port) {
+        super(RequestType.JOIN, username, futureId);
         this.groupName = groupName;
         this.ipAddress = ipAddress;
         this.port = port;

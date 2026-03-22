@@ -3,7 +3,6 @@ package dev.ioannikas.grouplib.managers;
 
 import dev.ioannikas.chatapp.utility.Printer;
 import dev.ioannikas.grouplib.GroupAPI;
-import dev.ioannikas.grouplib.network.serializable.gms.ConnectionTCP;
 import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSJoinReply;
 import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSLeaveReply;
 import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSReply;
@@ -13,24 +12,19 @@ import dev.ioannikas.grouplib.network.serializable.gms.requests.GMSRequest;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Queue;
+import java.util.Map;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class GMSManager extends GeneralManager {
 
     private final int HEARTBEAT_INTERVAL = 2;
-    private final ConnectionTCP connection;
-
-    private final BlockingQueue<GMSReply> receiving;
-    private final BlockingQueue<RequestTask> sending;
-    private final Queue<CompletableFuture<GMSReply>> pendingFutures;
+    private final Map<Integer, CompletableFuture<GMSReply>> pendingFutures;
+    private final AtomicInteger nextFutureId = new AtomicInteger(1);
 
     public GMSManager(GroupAPI api) {
         super(api);
-        this.connection = api.getNetworkManager().getGmsConnection();
-        this.receiving = new LinkedBlockingQueue<>();
-        this.sending = new LinkedBlockingQueue<>();
-        this.pendingFutures = new ConcurrentLinkedQueue<>();
+        this.pendingFutures = new ConcurrentHashMap<>();
 
         start();
     }
@@ -39,12 +33,13 @@ public class GMSManager extends GeneralManager {
         CompletableFuture<GMSReply> future = new CompletableFuture<>();
 
         try {
-            GMSJoinRequest packet = new GMSJoinRequest(username, groupName, ipAddress, port);
-            sending.put(new RequestTask(packet, future));
+            GMSJoinRequest packet = new GMSJoinRequest(username, nextFutureId.getAndIncrement(), groupName, ipAddress, port);
+            pendingFutures.put(packet.getFutureId(), future);
+            getAPI().getNetworkManager().sendGms(packet);
 
             return (GMSJoinReply) future.get();
-        } catch (InterruptedException | ExecutionException e) {
-            Printer.printErr("[GMS Manager] Error completing a join request.");
+        } catch (InterruptedException | ExecutionException | IOException e) {
+            Printer.printErr("[GMSManager] Error completing a join request.");
             e.printStackTrace();
         }
 
@@ -55,56 +50,48 @@ public class GMSManager extends GeneralManager {
         CompletableFuture<GMSReply> future = new CompletableFuture<>();
 
         try {
-            GMSLeaveRequest packet = new GMSLeaveRequest(username, groupId);
-            sending.put(new RequestTask(packet, future));
+            GMSLeaveRequest packet = new GMSLeaveRequest(username, nextFutureId.getAndIncrement(), groupId);
+            pendingFutures.put(packet.getFutureId(), future);
+            getAPI().getNetworkManager().sendGms(packet);
 
             return (GMSLeaveReply) future.get();
-        } catch (InterruptedException | ExecutionException e) {
-            Printer.printErr("[GMS Manager] Error completing a leave request.");
+        } catch (InterruptedException | ExecutionException | IOException e) {
+            Printer.printErr("[GMSManager] Error completing a leave request.");
             e.printStackTrace();
         }
 
         return null;
     }
 
-    public void receiver() {
-        while(!isShuttingDown()) {
-            try {
-                GMSReply reply = receiving.take();
-                CompletableFuture<GMSReply> future = pendingFutures.poll();
+    public void handleReceivedPacket(GMSReply reply) {
+        int futureId;
 
-                // Should never happen
-                if (future == null)
-                    continue;
-
-                future.complete(reply);
-            } catch (InterruptedException ignored) {
-
-            }
+        if (reply instanceof GMSJoinReply join) {
+            futureId = join.getFutureId();
+        } else if (reply instanceof GMSLeaveReply leave) {
+            futureId = leave.getFutureId();
+        } else {
+            return;
         }
+
+        CompletableFuture<GMSReply> future = pendingFutures.remove(futureId);
+        // Should never happen
+        if (future == null)
+            return;
+        future.complete(reply);
     }
 
     private void sender() {
         while(!isShuttingDown()) {
             try {
-                RequestTask task = sending.poll(HEARTBEAT_INTERVAL, TimeUnit.SECONDS);
-
-                if (task != null) {
-                    pendingFutures.offer(task.future);
-                    connection.sendPacket(task.packet);
-                } else {
-                    connection.sendPacket(GMSRequest.simpleHeartbeat());
-                }
+                Thread.sleep(HEARTBEAT_INTERVAL * 1000);
+                getAPI().getNetworkManager().sendGms(GMSRequest.simpleHeartbeat());
             } catch (InterruptedException ignored) {
 
             } catch (IOException e) {
-                Printer.printErr("[GMS Sender] Error communicating with the GMS.");
+                Printer.printErr("[GMSSender] Error communicating with the GMS.");
             }
         }
-    }
-
-    public BlockingQueue<GMSReply> getReceiving() {
-        return receiving;
     }
 
     @Override
@@ -112,24 +99,12 @@ public class GMSManager extends GeneralManager {
         Thread sender = new Thread(this::sender);
         sender.setName("gms-sender");
 
-        Thread receiver = new Thread(this::receiver);
-        receiver.setName("gms-receiver");
-        return List.of(sender, receiver);
+        return List.of(sender);
     }
 
     @Override
     protected void onShutdown() {
 
-    }
-
-    private static class RequestTask {
-        final GMSRequest packet;
-        final CompletableFuture<GMSReply> future;
-
-        RequestTask(GMSRequest packet, CompletableFuture<GMSReply> future) {
-            this.packet = packet;
-            this.future = future;
-        }
     }
 
 }

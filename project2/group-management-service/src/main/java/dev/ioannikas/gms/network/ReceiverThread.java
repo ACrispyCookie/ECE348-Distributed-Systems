@@ -70,18 +70,18 @@ public class ReceiverThread extends Thread {
         int groupId = manager.findOrCreateGroup(packet.getGroupName());
         GroupManager.ReturnCode code = manager.addToGroup(groupId, newClient);
         if (code == GroupManager.ReturnCode.CLIENT_ALREADY_EXISTS) {
-            GMSJoinReply reply = new GMSJoinReply(groupId, GMSJoinReply.FailReason.USERNAME_TAKEN, null);
+            GMSJoinReply reply = new GMSJoinReply(groupId, packet.getFutureId(), GMSJoinReply.FailReason.USERNAME_TAKEN, null);
             connection.sendPacket(reply);
             return;
         } else if (code != GroupManager.ReturnCode.SUCCESS) {
             Printer.printErr("Error while adding member " + connection.getIp() + ":" + connection.getPort() + " [" + packet.getUsername() + "] to group");
-            GMSJoinReply reply = new GMSJoinReply(groupId, GMSJoinReply.FailReason.UNKNOWN, null);
+            GMSJoinReply reply = new GMSJoinReply(groupId, packet.getFutureId(), GMSJoinReply.FailReason.UNKNOWN, null);
             connection.sendPacket(reply);
             return;
         }
 
         groups.put(groupId, packet.getUsername());
-        GMSJoinReply reply = new GMSJoinReply(groupId, GMSJoinReply.FailReason.NONE, manager.getClients(groupId));
+        GMSJoinReply reply = new GMSJoinReply(groupId, packet.getFutureId(), GMSJoinReply.FailReason.NONE, manager.getClients(groupId));
         connection.sendPacket(reply);
 
         GMSUpdateReply update = new GMSUpdateReply(groupId, newClient, GMSUpdateReply.Action.JOINED);
@@ -107,13 +107,13 @@ public class ReceiverThread extends Thread {
         GroupManager.ReturnCode code = manager.removeFromGroup(groupId, username);
         if (code != GroupManager.ReturnCode.SUCCESS) {
             Printer.printErr("Error while adding member " + connection.getIp() + ":" + connection.getPort() + " [" + packet.getUsername() + "] to group");
-            GMSLeaveReply reply = new GMSLeaveReply(groupId, GMSLeaveReply.FailReason.UNKNOWN);
+            GMSLeaveReply reply = new GMSLeaveReply(groupId, packet.getFutureId(), GMSLeaveReply.FailReason.UNKNOWN);
             connection.sendPacket(reply);
             return;
         }
 
         groups.remove(groupId);
-        GMSLeaveReply reply = new GMSLeaveReply(groupId, GMSLeaveReply.FailReason.NONE);
+        GMSLeaveReply reply = new GMSLeaveReply(groupId, packet.getFutureId(), GMSLeaveReply.FailReason.NONE);
         connection.sendPacket(reply);
         // TODO Send update packet to group
     }

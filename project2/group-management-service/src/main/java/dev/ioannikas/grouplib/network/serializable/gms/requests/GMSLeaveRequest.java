@@ -8,8 +8,8 @@ public class GMSLeaveRequest extends GMSRequest {
     private static final long serialVersionUID = 2L;
     private final int groupId;
 
-    public GMSLeaveRequest(String username, int groupId) {
-        super(RequestType.LEAVE, username);
+    public GMSLeaveRequest(String username, int futureId, int groupId) {
+        super(RequestType.LEAVE, username, futureId);
         this.groupId = groupId;
     }
 

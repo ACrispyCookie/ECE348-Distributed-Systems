@@ -8,8 +8,8 @@ import java.net.Socket;
 public class ConnectionTCP {
 
     private final Socket socket;
-    private ObjectInputStream in;
-    private ObjectOutputStream out;
+    private final ObjectInputStream in;
+    private final ObjectOutputStream out;
 
     public ConnectionTCP(Socket socket) throws IOException {
         this.socket = socket;

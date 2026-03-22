@@ -2,11 +2,13 @@ package dev.ioannikas.grouplib;
 
 import dev.ioannikas.grouplib.api.JoinReply;
 import dev.ioannikas.grouplib.api.LeaveReply;
+import dev.ioannikas.grouplib.api.Message;
 import dev.ioannikas.grouplib.managers.GMSManager;
 import dev.ioannikas.grouplib.managers.MessagingManager;
 import dev.ioannikas.grouplib.managers.NetworkManager;
 import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSJoinReply;
 import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSLeaveReply;
+import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSUpdateReply;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -52,9 +54,15 @@ public class GroupAPI {
         return 0;
     }
 
-    public <T extends Serializable> T receive(int groupId, int block) {
+    public Object receive(int groupId, boolean block) {
+        if (!groups.containsKey(groupId))
+            return null;
 
-        return null;
+        Message reply = messagingManager.receive(groupId, block);
+        if (reply.getType() == Message.Type.VIEW_UPDATE)
+            return ((GMSUpdateReply) reply.getObject()).toApiVersion();
+        else
+            return reply.getObject();
     }
 
     public NetworkManager getNetworkManager() {

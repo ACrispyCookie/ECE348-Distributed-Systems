@@ -10,10 +10,12 @@ public class GMSRequest extends PacketTCP {
     private static final long serialVersionUID = 2L;
     private final RequestType type;
     private final String username;
+    private final int futureId;
 
-    public GMSRequest(RequestType type, String username) {
+    public GMSRequest(RequestType type, String username, int futureId) {
         this.type = type;
         this.username = username;
+        this.futureId = futureId;
     }
 
     public RequestType getType() {
@@ -24,8 +26,12 @@ public class GMSRequest extends PacketTCP {
         return username;
     }
 
+    public int getFutureId() {
+        return futureId;
+    }
+
     public static GMSRequest simpleHeartbeat() {
-        return new GMSRequest(RequestType.HEARTBEAT, null);
+        return new GMSRequest(RequestType.HEARTBEAT, null, -1);
     }
 
     public enum RequestType {
