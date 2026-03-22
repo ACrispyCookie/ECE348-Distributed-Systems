@@ -4,6 +4,7 @@ import dev.ioannikas.grouplib.api.JoinLeaveResult;
 import dev.ioannikas.grouplib.network.serializable.ClientInfo;
 
 import java.io.Serial;
+import java.util.LinkedList;
 import java.util.List;
 
 public class UpdateGMSReply extends GMSReply {
@@ -31,7 +32,7 @@ public class UpdateGMSReply extends GMSReply {
         JoinLeaveResult.Status status = JoinLeaveResult.Status.valueOf(this.getResult().name());
         JoinLeaveResult.FailReason failReason = JoinLeaveResult.FailReason.valueOf(reason.name());
 
-        return new JoinLeaveResult(status, getGroupId(), failReason, clients.stream().map(ClientInfo::getUsername).toList());
+        return new JoinLeaveResult(status, getGroupId(), failReason, clients == null ? new LinkedList<>() : clients.stream().map(ClientInfo::getUsername).toList());
     }
 
     public enum FailReason {

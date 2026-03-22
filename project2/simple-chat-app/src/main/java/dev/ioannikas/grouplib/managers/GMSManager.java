@@ -24,19 +24,26 @@ public class GMSManager {
     private final Thread sender, receiver;
 
     public GMSManager(String gmsAddress, int gmsPort) {
-        try {
-            this.socket = new Socket(gmsAddress, gmsPort);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
         this.outgoing = new LinkedBlockingQueue<>();
         this.pendingFutures = new ConcurrentLinkedQueue<>();
 
         this.sender = new Thread(this::sender);
         sender.setName("gms-sender");
-        sender.start();
         this.receiver = new Thread(this::receiver);
         receiver.setName("gms-receiver");
+
+        Socket temp = null;
+        try {
+            temp = new Socket(gmsAddress, gmsPort);
+        } catch (IOException e) {
+            Printer.printErr("[GMS Manager] Error connecting to the GMS.");
+            this.socket = temp;
+            shuttingDown = true;
+            return;
+        }
+
+        this.socket = temp;
+        sender.start();
         receiver.start();
     }
 
@@ -63,7 +70,7 @@ public class GMSManager {
             while (!shuttingDown) {
                 GMSReply reply = (GMSReply) in.readObject();
                 CompletableFuture<UpdateGMSReply> future = pendingFutures.poll();
-                Printer.printDebug("Received reply " + reply.getType());
+                Printer.printDebug("[GMS Receiver] Received reply " + reply.getType());
 
                 if (future == null) {
                     // TODO Handle group view update
@@ -73,8 +80,8 @@ public class GMSManager {
                 future.complete((UpdateGMSReply) reply);
             }
         } catch (Exception e) {
-            e.printStackTrace();
-            if (!shuttingDown) Printer.printErr("GMS Disconnected.");
+            if (!shuttingDown) e.printStackTrace();
+            if (!shuttingDown) Printer.printErr("[GMS Receiver] GMS Disconnected.");
         }
     }
 
@@ -94,20 +101,25 @@ public class GMSManager {
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
-            if (!shuttingDown) Printer.printErr("GMS Disconnected.");
+            if (!shuttingDown) e.printStackTrace();
+            if (!shuttingDown) Printer.printErr("[GMS Sender] GMS Disconnected.");
         }
     }
 
     public void shutdown() {
         shuttingDown = true;
         try {
-            socket.close();
+            if (!socket.isClosed())
+                socket.close();
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            Printer.printErr("[GMS Manager] Error closing the socket.");
         }
         sender.interrupt();
         receiver.interrupt();
+    }
+
+    public boolean isShuttingDown() {
+        return shuttingDown;
     }
 
     private static class RequestTask {

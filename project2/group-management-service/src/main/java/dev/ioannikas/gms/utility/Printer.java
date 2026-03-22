@@ -31,6 +31,8 @@ public class Printer {
     }
 
     private static void print(String prefix, String message) {
-        System.err.println(LocalDateTime.now().format(FMT) + ": [" + prefix + "] " + message);
+        String[] lines = message.split("\n");
+        for (String line : lines)
+            System.out.println(LocalDateTime.now().format(FMT) + ": [" + prefix + "] " + line);
     }
 }

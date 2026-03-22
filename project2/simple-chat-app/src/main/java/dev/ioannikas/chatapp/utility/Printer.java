@@ -11,7 +11,7 @@ public class Printer {
     }
 
     public static void printDebug(String message) {
-        print("DEBUG ", message);
+        print("DEBUG", message);
     }
 
     public static void printMessage(String name, int members, String message) {

@@ -35,7 +35,7 @@ public class GroupManager {
             return ReturnCode.GROUP_NOT_FOUND;
 
         ClientInfo previous = group.removeClient(username);
-        return previous == null ? ReturnCode.SUCCESS : ReturnCode.CLIENT_NOT_FOUND;
+        return previous != null ? ReturnCode.SUCCESS : ReturnCode.CLIENT_NOT_FOUND;
     }
 
     public synchronized String getGroupName(int groupId) {

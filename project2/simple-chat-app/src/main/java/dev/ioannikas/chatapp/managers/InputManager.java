@@ -23,18 +23,19 @@ public class InputManager extends Thread {
     public void run() {
         Scanner scanner = new Scanner(System.in);
 
-        while (!ChatApp.isShuttingDown() && scanner.hasNext()) {
+        while (scanner.hasNext()) {
             String line = scanner.nextLine();
             Command command = Command.parse(line);
 
             if (command != null) {
-                handleCommand(command);
+                if (handleCommand(command) == Command.Type.EXIT)
+                    break;
                 continue;
             } else if (line.startsWith("/")) {
-                Printer.printErr("Invalid command!");
+                Printer.printErr("[ChatApp] Invalid command!");
                 continue;
             } else if (selected == -1) {
-                Printer.printErr("Select a chat before sending!");
+                Printer.printErr("[ChatApp] Select a chat before sending!");
                 continue;
             }
 
@@ -43,7 +44,7 @@ public class InputManager extends Thread {
         }
     }
 
-    private void handleCommand(Command command) {
+    private Command.Type handleCommand(Command command) {
         switch (command.getType()) {
             case JOIN -> handleJoin(command);
             case LEAVE -> handleLeave(command);
@@ -51,57 +52,69 @@ public class InputManager extends Thread {
             case INFO -> handleInfo();
             case EXIT -> handleExit();
         }
+
+        return command.getType();
     }
 
     private void handleJoin(Command command) {
         if (command.getArgs().length != 2) {
-            Printer.printErr("Invalid usage: /join <group name> <username>");
+            Printer.printErr("[ChatApp] Invalid usage: /join <group name> <username>");
             return;
         }
 
         String groupName = command.getArgs()[0];
         String username = command.getArgs()[1];
 
+        if (ChatApp.getChatManager().getByName(groupName) != -1) {
+            Printer.printErr("[ChatApp] You are already in this group!");
+            return;
+        }
+
         JoinLeaveResult reply = ChatApp.getGroupAPI().join(groupName, username);
         if (reply.getStatus() == JoinLeaveResult.Status.ERROR) {
             if (reply.getReason() == JoinLeaveResult.FailReason.USERNAME_TAKEN)
-                Printer.printErr("This username is taken in this group!");
+                Printer.printErr("[ChatApp] This username is taken in this group!");
             else
-                Printer.printErr("Error while joining group!");
+                Printer.printErr("[ChatApp] Error while joining group!");
             return;
         }
 
         ChatApp.getChatManager().joinChat(reply.getGroupId(), groupName, username, reply.getClients());
-        Printer.printInfo("You have joined group " + groupName + "!");
+        Printer.printInfo("[ChatApp] You have joined group " + groupName + " (ID:" + reply.getGroupId() + ")!");
     }
 
     private void handleLeave(Command command) {
         if (command.getArgs().length != 1) {
-            Printer.printErr("Invalid usage: /leave <group ID>");
+            Printer.printErr("[ChatApp] Invalid usage: /leave <group name/group ID>");
             return;
         }
 
         int groupId;
         try {
             groupId = Integer.parseInt(command.getArgs()[0]);
-        } catch (Exception e) {
-            Printer.printErr("Please enter a valid number!");
+        } catch (Exception ignored) {
+            groupId = ChatApp.getChatManager().getByName(command.getArgs()[0]);
+        }
+
+        if (groupId == -1 || !ChatApp.getChatManager().exists(groupId)) {
+            Printer.printErr("[ChatApp] Group not found!");
             return;
         }
 
         JoinLeaveResult reply = ChatApp.getGroupAPI().leave(groupId);
         if (reply.getStatus() == JoinLeaveResult.Status.ERROR) {
-            Printer.printErr("Error while leaving a group!");
+            Printer.printErr("[ChatApp] Error while leaving a group!");
             return;
         }
 
+        String name = ChatApp.getChatManager().getName(groupId);
         ChatApp.getChatManager().leaveChat(groupId);
-        Printer.printInfo("You have left group " + groupId + "!");
+        Printer.printInfo("[ChatApp] You have left group " + name + " (ID:" + groupId + ")!");
     }
 
     private void handleSelect(Command command) {
         if (command.getArgs().length != 1) {
-            Printer.printErr("Invalid usage: /select <group name/group ID>");
+            Printer.printErr("[ChatApp] Invalid usage: /select <group name/group ID>");
             return;
         }
 
@@ -113,27 +126,27 @@ public class InputManager extends Thread {
         }
 
         if (groupId == -1) {
-            Printer.printErr("Group not found!");
+            Printer.printErr("[ChatApp] Group not found!");
             return;
         }
 
         selected = groupId;
-        Printer.printInfo("You have selected group " + ChatApp.getChatManager().getName(groupId) + "!");
+        Printer.printInfo("[ChatApp] You have selected group " + ChatApp.getChatManager().getName(groupId) + "!");
     }
 
     private void handleInfo() {
         if (selected == -1) {
-            Printer.printErr("You must select a chat to print its info!");
+            Printer.printErr("[ChatApp] You must select a chat to print its info!");
             return;
         }
 
-        StringBuilder builder = new StringBuilder("Chat info:");
+        StringBuilder builder = new StringBuilder("[ChatApp] Chat info:");
         builder.append("\n");
-        builder.append("Group name: ").append(ChatApp.getChatManager().getName(selected)).append("\n");
-        builder.append("Your username: ").append(ChatApp.getChatManager().getUsername(selected)).append("\n");
+        builder.append("[ChatApp] Group name: ").append(ChatApp.getChatManager().getName(selected)).append("\n");
+        builder.append("[ChatApp] Your username: ").append(ChatApp.getChatManager().getUsername(selected)).append("\n");
 
         List<String> members = ChatApp.getChatManager().getMembers(selected);
-        builder.append("Members: ").append(members.size()).append("\n");
+        builder.append("[ChatApp] Members: ").append(members.size()).append("\n");
 
         for (String s : members) {
             builder.append("        - ").append(s).append("\n");

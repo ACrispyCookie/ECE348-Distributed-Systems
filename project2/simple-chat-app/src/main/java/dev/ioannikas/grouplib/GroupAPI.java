@@ -1,11 +1,16 @@
 package dev.ioannikas.grouplib;
 
+import dev.ioannikas.chatapp.utility.Printer;
 import dev.ioannikas.grouplib.api.JoinLeaveResult;
 import dev.ioannikas.grouplib.managers.GMSManager;
 import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSReply;
 import dev.ioannikas.grouplib.network.serializable.gms.replies.UpdateGMSReply;
 
 import java.io.Serializable;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.SocketException;
+import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -19,9 +24,14 @@ public class GroupAPI {
 
     private boolean shuttingDown = false;
 
-    public void init(String gmsAddress, int gmsPort) {
+    public boolean init(String gmsAddress, int gmsPort, int appPort) {
         this.groups = new HashMap<>();
         this.gmsManager = new GMSManager(gmsAddress, gmsPort);
+        this.port = appPort;
+        this.ipAddress = findLocalIp();
+        Printer.printDebug("[GroupAPI] Using IP: " + ipAddress);
+
+        return !gmsManager.isShuttingDown();
     }
 
     public JoinLeaveResult join(String groupName, String username) {
@@ -70,5 +80,25 @@ public class GroupAPI {
 
     public boolean isShuttingDown() {
         return shuttingDown;
+    }
+
+    private String findLocalIp() {
+        try (DatagramSocket socket = new DatagramSocket()) {
+            socket.connect(InetAddress.getByName("8.8.8.8"), 10002);
+
+            String ip = socket.getLocalAddress().getHostAddress();
+            if (ip != null && !ip.equals("0.0.0.0") && !ip.startsWith("127.")) {
+                return ip;
+            }
+        } catch (SocketException | UnknownHostException e) {
+
+        }
+
+        try {
+            return InetAddress.getLocalHost().getHostAddress();
+        } catch (UnknownHostException e) {
+            Printer.printErr("[GroupAPI] CRITICAL: Could not determine local IP address!");
+            return "127.0.0.1";
+        }
     }
 }

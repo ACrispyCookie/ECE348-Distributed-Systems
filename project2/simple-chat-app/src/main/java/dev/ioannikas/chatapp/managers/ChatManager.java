@@ -108,6 +108,15 @@ public class ChatManager {
         }
     }
 
+    public boolean exists(int groupId) {
+        lock.lock();
+        try {
+            return chats.containsKey(groupId);
+        } finally {
+            lock.unlock();
+        }
+    }
+
     public void cleanUp() {
         lock.lock();
         try {

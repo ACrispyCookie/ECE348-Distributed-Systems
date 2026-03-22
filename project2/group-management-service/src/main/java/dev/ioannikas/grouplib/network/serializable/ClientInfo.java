@@ -1,8 +1,12 @@
 package dev.ioannikas.grouplib.network.serializable;
 
+import java.io.Serial;
 import java.io.Serializable;
 
 public class ClientInfo implements Serializable {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
     private final String username;
     private final String ipAddress;
     private final int port;
