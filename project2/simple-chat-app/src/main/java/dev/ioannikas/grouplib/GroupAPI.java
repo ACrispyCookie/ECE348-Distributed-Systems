@@ -1,10 +1,11 @@
 package dev.ioannikas.grouplib;
 
 import dev.ioannikas.chatapp.utility.Printer;
-import dev.ioannikas.grouplib.api.JoinLeaveResult;
+import dev.ioannikas.grouplib.api.JoinReply;
+import dev.ioannikas.grouplib.api.LeaveReply;
 import dev.ioannikas.grouplib.managers.GMSManager;
-import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSReply;
-import dev.ioannikas.grouplib.network.serializable.gms.replies.UpdateGMSReply;
+import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSJoinReply;
+import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSLeaveReply;
 
 import java.io.Serializable;
 import java.net.DatagramSocket;
@@ -34,10 +35,10 @@ public class GroupAPI {
         return !gmsManager.isShuttingDown();
     }
 
-    public JoinLeaveResult join(String groupName, String username) {
+    public JoinReply join(String groupName, String username) {
         try {
-            UpdateGMSReply reply = gmsManager.join(groupName, username, ipAddress, port);
-            if (reply.getResult() == GMSReply.ReplyResult.ERROR)
+            GMSJoinReply reply = gmsManager.join(groupName, username, ipAddress, port);
+            if (reply.getReason() != GMSJoinReply.FailReason.NONE)
                 return reply.toApiVersion();
 
             groups.put(reply.getGroupId(), username);
@@ -47,13 +48,13 @@ public class GroupAPI {
         }
     }
 
-    public JoinLeaveResult leave(int groupId) {
+    public LeaveReply leave(int groupId) {
         try {
             if (!groups.containsKey(groupId))
                 return null;
 
-            UpdateGMSReply reply = gmsManager.leave(groupId, groups.get(groupId));
-            if (reply.getResult() == GMSReply.ReplyResult.ERROR)
+            GMSLeaveReply reply = gmsManager.leave(groupId, groups.get(groupId));
+            if (reply.getReason() == GMSLeaveReply.FailReason.UNKNOWN)
                 return reply.toApiVersion();
 
             groups.remove(groupId);
@@ -90,7 +91,7 @@ public class GroupAPI {
             if (ip != null && !ip.equals("0.0.0.0") && !ip.startsWith("127.")) {
                 return ip;
             }
-        } catch (SocketException | UnknownHostException e) {
+        } catch (SocketException | UnknownHostException ignored) {
 
         }
 

@@ -2,9 +2,12 @@ package dev.ioannikas.grouplib.managers;
 
 
 import dev.ioannikas.chatapp.utility.Printer;
+import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSJoinReply;
+import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSLeaveReply;
 import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSReply;
-import dev.ioannikas.grouplib.network.serializable.gms.replies.UpdateGMSReply;
-import dev.ioannikas.grouplib.network.serializable.gms.requests.RequestGMSPacket;
+import dev.ioannikas.grouplib.network.serializable.gms.requests.GMSJoinRequest;
+import dev.ioannikas.grouplib.network.serializable.gms.requests.GMSLeaveRequest;
+import dev.ioannikas.grouplib.network.serializable.gms.requests.GMSRequest;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -20,7 +23,7 @@ public class GMSManager {
 
     private final Socket socket;
     private final BlockingQueue<RequestTask> outgoing;
-    private final Queue<CompletableFuture<UpdateGMSReply>> pendingFutures;
+    private final Queue<CompletableFuture<GMSReply>> pendingFutures;
     private final Thread sender, receiver;
 
     public GMSManager(String gmsAddress, int gmsPort) {
@@ -32,12 +35,12 @@ public class GMSManager {
         this.receiver = new Thread(this::receiver);
         receiver.setName("gms-receiver");
 
-        Socket temp = null;
+        Socket temp;
         try {
             temp = new Socket(gmsAddress, gmsPort);
         } catch (IOException e) {
             Printer.printErr("[GMS Manager] Error connecting to the GMS.");
-            this.socket = temp;
+            this.socket = null;
             shuttingDown = true;
             return;
         }
@@ -47,37 +50,36 @@ public class GMSManager {
         receiver.start();
     }
 
-    public UpdateGMSReply join(String groupName, String username, String ipAddress, int port) throws ExecutionException, InterruptedException {
-        CompletableFuture<UpdateGMSReply> future = new CompletableFuture<>();
+    public GMSJoinReply join(String groupName, String username, String ipAddress, int port) throws ExecutionException, InterruptedException {
+        CompletableFuture<GMSReply> future = new CompletableFuture<>();
 
-        RequestGMSPacket packet = new RequestGMSPacket(RequestGMSPacket.RequestType.JOIN, username, -1, groupName, ipAddress, port);
+        GMSJoinRequest packet = new GMSJoinRequest(username, groupName, ipAddress, port);
         outgoing.put(new RequestTask(packet, future));
 
-        return future.get();
+        return (GMSJoinReply) future.get();
     }
 
-    public UpdateGMSReply leave(int groupId, String username) throws ExecutionException, InterruptedException {
-        CompletableFuture<UpdateGMSReply> future = new CompletableFuture<>();
+    public GMSLeaveReply leave(int groupId, String username) throws ExecutionException, InterruptedException {
+        CompletableFuture<GMSReply> future = new CompletableFuture<>();
 
-        RequestGMSPacket packet = new RequestGMSPacket(RequestGMSPacket.RequestType.LEAVE, username, groupId, null, null, -1);
+        GMSLeaveRequest packet = new GMSLeaveRequest(username, groupId);
         outgoing.put(new RequestTask(packet, future));
 
-        return future.get();
+        return (GMSLeaveReply) future.get();
     }
 
     public void receiver() {
         try (ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
             while (!shuttingDown) {
                 GMSReply reply = (GMSReply) in.readObject();
-                CompletableFuture<UpdateGMSReply> future = pendingFutures.poll();
-                Printer.printDebug("[GMS Receiver] Received reply " + reply.getType());
+                CompletableFuture<GMSReply> future = pendingFutures.poll();
 
                 if (future == null) {
                     // TODO Handle group view update
                     continue;
                 }
 
-                future.complete((UpdateGMSReply) reply);
+                future.complete(reply);
             }
         } catch (Exception e) {
             if (!shuttingDown) e.printStackTrace();
@@ -96,7 +98,7 @@ public class GMSManager {
                     out.writeObject(task.packet);
                     out.flush();
                 } else {
-                    out.writeObject(RequestGMSPacket.simpleHeartbeat());
+                    out.writeObject(GMSRequest.simpleHeartbeat());
                     out.flush();
                 }
             }
@@ -123,10 +125,10 @@ public class GMSManager {
     }
 
     private static class RequestTask {
-        final RequestGMSPacket packet;
-        final CompletableFuture<UpdateGMSReply> future;
+        final GMSRequest packet;
+        final CompletableFuture<GMSReply> future;
 
-        RequestTask(RequestGMSPacket packet, CompletableFuture<UpdateGMSReply> future) {
+        RequestTask(GMSRequest packet, CompletableFuture<GMSReply> future) {
             this.packet = packet;
             this.future = future;
         }

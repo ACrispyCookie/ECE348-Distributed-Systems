@@ -80,10 +80,6 @@ public class GroupManager {
             return name;
         }
 
-        public boolean containsClient(String username) {
-            return clients.containsKey(username);
-        }
-
         public ClientInfo addClient(ClientInfo client) {
             return clients.put(client.getUsername(), client);
         }

@@ -5,15 +5,15 @@ import dev.ioannikas.grouplib.network.serializable.ClientInfo;
 import java.io.Serial;
 import java.util.List;
 
-public class UpdateGMSReply extends GMSReply {
+public class GMSJoinReply extends GMSReply {
 
     @Serial
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L;
     private final FailReason reason;
     private final List<ClientInfo> clients;
 
-    public UpdateGMSReply(ReplyType type, ReplyResult result, int groupId, FailReason reason, List<ClientInfo> clients) {
-        super(type, result, groupId);
+    public GMSJoinReply(int groupId, FailReason reason, List<ClientInfo> clients) {
+        super(ReplyType.JOIN, groupId);
         this.reason = reason;
         this.clients = clients;
     }
@@ -27,6 +27,8 @@ public class UpdateGMSReply extends GMSReply {
     }
 
     public enum FailReason {
-        USERNAME_TAKEN
+        NONE,
+        USERNAME_TAKEN,
+        UNKNOWN
     }
 }

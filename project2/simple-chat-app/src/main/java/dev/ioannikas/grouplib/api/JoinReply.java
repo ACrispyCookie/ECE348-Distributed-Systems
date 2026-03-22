@@ -2,28 +2,23 @@ package dev.ioannikas.grouplib.api;
 
 import java.util.List;
 
-public class JoinLeaveResult {
-    private final Status status;
+public class JoinReply {
+
     private final int groupId;
-    private final FailReason reason;
+    private final JoinReply.FailReason reason;
     private final List<String> clients;
 
-    public JoinLeaveResult(Status status, int groupId, FailReason reason, List<String> clients) {
-        this.status = status;
+    public JoinReply(int groupId, JoinReply.FailReason reason, List<String> clients) {
         this.groupId = groupId;
         this.reason = reason;
         this.clients = clients;
-    }
-
-    public Status getStatus() {
-        return status;
     }
 
     public int getGroupId() {
         return groupId;
     }
 
-    public FailReason getReason() {
+    public JoinReply.FailReason getReason() {
         return reason;
     }
 
@@ -32,11 +27,8 @@ public class JoinLeaveResult {
     }
 
     public enum FailReason {
-        USERNAME_TAKEN
-    }
-
-    public enum Status {
-        SUCCESS,
-        ERROR
+        NONE,
+        USERNAME_TAKEN,
+        UNKNOWN
     }
 }

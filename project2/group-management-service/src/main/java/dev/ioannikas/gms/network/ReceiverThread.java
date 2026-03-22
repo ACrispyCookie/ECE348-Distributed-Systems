@@ -4,9 +4,11 @@ import dev.ioannikas.gms.managers.GroupManager;
 import dev.ioannikas.gms.utility.Printer;
 import dev.ioannikas.grouplib.network.serializable.ClientInfo;
 import dev.ioannikas.grouplib.network.serializable.Connection;
-import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSReply;
-import dev.ioannikas.grouplib.network.serializable.gms.replies.UpdateGMSReply;
-import dev.ioannikas.grouplib.network.serializable.gms.requests.RequestGMSPacket;
+import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSJoinReply;
+import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSLeaveReply;
+import dev.ioannikas.grouplib.network.serializable.gms.requests.GMSJoinRequest;
+import dev.ioannikas.grouplib.network.serializable.gms.requests.GMSLeaveRequest;
+import dev.ioannikas.grouplib.network.serializable.gms.requests.GMSRequest;
 
 import java.io.*;
 import java.net.Socket;
@@ -31,17 +33,16 @@ public class ReceiverThread extends Thread {
     }
 
     public void run() {
-
         try {
             connection.init();
             Printer.printDebug("Client " + connection.getIp() + ":" + connection.getPort() + " connected!");
             connection.getSocket().setSoTimeout(TIMEOUT * 1000);
 
             while (!shuttingDown) {
-                RequestGMSPacket packet = (RequestGMSPacket) connection.nextObject();
+                GMSRequest packet = (GMSRequest) connection.nextObject();
                 switch (packet.getType()) {
-                    case JOIN -> handleJoin(packet);
-                    case LEAVE -> handleLeave(packet);
+                    case JOIN -> handleJoin((GMSJoinRequest) packet);
+                    case LEAVE -> handleLeave((GMSLeaveRequest) packet);
                     default -> Printer.printDebug("Received heartbeat from " + connection.getIp() + ":" + connection.getPort() + "!");
                 }
             }
@@ -54,37 +55,46 @@ public class ReceiverThread extends Thread {
         }
     }
 
-    private void handleJoin(RequestGMSPacket packet) throws IOException {
+    private void handleJoin(GMSJoinRequest packet) throws IOException {
         ClientInfo newClient = new ClientInfo(packet.getUsername(), packet.getIpAddress(), packet.getPort());
         Printer.printInfo("Received join from " + connection.getIp() + ":" + connection.getPort() + "!" + "\n" + newClient + "\nGroup: " + packet.getGroupName());
 
         int groupId = manager.findOrCreateGroup(packet.getGroupName());
         GroupManager.ReturnCode code = manager.addToGroup(groupId, newClient);
-        if (code != GroupManager.ReturnCode.SUCCESS)
+        if (code == GroupManager.ReturnCode.CLIENT_ALREADY_EXISTS) {
+            GMSJoinReply reply = new GMSJoinReply(groupId, GMSJoinReply.FailReason.USERNAME_TAKEN, null);
+            connection.sendPacket(reply);
+            return;
+        } else if (code != GroupManager.ReturnCode.SUCCESS) {
             Printer.printErr("Error while adding member " + connection.getIp() + ":" + connection.getPort() + " [" + packet.getUsername() + "] to group");
+            GMSJoinReply reply = new GMSJoinReply(groupId, GMSJoinReply.FailReason.UNKNOWN, null);
+            connection.sendPacket(reply);
+            return;
+        }
 
         groups.put(groupId, packet.getUsername());
-
-        UpdateGMSReply reply = new UpdateGMSReply(GMSReply.ReplyType.JOIN, GMSReply.ReplyResult.SUCCESS, groupId, UpdateGMSReply.FailReason.USERNAME_TAKEN, manager.getClients(groupId));
+        GMSJoinReply reply = new GMSJoinReply(groupId, GMSJoinReply.FailReason.NONE, manager.getClients(groupId));
         connection.sendPacket(reply);
-        // Send update packet to group
+        // TODO Send update packet to group
     }
 
-    private void handleLeave(RequestGMSPacket packet) throws IOException {
+    private void handleLeave(GMSLeaveRequest packet) throws IOException {
         int groupId = packet.getGroupId();
         String username = packet.getUsername();
         Printer.printInfo("Received leave from " + connection.getIp() + ":" + connection.getPort() + "!" + "\nUsername: " + username + "\nGroup: " + groupId);
 
         GroupManager.ReturnCode code = manager.removeFromGroup(groupId, username);
-        Printer.printDebug(String.valueOf(code));
-        if (code != GroupManager.ReturnCode.SUCCESS)
-            Printer.printErr("Error while removing member " + connection.getIp() + ":" + connection.getPort() + " [" + username + "] from group");
+        if (code != GroupManager.ReturnCode.SUCCESS) {
+            Printer.printErr("Error while adding member " + connection.getIp() + ":" + connection.getPort() + " [" + packet.getUsername() + "] to group");
+            GMSLeaveReply reply = new GMSLeaveReply(groupId, GMSLeaveReply.FailReason.UNKNOWN);
+            connection.sendPacket(reply);
+            return;
+        }
 
         groups.remove(groupId);
-
-        UpdateGMSReply reply = new UpdateGMSReply(GMSReply.ReplyType.LEAVE, GMSReply.ReplyResult.SUCCESS, groupId, UpdateGMSReply.FailReason.USERNAME_TAKEN, null);
+        GMSLeaveReply reply = new GMSLeaveReply(groupId, GMSLeaveReply.FailReason.NONE);
         connection.sendPacket(reply);
-        // Send update packet to group
+        // TODO Send update packet to group
     }
 
     private void handleFailure() {
@@ -96,7 +106,7 @@ public class ReceiverThread extends Thread {
             if (code != GroupManager.ReturnCode.SUCCESS)
                 Printer.printErr("Error while removing member " + connection.getIp() + ":" + connection.getPort() + " [" + username + "] to group");
 
-            // Send update packet to group
+            // TODO Send update packet to group
         }
 
         groups.clear();

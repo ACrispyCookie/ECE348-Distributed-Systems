@@ -4,7 +4,8 @@ import dev.ioannikas.chatapp.ChatApp;
 import dev.ioannikas.chatapp.model.Command;
 import dev.ioannikas.chatapp.model.Message;
 import dev.ioannikas.chatapp.utility.Printer;
-import dev.ioannikas.grouplib.api.JoinLeaveResult;
+import dev.ioannikas.grouplib.api.JoinReply;
+import dev.ioannikas.grouplib.api.LeaveReply;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -70,9 +71,9 @@ public class InputManager extends Thread {
             return;
         }
 
-        JoinLeaveResult reply = ChatApp.getGroupAPI().join(groupName, username);
-        if (reply.getStatus() == JoinLeaveResult.Status.ERROR) {
-            if (reply.getReason() == JoinLeaveResult.FailReason.USERNAME_TAKEN)
+        JoinReply reply = ChatApp.getGroupAPI().join(groupName, username);
+        if (reply.getReason() != JoinReply.FailReason.NONE) {
+            if (reply.getReason() == JoinReply.FailReason.USERNAME_TAKEN)
                 Printer.printErr("[ChatApp] This username is taken in this group!");
             else
                 Printer.printErr("[ChatApp] Error while joining group!");
@@ -101,14 +102,16 @@ public class InputManager extends Thread {
             return;
         }
 
-        JoinLeaveResult reply = ChatApp.getGroupAPI().leave(groupId);
-        if (reply.getStatus() == JoinLeaveResult.Status.ERROR) {
+        LeaveReply reply = ChatApp.getGroupAPI().leave(groupId);
+        if (reply.getReason() != LeaveReply.FailReason.NONE) {
             Printer.printErr("[ChatApp] Error while leaving a group!");
             return;
         }
 
         String name = ChatApp.getChatManager().getName(groupId);
         ChatApp.getChatManager().leaveChat(groupId);
+        if (selected == groupId)
+            selected = -1;
         Printer.printInfo("[ChatApp] You have left group " + name + " (ID:" + groupId + ")!");
     }
 

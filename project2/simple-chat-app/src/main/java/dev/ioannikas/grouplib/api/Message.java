@@ -1,10 +1,10 @@
 package dev.ioannikas.grouplib.api;
 
-public class MessageResult {
+public class Message {
     private final Type type;
     private final Object object;
 
-    public MessageResult(Type type, Object object) {
+    public Message(Type type, Object object) {
         this.type = type;
         this.object = object;
     }

@@ -6,7 +6,7 @@ import java.io.Serializable;
 public class ClientInfo implements Serializable {
 
     @Serial
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L;
     private final String username;
     private final String ipAddress;
     private final int port;

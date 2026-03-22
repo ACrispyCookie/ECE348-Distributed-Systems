@@ -7,23 +7,17 @@ import java.io.Serial;
 public class GMSReply extends Packet {
 
     @Serial
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L;
     private final ReplyType type;
-    private final ReplyResult result;
     private final int groupId;
 
-    public GMSReply(ReplyType type, ReplyResult result, int groupId) {
+    public GMSReply(ReplyType type, int groupId) {
         this.type = type;
-        this.result = result;
         this.groupId = groupId;
     }
 
     public ReplyType getType() {
         return type;
-    }
-
-    public ReplyResult getResult() {
-        return result;
     }
 
     public int getGroupId() {
@@ -34,10 +28,5 @@ public class GMSReply extends Packet {
         UPDATE,
         JOIN,
         LEAVE
-    }
-
-    public enum ReplyResult {
-        SUCCESS,
-        ERROR
     }
 }

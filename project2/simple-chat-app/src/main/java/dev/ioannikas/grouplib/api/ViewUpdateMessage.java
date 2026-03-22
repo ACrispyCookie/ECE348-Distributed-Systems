@@ -1,29 +1,29 @@
 package dev.ioannikas.grouplib.api;
 
-public class ViewUpdateResult {
-    private final Type type;
+public class ViewUpdateMessage {
     private final int groupId;
+    private final UpdateAction action;
     private final String client;
 
-    public ViewUpdateResult(Type type, int groupId, String client) {
-        this.type = type;
+    public ViewUpdateMessage(int groupId, UpdateAction action, String client) {
         this.groupId = groupId;
+        this.action = action;
         this.client = client;
-    }
-
-    public Type getType() {
-        return type;
     }
 
     public int getGroupId() {
         return groupId;
     }
 
+    public UpdateAction getAction() {
+        return action;
+    }
+
     public String getClient() {
         return client;
     }
 
-    public enum Type {
+    public enum UpdateAction {
         JOIN,
         LEAVE
     }

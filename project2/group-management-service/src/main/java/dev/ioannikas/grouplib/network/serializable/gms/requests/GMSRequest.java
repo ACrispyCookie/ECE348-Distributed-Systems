@@ -1,0 +1,36 @@
+package dev.ioannikas.grouplib.network.serializable.gms.requests;
+
+import dev.ioannikas.grouplib.network.serializable.Packet;
+
+import java.io.Serial;
+
+public class GMSRequest extends Packet {
+
+    @Serial
+    private static final long serialVersionUID = 2L;
+    private final RequestType type;
+    private final String username;
+
+    public GMSRequest(RequestType type, String username) {
+        this.type = type;
+        this.username = username;
+    }
+
+    public RequestType getType() {
+        return type;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public static GMSRequest simpleHeartbeat() {
+        return new GMSRequest(RequestType.HEARTBEAT, null);
+    }
+
+    public enum RequestType {
+        JOIN,
+        LEAVE,
+        HEARTBEAT
+    }
+}
