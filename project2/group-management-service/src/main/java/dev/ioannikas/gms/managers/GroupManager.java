@@ -1,8 +1,9 @@
 package dev.ioannikas.gms.managers;
 
-import dev.ioannikas.grouplib.network.serializable.ClientInfo;
+import dev.ioannikas.grouplib.network.serializable.gms.ClientInfo;
 
 import java.util.*;
+import java.util.function.Consumer;
 
 public class GroupManager {
 
@@ -52,6 +53,16 @@ public class GroupManager {
             return null;
 
         return new LinkedList<>(group.getClients());
+    }
+
+    public synchronized void forEachClient(int groupId, Consumer<ClientInfo> consumer) {
+        Group group = index.get(groupId);
+        if (group == null)
+            return;
+
+        for (ClientInfo client : group.getClients()) {
+            consumer.accept(client);
+        }
     }
 
     public enum ReturnCode {

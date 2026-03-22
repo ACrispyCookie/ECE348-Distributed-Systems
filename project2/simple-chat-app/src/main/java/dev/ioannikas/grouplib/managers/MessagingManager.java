@@ -1,4 +1,22 @@
 package dev.ioannikas.grouplib.managers;
 
-public class MessagingManager {
+import dev.ioannikas.grouplib.GroupAPI;
+
+import java.util.List;
+
+public class MessagingManager extends GeneralManager {
+    
+    public MessagingManager(GroupAPI groupAPI) {
+        super(groupAPI);
+    }
+
+    @Override
+    protected void onShutdown() {
+
+    }
+
+    @Override
+    protected List<Thread> getThreads() {
+        return List.of();
+    }
 }

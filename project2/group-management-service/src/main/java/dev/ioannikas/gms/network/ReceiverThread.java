@@ -2,10 +2,11 @@ package dev.ioannikas.gms.network;
 
 import dev.ioannikas.gms.managers.GroupManager;
 import dev.ioannikas.gms.utility.Printer;
-import dev.ioannikas.grouplib.network.serializable.ClientInfo;
-import dev.ioannikas.grouplib.network.serializable.Connection;
+import dev.ioannikas.grouplib.network.serializable.gms.ClientInfo;
+import dev.ioannikas.grouplib.network.serializable.gms.ConnectionTCP;
 import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSJoinReply;
 import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSLeaveReply;
+import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSUpdateReply;
 import dev.ioannikas.grouplib.network.serializable.gms.requests.GMSJoinRequest;
 import dev.ioannikas.grouplib.network.serializable.gms.requests.GMSLeaveRequest;
 import dev.ioannikas.grouplib.network.serializable.gms.requests.GMSRequest;
@@ -15,6 +16,8 @@ import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class ReceiverThread extends Thread {
 
@@ -22,19 +25,20 @@ public class ReceiverThread extends Thread {
     private static boolean shuttingDown = false;
 
     private final GroupManager manager;
-    private final Connection connection;
+    private final ConnectionTCP connection;
     private final Map<Integer, String> groups;
+    private final BlockingQueue<GMSUpdateReply> pendingViewUpdates;
 
-    public ReceiverThread(GroupManager manager, Socket socket) {
+    public ReceiverThread(GroupManager manager, Socket socket) throws IOException {
         this.manager = manager;
-        this.connection = new Connection(socket);
+        this.connection = new ConnectionTCP(socket);
         this.groups = new HashMap<>();
+        this.pendingViewUpdates = new LinkedBlockingQueue<>();
         setName("client-" + socket.getInetAddress().getHostAddress());
     }
 
     public void run() {
         try {
-            connection.init();
             Printer.printDebug("Client " + connection.getIp() + ":" + connection.getPort() + " connected!");
             connection.getSocket().setSoTimeout(TIMEOUT * 1000);
 
@@ -55,8 +59,12 @@ public class ReceiverThread extends Thread {
         }
     }
 
+    public void addViewUpdate(GMSUpdateReply viewUpdate) throws InterruptedException {
+        pendingViewUpdates.put(viewUpdate);
+    }
+
     private void handleJoin(GMSJoinRequest packet) throws IOException {
-        ClientInfo newClient = new ClientInfo(packet.getUsername(), packet.getIpAddress(), packet.getPort());
+        ClientInfo newClient = new ClientInfo(packet.getUsername(), packet.getIpAddress(), packet.getPort(), this);
         Printer.printInfo("Received join from " + connection.getIp() + ":" + connection.getPort() + "!" + "\n" + newClient + "\nGroup: " + packet.getGroupName());
 
         int groupId = manager.findOrCreateGroup(packet.getGroupName());
@@ -75,7 +83,20 @@ public class ReceiverThread extends Thread {
         groups.put(groupId, packet.getUsername());
         GMSJoinReply reply = new GMSJoinReply(groupId, GMSJoinReply.FailReason.NONE, manager.getClients(groupId));
         connection.sendPacket(reply);
-        // TODO Send update packet to group
+
+        GMSUpdateReply update = new GMSUpdateReply(groupId, newClient, GMSUpdateReply.Action.JOINED);
+        manager.forEachClient(groupId, (c) -> {
+            ReceiverThread thread = c.getManager();
+            if (thread == this)
+                return;
+            ConnectionTCP tConnection = thread.connection;
+
+            try {
+                tConnection.sendPacket(update);
+            } catch (IOException e) {
+                Printer.printErr("Error sending update packet to " + tConnection.getIp() + ":" + tConnection.getPort());
+            }
+        });
     }
 
     private void handleLeave(GMSLeaveRequest packet) throws IOException {

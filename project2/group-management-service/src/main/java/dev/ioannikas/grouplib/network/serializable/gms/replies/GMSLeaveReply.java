@@ -6,14 +6,14 @@ public class GMSLeaveReply extends GMSReply {
 
     @Serial
     private static final long serialVersionUID = 2L;
-    private final GMSLeaveReply.FailReason reason;
+    private final FailReason reason;
 
-    public GMSLeaveReply(int groupId, GMSLeaveReply.FailReason reason) {
+    public GMSLeaveReply(int groupId, FailReason reason) {
         super(ReplyType.LEAVE, groupId);
         this.reason = reason;
     }
 
-    public GMSLeaveReply.FailReason getReason() {
+    public FailReason getReason() {
         return reason;
     }
 

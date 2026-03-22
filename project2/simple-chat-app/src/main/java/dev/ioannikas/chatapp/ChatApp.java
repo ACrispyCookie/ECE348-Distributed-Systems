@@ -6,6 +6,7 @@ import dev.ioannikas.chatapp.managers.MessageManager;
 import dev.ioannikas.chatapp.utility.Printer;
 import dev.ioannikas.grouplib.GroupAPI;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.concurrent.CountDownLatch;
@@ -23,12 +24,14 @@ public class ChatApp {
         AppConfig config = parseArguments(args);
 
         groupAPI = new GroupAPI();
-        if (!groupAPI.init(config.getGmsIp(), config.getGmsPort(), config.getAppPort())) {
+        try {
+            groupAPI.init(config.getGmsIp(), config.getGmsPort(), config.getAppPort());
+        } catch (IOException e) {
             Printer.printErr("[ChatApp] Error initializing GMS! Shutting down...");
+            e.printStackTrace();
             return;
-        } else {
-            Printer.printInfo("[ChatApp] GMS successfully initialized!");
         }
+        Printer.printInfo("[ChatApp] GMS successfully initialized!");
 
         chatManager  = new ChatManager();
         inputManager = new InputManager();

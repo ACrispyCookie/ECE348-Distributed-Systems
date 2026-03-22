@@ -1,4 +1,6 @@
-package dev.ioannikas.grouplib.network.serializable;
+package dev.ioannikas.grouplib.network.serializable.gms;
+
+import dev.ioannikas.gms.network.ReceiverThread;
 
 import java.io.Serial;
 import java.io.Serializable;
@@ -10,11 +12,13 @@ public class ClientInfo implements Serializable {
     private final String username;
     private final String ipAddress;
     private final int port;
+    private final transient ReceiverThread manager;
 
-    public ClientInfo(String username, String ipAddress, int port) {
+    public ClientInfo(String username, String ipAddress, int port, ReceiverThread manager) {
         this.username = username;
         this.ipAddress = ipAddress;
         this.port = port;
+        this.manager = manager;
     }
 
     public String getUsername() {
@@ -27,6 +31,10 @@ public class ClientInfo implements Serializable {
 
     public int getPort() {
         return port;
+    }
+
+    public ReceiverThread getManager() {
+        return manager;
     }
 
     @Override

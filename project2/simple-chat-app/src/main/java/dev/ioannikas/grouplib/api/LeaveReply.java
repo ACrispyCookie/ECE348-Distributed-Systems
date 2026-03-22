@@ -1,9 +1,5 @@
 package dev.ioannikas.grouplib.api;
 
-import dev.ioannikas.grouplib.network.serializable.ClientInfo;
-
-import java.util.List;
-
 public class LeaveReply {
 
     private final int groupId;

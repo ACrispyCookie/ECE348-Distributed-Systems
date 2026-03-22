@@ -2,6 +2,8 @@ package dev.ioannikas.grouplib.managers;
 
 
 import dev.ioannikas.chatapp.utility.Printer;
+import dev.ioannikas.grouplib.GroupAPI;
+import dev.ioannikas.grouplib.network.serializable.gms.ConnectionTCP;
 import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSJoinReply;
 import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSLeaveReply;
 import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSReply;
@@ -10,118 +12,114 @@ import dev.ioannikas.grouplib.network.serializable.gms.requests.GMSLeaveRequest;
 import dev.ioannikas.grouplib.network.serializable.gms.requests.GMSRequest;
 
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.net.Socket;
+import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.*;
 
-public class GMSManager {
+public class GMSManager extends GeneralManager {
 
     private final int HEARTBEAT_INTERVAL = 2;
-    private boolean shuttingDown = false;
+    private final ConnectionTCP connection;
 
-    private final Socket socket;
-    private final BlockingQueue<RequestTask> outgoing;
+    private final BlockingQueue<GMSReply> receiving;
+    private final BlockingQueue<RequestTask> sending;
     private final Queue<CompletableFuture<GMSReply>> pendingFutures;
-    private final Thread sender, receiver;
 
-    public GMSManager(String gmsAddress, int gmsPort) {
-        this.outgoing = new LinkedBlockingQueue<>();
+    public GMSManager(GroupAPI api) {
+        super(api);
+        this.connection = api.getNetworkManager().getGmsConnection();
+        this.receiving = new LinkedBlockingQueue<>();
+        this.sending = new LinkedBlockingQueue<>();
         this.pendingFutures = new ConcurrentLinkedQueue<>();
 
-        this.sender = new Thread(this::sender);
-        sender.setName("gms-sender");
-        this.receiver = new Thread(this::receiver);
-        receiver.setName("gms-receiver");
+        start();
+    }
 
-        Socket temp;
+    public GMSJoinReply join(String groupName, String username, String ipAddress, int port) {
+        CompletableFuture<GMSReply> future = new CompletableFuture<>();
+
         try {
-            temp = new Socket(gmsAddress, gmsPort);
-        } catch (IOException e) {
-            Printer.printErr("[GMS Manager] Error connecting to the GMS.");
-            this.socket = null;
-            shuttingDown = true;
-            return;
+            GMSJoinRequest packet = new GMSJoinRequest(username, groupName, ipAddress, port);
+            sending.put(new RequestTask(packet, future));
+
+            return (GMSJoinReply) future.get();
+        } catch (InterruptedException | ExecutionException e) {
+            Printer.printErr("[GMS Manager] Error completing a join request.");
+            e.printStackTrace();
         }
 
-        this.socket = temp;
-        sender.start();
-        receiver.start();
+        return null;
     }
 
-    public GMSJoinReply join(String groupName, String username, String ipAddress, int port) throws ExecutionException, InterruptedException {
+    public GMSLeaveReply leave(int groupId, String username) {
         CompletableFuture<GMSReply> future = new CompletableFuture<>();
 
-        GMSJoinRequest packet = new GMSJoinRequest(username, groupName, ipAddress, port);
-        outgoing.put(new RequestTask(packet, future));
+        try {
+            GMSLeaveRequest packet = new GMSLeaveRequest(username, groupId);
+            sending.put(new RequestTask(packet, future));
 
-        return (GMSJoinReply) future.get();
-    }
+            return (GMSLeaveReply) future.get();
+        } catch (InterruptedException | ExecutionException e) {
+            Printer.printErr("[GMS Manager] Error completing a leave request.");
+            e.printStackTrace();
+        }
 
-    public GMSLeaveReply leave(int groupId, String username) throws ExecutionException, InterruptedException {
-        CompletableFuture<GMSReply> future = new CompletableFuture<>();
-
-        GMSLeaveRequest packet = new GMSLeaveRequest(username, groupId);
-        outgoing.put(new RequestTask(packet, future));
-
-        return (GMSLeaveReply) future.get();
+        return null;
     }
 
     public void receiver() {
-        try (ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
-            while (!shuttingDown) {
-                GMSReply reply = (GMSReply) in.readObject();
+        while(!isShuttingDown()) {
+            try {
+                GMSReply reply = receiving.take();
                 CompletableFuture<GMSReply> future = pendingFutures.poll();
 
-                if (future == null) {
-                    // TODO Handle group view update
+                // Should never happen
+                if (future == null)
                     continue;
-                }
 
                 future.complete(reply);
+            } catch (InterruptedException ignored) {
+
             }
-        } catch (Exception e) {
-            if (!shuttingDown) e.printStackTrace();
-            if (!shuttingDown) Printer.printErr("[GMS Receiver] GMS Disconnected.");
         }
     }
 
     private void sender() {
-        try (ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {
-            while (!shuttingDown) {
-                RequestTask task = outgoing.poll(HEARTBEAT_INTERVAL, TimeUnit.SECONDS);
+        while(!isShuttingDown()) {
+            try {
+                RequestTask task = sending.poll(HEARTBEAT_INTERVAL, TimeUnit.SECONDS);
 
                 if (task != null) {
                     pendingFutures.offer(task.future);
-
-                    out.writeObject(task.packet);
-                    out.flush();
+                    connection.sendPacket(task.packet);
                 } else {
-                    out.writeObject(GMSRequest.simpleHeartbeat());
-                    out.flush();
+                    connection.sendPacket(GMSRequest.simpleHeartbeat());
                 }
+            } catch (InterruptedException ignored) {
+
+            } catch (IOException e) {
+                Printer.printErr("[GMS Sender] Error communicating with the GMS.");
             }
-        } catch (Exception e) {
-            if (!shuttingDown) e.printStackTrace();
-            if (!shuttingDown) Printer.printErr("[GMS Sender] GMS Disconnected.");
         }
     }
 
-    public void shutdown() {
-        shuttingDown = true;
-        try {
-            if (!socket.isClosed())
-                socket.close();
-        } catch (IOException e) {
-            Printer.printErr("[GMS Manager] Error closing the socket.");
-        }
-        sender.interrupt();
-        receiver.interrupt();
+    public BlockingQueue<GMSReply> getReceiving() {
+        return receiving;
     }
 
-    public boolean isShuttingDown() {
-        return shuttingDown;
+    @Override
+    protected List<Thread> getThreads() {
+        Thread sender = new Thread(this::sender);
+        sender.setName("gms-sender");
+
+        Thread receiver = new Thread(this::receiver);
+        receiver.setName("gms-receiver");
+        return List.of(sender, receiver);
+    }
+
+    @Override
+    protected void onShutdown() {
+
     }
 
     private static class RequestTask {

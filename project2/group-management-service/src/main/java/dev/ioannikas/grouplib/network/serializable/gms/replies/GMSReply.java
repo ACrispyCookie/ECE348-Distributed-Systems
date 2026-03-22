@@ -1,10 +1,10 @@
 package dev.ioannikas.grouplib.network.serializable.gms.replies;
 
-import dev.ioannikas.grouplib.network.serializable.Packet;
+import dev.ioannikas.grouplib.network.serializable.gms.PacketTCP;
 
 import java.io.Serial;
 
-public class GMSReply extends Packet {
+public class GMSReply extends PacketTCP {
 
     @Serial
     private static final long serialVersionUID = 2L;

@@ -1,4 +1,4 @@
-package dev.ioannikas.grouplib.network.serializable;
+package dev.ioannikas.grouplib.network.serializable.gms;
 
 import java.io.Serial;
 import java.io.Serializable;

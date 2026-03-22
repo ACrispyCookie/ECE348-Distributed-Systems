@@ -1,6 +1,6 @@
 package dev.ioannikas.grouplib.network.serializable.gms.replies;
 
-import dev.ioannikas.grouplib.network.serializable.ClientInfo;
+import dev.ioannikas.grouplib.network.serializable.gms.ClientInfo;
 
 import java.io.Serial;
 

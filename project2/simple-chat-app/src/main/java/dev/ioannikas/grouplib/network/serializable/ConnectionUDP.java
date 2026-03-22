@@ -1,30 +1,33 @@
 package dev.ioannikas.grouplib.network.serializable;
 
+import dev.ioannikas.grouplib.network.serializable.gms.PacketTCP;
+
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.net.Socket;
+import java.net.DatagramSocket;
 
-public class Connection {
+public class ConnectionUDP {
 
-    private final Socket socket;
+    private final DatagramSocket socket;
     private ObjectInputStream in;
     private ObjectOutputStream out;
 
-    public Connection(Socket socket) {
+    public ConnectionUDP(DatagramSocket socket) throws IOException {
         this.socket = socket;
     }
 
-    public void init() throws IOException {
-        this.in = new ObjectInputStream(socket.getInputStream());
-        this.out = new ObjectOutputStream(socket.getOutputStream());
+    public void close() throws IOException {
+        in.close();
+        out.close();
+        socket.close();
     }
 
     public Object nextObject() throws IOException, ClassNotFoundException {
         return in.readObject();
     }
 
-    public void sendPacket(Packet packet) throws IOException {
+    public void sendPacket(PacketTCP packet) throws IOException {
         out.writeObject(packet);
         out.flush();
     }
@@ -37,7 +40,7 @@ public class Connection {
         return socket.getPort();
     }
 
-    public Socket getSocket() {
+    public DatagramSocket getSocket() {
         return socket;
     }
 }
