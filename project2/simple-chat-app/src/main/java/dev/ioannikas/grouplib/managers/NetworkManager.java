@@ -2,7 +2,7 @@ package dev.ioannikas.grouplib.managers;
 
 import dev.ioannikas.chatapp.utility.Printer;
 import dev.ioannikas.grouplib.GroupAPI;
-import dev.ioannikas.grouplib.api.Message;
+import dev.ioannikas.grouplib.network.serializable.PacketUDP;
 import dev.ioannikas.grouplib.network.serializable.gms.ConnectionTCP;
 import dev.ioannikas.grouplib.network.serializable.ConnectionUDP;
 import dev.ioannikas.grouplib.network.serializable.gms.PacketTCP;
@@ -40,7 +40,7 @@ public class NetworkManager extends GeneralManager {
                 if (incomingObject.getType() != GMSReply.ReplyType.UPDATE)
                     getAPI().getGmsManager().handleReceivedPacket(incomingObject);
                 else if (incomingObject.getType() == GMSReply.ReplyType.UPDATE)
-                    getAPI().getMessagingManager().handleReceivedPacket(new Message(Message.Type.VIEW_UPDATE, incomingObject));
+                    getAPI().getMessagingManager().handleReceivedPacket(new PacketUDP(incomingObject.getGroupId(), incomingObject));
                 else
                     Printer.printDebug("[NetworkManager] Received invalid packet from GMS.");
             } catch (Exception e) {
@@ -54,7 +54,19 @@ public class NetworkManager extends GeneralManager {
     }
 
     private void udpReceiver() {
+        while (!isShuttingDown()) {
+            try {
+                PacketUDP incomingPacket = (PacketUDP) gmsConnection.nextObject();
 
+                getAPI().getMessagingManager().handleReceivedPacket(incomingPacket);
+            } catch (Exception e) {
+                if (!isShuttingDown()) {
+                    Printer.printErr("[NetworkManager] Error receiving packet from group.");
+                    e.printStackTrace();
+                }
+                return;
+            }
+        }
     }
 
     public void sendGms(PacketTCP packet) throws IOException {
@@ -109,7 +121,7 @@ public class NetworkManager extends GeneralManager {
     protected void onShutdown() {
         try {
             gmsConnection.close();
-//            normalConnection.close();
+            normalConnection.close();
         } catch (IOException e) {
             Printer.printErr("[NetworkManager] Could not close sockets!");
         }

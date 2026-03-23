@@ -2,7 +2,7 @@ package dev.ioannikas.grouplib;
 
 import dev.ioannikas.grouplib.api.JoinReply;
 import dev.ioannikas.grouplib.api.LeaveReply;
-import dev.ioannikas.grouplib.api.Message;
+import dev.ioannikas.grouplib.network.serializable.PacketUDP;
 import dev.ioannikas.grouplib.managers.GMSManager;
 import dev.ioannikas.grouplib.managers.MessagingManager;
 import dev.ioannikas.grouplib.managers.NetworkManager;
@@ -50,17 +50,19 @@ public class GroupAPI {
     }
 
     public <T extends Serializable> int send(int groupId, T message) {
+        if (!groups.containsKey(groupId))
+            return -1;
 
-        return 0;
+        return messagingManager.send(groupId, message);
     }
 
     public Object receive(int groupId, boolean block) throws InterruptedException {
         if (!groups.containsKey(groupId))
             return null;
 
-        Message reply = messagingManager.receive(groupId, block);
-        if (reply.getType() == Message.Type.VIEW_UPDATE)
-            return ((GMSUpdateReply) reply.getObject()).toApiVersion();
+        PacketUDP reply = messagingManager.receive(groupId, block);
+        if (reply.getObject() instanceof GMSUpdateReply update)
+            return update.toApiVersion();
         else
             return reply.getObject();
     }
