@@ -13,6 +13,7 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.*;
 
+@Deprecated
 public class SingleThreadGMS {
 
     private static final int DEFAULT_PORT = 5000;
