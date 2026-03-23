@@ -4,6 +4,7 @@ import dev.ioannikas.gms.network.ReceiverThread;
 
 import java.io.Serial;
 import java.io.Serializable;
+import java.net.SocketAddress;
 
 public class ClientInfo implements Serializable {
 
@@ -12,13 +13,21 @@ public class ClientInfo implements Serializable {
     private final String username;
     private final String ipAddress;
     private final int port;
-    private final transient ReceiverThread manager;
+    private transient ReceiverThread manager;
+    private transient SocketAddress managerS;
 
     public ClientInfo(String username, String ipAddress, int port, ReceiverThread manager) {
         this.username = username;
         this.ipAddress = ipAddress;
         this.port = port;
         this.manager = manager;
+    }
+
+    public ClientInfo(String username, String ipAddress, int port, SocketAddress managerS) {
+        this.username = username;
+        this.ipAddress = ipAddress;
+        this.port = port;
+        this.managerS = managerS;
     }
 
     public String getUsername() {
@@ -35,6 +44,10 @@ public class ClientInfo implements Serializable {
 
     public ReceiverThread getManager() {
         return manager;
+    }
+
+    public SocketAddress getManagerS() {
+        return managerS;
     }
 
     @Override
