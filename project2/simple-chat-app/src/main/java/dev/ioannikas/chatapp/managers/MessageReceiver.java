@@ -2,7 +2,7 @@ package dev.ioannikas.chatapp.managers;
 
 import dev.ioannikas.chatapp.ChatApp;
 import dev.ioannikas.chatapp.model.ChatMessage;
-import dev.ioannikas.grouplib.api.ViewUpdateMessage;
+import dev.ioannikas.group.api.ViewUpdateMessage;
 
 public class MessageReceiver extends Thread {
 

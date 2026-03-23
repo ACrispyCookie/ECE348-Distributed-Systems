@@ -4,8 +4,8 @@ import dev.ioannikas.chatapp.ChatApp;
 import dev.ioannikas.chatapp.model.Command;
 import dev.ioannikas.chatapp.model.ChatMessage;
 import dev.ioannikas.chatapp.utility.Printer;
-import dev.ioannikas.grouplib.api.JoinReply;
-import dev.ioannikas.grouplib.api.LeaveReply;
+import dev.ioannikas.group.api.JoinReply;
+import dev.ioannikas.group.api.LeaveReply;
 
 import java.time.LocalDateTime;
 import java.util.Scanner;

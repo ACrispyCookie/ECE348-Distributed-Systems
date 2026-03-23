@@ -3,7 +3,7 @@ package dev.ioannikas.chatapp;
 import dev.ioannikas.chatapp.managers.ChatManager;
 import dev.ioannikas.chatapp.managers.InputManager;
 import dev.ioannikas.chatapp.utility.Printer;
-import dev.ioannikas.grouplib.GroupAPI;
+import dev.ioannikas.group.GroupAPI;
 
 import java.io.IOException;
 import java.nio.file.Files;

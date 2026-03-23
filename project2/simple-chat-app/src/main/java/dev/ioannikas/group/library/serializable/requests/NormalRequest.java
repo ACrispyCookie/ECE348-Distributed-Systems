@@ -1,0 +1,21 @@
+package dev.ioannikas.group.library.serializable.requests;
+
+import dev.ioannikas.group.library.serializable.PacketUDP;
+
+import java.io.Serial;
+
+public class NormalRequest extends PacketUDP {
+
+    @Serial
+    private static final long serialVersionUID = 2L;
+    private final Object data;
+
+    public NormalRequest(int groupId, Object data) {
+        super(groupId);
+        this.data = data;
+    }
+
+    public Object getData() {
+        return data;
+    }
+}

@@ -16,6 +16,12 @@ public class ClientInfo implements Serializable {
     private transient ClientThread manager;
     private transient SocketAddress managerS;
 
+    public ClientInfo(String username, String ipAddress, int port) {
+        this.username = username;
+        this.ipAddress = ipAddress;
+        this.port = port;
+    }
+
     public ClientInfo(String username, String ipAddress, int port, ClientThread manager) {
         this.username = username;
         this.ipAddress = ipAddress;
