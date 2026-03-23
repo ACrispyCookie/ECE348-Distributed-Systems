@@ -14,8 +14,8 @@ public class Printer {
         print("DEBUG", message);
     }
 
-    public static void printMessage(String name, int members, String message) {
-        print("GROUP " + name + " (" + members + ")", message);
+    public static void printMessage(String name, int id, String message) {
+        print("GROUP " + name + " (" + id + ")", message);
     }
 
     public static void printErr(String message) {

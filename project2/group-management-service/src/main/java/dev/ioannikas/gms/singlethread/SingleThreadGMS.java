@@ -1,11 +1,10 @@
 package dev.ioannikas.gms.singlethread;
 
 import dev.ioannikas.gms.managers.GroupManager;
-import dev.ioannikas.gms.network.ReceiverThread;
+import dev.ioannikas.gms.threads.ClientThread;
 import dev.ioannikas.gms.utility.Printer;
 
 import java.io.IOException;
-import java.io.ObjectInputStream;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
@@ -135,6 +134,5 @@ public class SingleThreadGMS {
 
     private static void onShutdown() {
         shuttingDown = true;
-        ReceiverThread.onShutdown();
     }
 }

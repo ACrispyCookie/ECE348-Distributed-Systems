@@ -2,22 +2,17 @@ package dev.ioannikas.chatapp;
 
 import dev.ioannikas.chatapp.managers.ChatManager;
 import dev.ioannikas.chatapp.managers.InputManager;
-import dev.ioannikas.chatapp.managers.MessageManager;
 import dev.ioannikas.chatapp.utility.Printer;
 import dev.ioannikas.grouplib.GroupAPI;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.concurrent.CountDownLatch;
 
 public class ChatApp {
 
     private static GroupAPI groupAPI;
     private static ChatManager chatManager;
-    private static InputManager inputManager;
-    private static MessageManager messageManager;
-    private static final CountDownLatch shutdown = new CountDownLatch(1);
     private static boolean shuttingDown = false;
     
     public static void main(String[] args) {
@@ -27,27 +22,15 @@ public class ChatApp {
         try {
             groupAPI.init(config.getGmsIp(), config.getGmsPort(), config.getAppPort());
         } catch (IOException e) {
-            Printer.printErr("[ChatApp] Error initializing GMS! Shutting down...");
+            Printer.printErr("[ChatApp] Error initializing GMS! Is the GMS running?");
             e.printStackTrace();
             return;
         }
         Printer.printInfo("[ChatApp] GMS successfully initialized!");
-
-        chatManager  = new ChatManager();
-        inputManager = new InputManager();
-        messageManager = new MessageManager();
-
         Printer.printInfo("[ChatApp] Client started! Start by typing a command!");
 
-        while (!shuttingDown) {
-            try {
-                shutdown.await();
-                shuttingDown = true;
-                shutdown();
-            } catch (InterruptedException ignored) {
-
-            }
-        }
+        chatManager  = new ChatManager();
+        new InputManager().runInputManager();
     }
 
     public static GroupAPI getGroupAPI() {
@@ -58,22 +41,9 @@ public class ChatApp {
         return chatManager;
     }
 
-    public static InputManager getInputManager() {
-        return inputManager;
-    }
-
-    public static MessageManager getMessageManager() {
-        return messageManager;
-    }
-
-    public static void startShutdown() {
-        shutdown.countDown();
-    }
-
-    private static void shutdown() {
+    public static void shutdown() {
         Printer.printInfo("[ChatApp] Shutting down...");
-        inputManager.interrupt();
-        messageManager.interrupt();
+        shuttingDown = true;
         groupAPI.shutdown();
     }
 
@@ -145,7 +115,7 @@ public class ChatApp {
 
     private static void printUsage() {
         System.out.println("Usage:");
-        System.out.println("  java -jar chatapp.jar <GMS_IP> <GMS_PORT> [APP_UDP_PORT]");
-        System.out.println("  java -jar chatapp.jar <path_to_config.json>");
+        System.out.println("  java -jar simple-chat-app.jar <GMS_IP> <GMS_PORT> [APP_UDP_PORT]");
+        System.out.println("  java -jar simple-chat-app.jar <path_to_config.json>");
     }
 }

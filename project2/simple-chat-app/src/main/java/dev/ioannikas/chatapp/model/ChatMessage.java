@@ -3,13 +3,13 @@ package dev.ioannikas.chatapp.model;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
-public class Message implements Serializable {
+public class ChatMessage implements Serializable {
 
     private final String author;
     private final LocalDateTime date;
     private final String message;
 
-    public Message(String author, LocalDateTime date, String message) {
+    public ChatMessage(String author, LocalDateTime date, String message) {
         this.author = author;
         this.date = date;
         this.message = message;

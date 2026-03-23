@@ -40,12 +40,14 @@ public class NetworkManager extends GeneralManager {
                 if (incomingObject.getType() != GMSReply.ReplyType.UPDATE)
                     getAPI().getGmsManager().handleReceivedPacket(incomingObject);
                 else if (incomingObject.getType() == GMSReply.ReplyType.UPDATE)
-                    getAPI().getMessagingManager().handleReceivedPacket(new Message(Message.Type.DATA, incomingObject));
+                    getAPI().getMessagingManager().handleReceivedPacket(new Message(Message.Type.VIEW_UPDATE, incomingObject));
                 else
                     Printer.printDebug("[NetworkManager] Received invalid packet from GMS.");
             } catch (Exception e) {
-                Printer.printErr("[NetworkManager] Error communicating with GMS.");
-                e.printStackTrace();
+                if (!isShuttingDown()) {
+                    Printer.printErr("[NetworkManager] Error communicating with GMS.");
+                    e.printStackTrace();
+                }
                 return;
             }
         }
@@ -98,14 +100,19 @@ public class NetworkManager extends GeneralManager {
         try {
             return InetAddress.getLocalHost().getHostAddress();
         } catch (UnknownHostException e) {
-            Printer.printErr("[GroupAPI] CRITICAL: Could not determine local IP address!");
+            Printer.printErr("[NetworkManager] Could not determine local IP address!");
             return "127.0.0.1";
         }
     }
 
     @Override
     protected void onShutdown() {
-
+        try {
+            gmsConnection.close();
+//            normalConnection.close();
+        } catch (IOException e) {
+            Printer.printErr("[NetworkManager] Could not close sockets!");
+        }
     }
 
     @Override

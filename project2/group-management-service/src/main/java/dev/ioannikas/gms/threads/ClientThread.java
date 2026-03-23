@@ -1,4 +1,4 @@
-package dev.ioannikas.gms.network;
+package dev.ioannikas.gms.threads;
 
 import dev.ioannikas.gms.managers.GroupManager;
 import dev.ioannikas.gms.utility.Printer;
@@ -16,30 +16,26 @@ import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 
-public class ReceiverThread extends Thread {
+public class ClientThread extends Thread {
 
-    private static int TIMEOUT = 5;
+    private static final int TIMEOUT = 5;
     private static boolean shuttingDown = false;
 
     private final GroupManager manager;
     private final ConnectionTCP connection;
     private final Map<Integer, String> groups;
-    private final BlockingQueue<GMSUpdateReply> pendingViewUpdates;
 
-    public ReceiverThread(GroupManager manager, Socket socket) throws IOException {
+    public ClientThread(GroupManager manager, Socket socket) throws IOException {
         this.manager = manager;
         this.connection = new ConnectionTCP(socket);
         this.groups = new HashMap<>();
-        this.pendingViewUpdates = new LinkedBlockingQueue<>();
         setName("client-" + socket.getInetAddress().getHostAddress());
     }
 
     public void run() {
         try {
-            Printer.printDebug("Client " + connection.getIp() + ":" + connection.getPort() + " connected!");
+            Printer.printInfo("Client " + connection.getIp() + ":" + connection.getPort() + " connected!");
             connection.getSocket().setSoTimeout(TIMEOUT * 1000);
 
             while (!shuttingDown) {
@@ -53,14 +49,12 @@ public class ReceiverThread extends Thread {
         } catch (SocketTimeoutException e) {
             handleFailure();
         } catch (IOException | ClassNotFoundException e) {
-            Printer.printErr("Client " + connection.getIp() + ":" + connection.getPort() + " encountered error: " + e.getMessage());
-            e.printStackTrace();
+            if (!(e instanceof EOFException)) {
+                Printer.printErr("Client " + connection.getIp() + ":" + connection.getPort() + " encountered error: " + e.getMessage());
+                e.printStackTrace();
+            }
             handleFailure();
         }
-    }
-
-    public void addViewUpdate(GMSUpdateReply viewUpdate) throws InterruptedException {
-        pendingViewUpdates.put(viewUpdate);
     }
 
     private void handleJoin(GMSJoinRequest packet) throws IOException {
@@ -84,19 +78,7 @@ public class ReceiverThread extends Thread {
         GMSJoinReply reply = new GMSJoinReply(groupId, packet.getFutureId(), GMSJoinReply.FailReason.NONE, manager.getClients(groupId));
         connection.sendPacket(reply);
 
-        GMSUpdateReply update = new GMSUpdateReply(groupId, newClient, GMSUpdateReply.Action.JOINED);
-        manager.forEachClient(groupId, (c) -> {
-            ReceiverThread thread = c.getManager();
-            if (thread == this)
-                return;
-            ConnectionTCP tConnection = thread.connection;
-
-            try {
-                tConnection.sendPacket(update);
-            } catch (IOException e) {
-                Printer.printErr("Error sending update packet to " + tConnection.getIp() + ":" + tConnection.getPort());
-            }
-        });
+        sendUpdatePacket(groupId, packet.getUsername(), GMSUpdateReply.Action.JOINED);
     }
 
     private void handleLeave(GMSLeaveRequest packet) throws IOException {
@@ -115,11 +97,12 @@ public class ReceiverThread extends Thread {
         groups.remove(groupId);
         GMSLeaveReply reply = new GMSLeaveReply(groupId, packet.getFutureId(), GMSLeaveReply.FailReason.NONE);
         connection.sendPacket(reply);
-        // TODO Send update packet to group
+
+        sendUpdatePacket(groupId, username, GMSUpdateReply.Action.LEFT);
     }
 
     private void handleFailure() {
-        Printer.printDebug("Client " + connection.getIp() + ":" + connection.getPort() + " has disconnected!");
+        Printer.printInfo("Client " + connection.getIp() + ":" + connection.getPort() + " has disconnected!");
         for (int groupId : groups.keySet()) {
             String username = groups.get(groupId);
 
@@ -127,7 +110,7 @@ public class ReceiverThread extends Thread {
             if (code != GroupManager.ReturnCode.SUCCESS)
                 Printer.printErr("Error while removing member " + connection.getIp() + ":" + connection.getPort() + " [" + username + "] to group");
 
-            // TODO Send update packet to group
+            sendUpdatePacket(groupId, username, GMSUpdateReply.Action.LEFT);
         }
 
         groups.clear();
@@ -138,8 +121,20 @@ public class ReceiverThread extends Thread {
         }
     }
 
-    public static void setTimeout(int seconds) {
-        TIMEOUT = seconds;
+    private void sendUpdatePacket(int groupId, String username, GMSUpdateReply.Action action) {
+        GMSUpdateReply update = new GMSUpdateReply(groupId, username, action);
+        manager.forEachClient(groupId, (c) -> {
+            ClientThread thread = c.getManager();
+            if (thread == this)
+                return;
+
+            ConnectionTCP tConnection = thread.connection;
+            try {
+                tConnection.sendPacket(update);
+            } catch (IOException e) {
+                Printer.printErr("Error sending update packet to " + tConnection.getIp() + ":" + tConnection.getPort());
+            }
+        });
     }
 
     public static void onShutdown() {

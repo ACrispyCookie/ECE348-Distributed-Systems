@@ -73,7 +73,7 @@ public class Client {
         groups.put(groupId, packet.getUsername());
         sendReply(new GMSJoinReply(groupId, packet.getFutureId(), GMSJoinReply.FailReason.NONE, manager.getClients(groupId)));
 
-        GMSUpdateReply update = new GMSUpdateReply(groupId, newClient, GMSUpdateReply.Action.JOINED);
+        GMSUpdateReply update = new GMSUpdateReply(groupId, newClient.getUsername(), GMSUpdateReply.Action.JOINED);
         manager.forEachClient(groupId, (c) -> {
             SocketAddress address = c.getManagerS();
 

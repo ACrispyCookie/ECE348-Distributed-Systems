@@ -92,7 +92,7 @@ public class GroupManager {
         }
 
         public ClientInfo addClient(ClientInfo client) {
-            return clients.put(client.getUsername(), client);
+            return clients.putIfAbsent(client.getUsername(), client);
         }
 
         public ClientInfo removeClient(String username) {

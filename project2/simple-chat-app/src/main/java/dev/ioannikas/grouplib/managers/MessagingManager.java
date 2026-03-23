@@ -18,22 +18,16 @@ public class MessagingManager extends GeneralManager {
         start();
     }
 
-    public Message receive(int groupId, boolean block) {
-        try {
-            BlockingQueue<Message> queue = groupPackets.get(groupId);
+    public Message receive(int groupId, boolean block) throws InterruptedException {
+        BlockingQueue<Message> queue = groupPackets.computeIfAbsent(groupId, i -> new LinkedBlockingQueue<>());
 
-            Message message;
-            if (block)
-                message = queue.take();
-            else
-                message = queue.poll();
+        Message message;
+        if (block)
+            message = queue.take();
+        else
+            message = queue.poll();
 
-            return message;
-        } catch (InterruptedException ignored) {
-
-        }
-
-        return null;
+        return message;
     }
 
     public void handleReceivedPacket(Message reply) {

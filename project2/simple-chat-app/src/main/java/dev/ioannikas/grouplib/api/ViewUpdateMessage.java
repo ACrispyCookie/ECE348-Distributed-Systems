@@ -24,7 +24,7 @@ public class ViewUpdateMessage {
     }
 
     public enum UpdateAction {
-        JOIN,
-        LEAVE
+        JOINED,
+        LEFT
     }
 }

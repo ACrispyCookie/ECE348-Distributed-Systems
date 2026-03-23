@@ -1,145 +1,125 @@
 package dev.ioannikas.chatapp.managers;
 
 import dev.ioannikas.chatapp.ChatApp;
+import dev.ioannikas.chatapp.model.ChatMessage;
+import dev.ioannikas.chatapp.utility.Printer;
 
 import java.util.*;
-import java.util.concurrent.locks.ReentrantLock;
 
 public class ChatManager {
 
     private final Map<Integer, GroupChat> chats = new HashMap<>();
-    private final ReentrantLock lock = new ReentrantLock();
 
-    public void memberLeft(int groupId, String member) {
-        lock.lock();
-        try {
-            GroupChat chat = chats.get(groupId);
-            if (chat == null)
-                return;
+    public synchronized void memberLeft(int groupId, String member) {
+        GroupChat chat = chats.get(groupId);
+        if (chat == null)
+            return;
 
-            chat.getMembers().remove(member);
-        } finally {
-            lock.unlock();
-        }
-
+        chat.getMembers().remove(member);
+        Printer.printMessage(chat.getName(), groupId, member + " has left the chat!");
     }
 
-    public void memberJoined(int groupId, String member) {
-        lock.lock();
-        try {
-            GroupChat chat = chats.get(groupId);
-            if (chat == null)
-                return;
+    public synchronized void memberJoined(int groupId, String member) {
+        GroupChat chat = chats.get(groupId);
+        if (chat == null)
+            return;
 
-            chat.getMembers().add(member);
-        } finally {
-            lock.unlock();
-        }
+        chat.getMembers().add(member);
+        Printer.printMessage(chat.getName(), groupId, member + " has joined the chat!");
     }
 
-    public void joinChat(int id, String name, String username, List<String> members) {
-        lock.lock();
-        try {
-            chats.put(id, new GroupChat(id, name, username, members));
-        } finally {
-            lock.unlock();
-        }
+    public synchronized void joinChat(int id, String name, String username, List<String> members) {
+        GroupChat chat = new GroupChat(id, name, username, new LinkedList<>(members), new MessageReceiver(id));
+        chats.put(id, chat);
     }
 
-    public void leaveChat(int groupId) {
-        lock.lock();
-        try {
-            chats.remove(groupId);
-        } finally {
-            lock.unlock();
-        }
+    public synchronized void leaveChat(int groupId) {
+        GroupChat chat = chats.remove(groupId);
+        chat.getManager().shutdown();
     }
 
-    public String getUsername(int groupId) {
-        lock.lock();
+    public synchronized int getByIdOrName(String idOrName) {
+        int groupId;
         try {
-            GroupChat chat = chats.get(groupId);
-            if (chat == null)
-                return null;
-
-            return chat.getUsername();
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    public String getName(int groupId) {
-        lock.lock();
-        try {
-            GroupChat chat = chats.get(groupId);
-            if (chat == null)
-                return null;
-
-            return chat.getName();
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    public List<String> getMembers(int groupId) {
-        lock.lock();
-        try {
-            GroupChat chat = chats.get(groupId);
-            if (chat == null)
-                return null;
-
-            return new LinkedList<>(chat.getMembers());
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    public int getByName(String name) {
-        lock.lock();
-        try {
-            for (GroupChat chat : chats.values()) {
-                if (chat.getName().equals(name))
-                    return chat.getId();
-            }
-
-            return -1;
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    public boolean exists(int groupId) {
-        lock.lock();
-        try {
-            return chats.containsKey(groupId);
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    public void cleanUp() {
-        lock.lock();
-        try {
+            groupId = Integer.parseInt(idOrName);
+        } catch (Exception ignored) {
+            groupId = -1;
             for (GroupChat chat : chats.values())
-                ChatApp.getGroupAPI().leave(chat.getId());
-            chats.clear();
-        } finally {
-            lock.unlock();
+                if (chat.getName().equals(idOrName)) {
+                    groupId = chat.getId();
+                    break;
+                }
         }
+
+        if (groupId == -1 || chats.get(groupId) == null)
+            return -1;
+
+        return groupId;
+    }
+
+    public synchronized String getUsername(int groupId) {
+        GroupChat chat = chats.get(groupId);
+        if (chat == null)
+            return null;
+
+        return chat.getUsername();
+    }
+
+    public synchronized void printChatMessage(int groupId, ChatMessage message) {
+        GroupChat chat = chats.get(groupId);
+        if (chat == null) {
+            Printer.printErr("[ChatApp] Error displaying orphaned message!");
+            return;
+        }
+
+        Printer.printMessage(chat.getName(), groupId, "At " + message.getDate() + " " + message.getAuthor() + " said: " + message.getMessage());
+    }
+
+    public synchronized void printChatInfo(int groupId) {
+        GroupChat chat = chats.get(groupId);
+        if (chat == null) {
+            Printer.printErr("[ChatApp] Group not found!");
+            return;
+        }
+
+        StringBuilder builder = new StringBuilder("[ChatApp] --- Chat info ---");
+        builder.append("\n");
+        builder.append("[ChatApp] Group ID: ").append(chat.getId()).append("\n");
+        builder.append("[ChatApp] Group name: ").append(chat.getName()).append("\n");
+        builder.append("[ChatApp] Your username: ").append(chat.getUsername()).append("\n");
+
+        List<String> members = chat.getMembers();
+        builder.append("[ChatApp] Members: ").append(members.size()).append("\n");
+
+        for (String s : members) {
+            builder.append("            - ").append(s).append("\n");
+        }
+
+        Printer.printInfo(builder.toString());
+    }
+
+    public synchronized void cleanUp() {
+        for (GroupChat chat : chats.values()) {
+            ChatApp.getGroupAPI().leave(chat.getId());
+            chat.getManager().shutdown();
+        }
+        chats.clear();
     }
 
     private static class GroupChat {
-
         private final int id;
         private final String name;
         private final String username;
         private final List<String> members;
+        private final MessageReceiver manager;
 
-        public GroupChat(int id, String name, String username, List<String> members) {
+        public GroupChat(int id, String name, String username, List<String> members, MessageReceiver manager) {
             this.id = id;
             this.name = name;
             this.username = username;
             this.members = members;
+            this.manager = manager;
+            manager.start();
         }
 
         public int getId() {
@@ -156,6 +136,10 @@ public class ChatManager {
 
         public List<String> getMembers() {
             return members;
+        }
+
+        public MessageReceiver getManager() {
+            return manager;
         }
     }
 }

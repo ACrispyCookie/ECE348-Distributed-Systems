@@ -2,26 +2,19 @@ package dev.ioannikas.chatapp.managers;
 
 import dev.ioannikas.chatapp.ChatApp;
 import dev.ioannikas.chatapp.model.Command;
-import dev.ioannikas.chatapp.model.Message;
+import dev.ioannikas.chatapp.model.ChatMessage;
 import dev.ioannikas.chatapp.utility.Printer;
 import dev.ioannikas.grouplib.api.JoinReply;
 import dev.ioannikas.grouplib.api.LeaveReply;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Scanner;
 
-public class InputManager extends Thread {
+public class InputManager {
 
     private int selected = -1;
 
-    public InputManager() {
-        this.setName("simplechatapp-input-manager");
-        this.start();
-    }
-
-    @Override
-    public void run() {
+    public void runInputManager() {
         Scanner scanner = new Scanner(System.in);
 
         while (scanner.hasNext()) {
@@ -40,8 +33,8 @@ public class InputManager extends Thread {
                 continue;
             }
 
-            Message message = new Message(ChatApp.getChatManager().getUsername(selected), LocalDateTime.now(), line);
-            ChatApp.getGroupAPI().send(selected, message);
+            ChatMessage chatMessage = new ChatMessage(ChatApp.getChatManager().getUsername(selected), LocalDateTime.now(), line);
+            ChatApp.getGroupAPI().send(selected, chatMessage);
         }
     }
 
@@ -66,7 +59,8 @@ public class InputManager extends Thread {
         String groupName = command.getArgs()[0];
         String username = command.getArgs()[1];
 
-        if (ChatApp.getChatManager().getByName(groupName) != -1) {
+        int groupId = ChatApp.getChatManager().getByIdOrName(command.getArgs()[0]);
+        if (groupId != -1) {
             Printer.printErr("[ChatApp] You are already in this group!");
             return;
         }
@@ -82,6 +76,11 @@ public class InputManager extends Thread {
 
         ChatApp.getChatManager().joinChat(reply.getGroupId(), groupName, username, reply.getClients());
         Printer.printInfo("[ChatApp] You have joined group " + groupName + " (ID:" + reply.getGroupId() + ")!");
+        ChatApp.getChatManager().printChatInfo(reply.getGroupId());
+        if (selected == -1) {
+            selected = reply.getGroupId();
+            Printer.printInfo("[ChatApp] You have selected group " + groupName + " (ID:" + reply.getGroupId() + ")!");
+        }
     }
 
     private void handleLeave(Command command) {
@@ -90,14 +89,8 @@ public class InputManager extends Thread {
             return;
         }
 
-        int groupId;
-        try {
-            groupId = Integer.parseInt(command.getArgs()[0]);
-        } catch (Exception ignored) {
-            groupId = ChatApp.getChatManager().getByName(command.getArgs()[0]);
-        }
-
-        if (groupId == -1 || !ChatApp.getChatManager().exists(groupId)) {
+        int groupId = ChatApp.getChatManager().getByIdOrName(command.getArgs()[0]);
+        if (groupId == -1) {
             Printer.printErr("[ChatApp] Group not found!");
             return;
         }
@@ -108,11 +101,10 @@ public class InputManager extends Thread {
             return;
         }
 
-        String name = ChatApp.getChatManager().getName(groupId);
         ChatApp.getChatManager().leaveChat(groupId);
         if (selected == groupId)
             selected = -1;
-        Printer.printInfo("[ChatApp] You have left group " + name + " (ID:" + groupId + ")!");
+        Printer.printInfo("[ChatApp] You have left group with ID:" + groupId + "!");
     }
 
     private void handleSelect(Command command) {
@@ -121,20 +113,14 @@ public class InputManager extends Thread {
             return;
         }
 
-        int groupId;
-        try {
-            groupId = Integer.parseInt(command.getArgs()[0]);
-        } catch (Exception ignored) {
-            groupId = ChatApp.getChatManager().getByName(command.getArgs()[0]);
-        }
-
+        int groupId = ChatApp.getChatManager().getByIdOrName(command.getArgs()[0]);
         if (groupId == -1) {
             Printer.printErr("[ChatApp] Group not found!");
             return;
         }
 
         selected = groupId;
-        Printer.printInfo("[ChatApp] You have selected group " + ChatApp.getChatManager().getName(groupId) + "!");
+        Printer.printInfo("[ChatApp] You have selected group with ID:" + groupId + "!");
     }
 
     private void handleInfo() {
@@ -143,24 +129,11 @@ public class InputManager extends Thread {
             return;
         }
 
-        StringBuilder builder = new StringBuilder("[ChatApp] Chat info:");
-        builder.append("\n");
-        builder.append("[ChatApp] Group name: ").append(ChatApp.getChatManager().getName(selected)).append("\n");
-        builder.append("[ChatApp] Your username: ").append(ChatApp.getChatManager().getUsername(selected)).append("\n");
-
-        List<String> members = ChatApp.getChatManager().getMembers(selected);
-        builder.append("[ChatApp] Members: ").append(members.size()).append("\n");
-
-        for (String s : members) {
-            builder.append("        - ").append(s).append("\n");
-        }
-
-        Printer.printInfo(builder.toString());
+        ChatApp.getChatManager().printChatInfo(selected);
     }
 
     private void handleExit() {
         ChatApp.getChatManager().cleanUp();
-
-        ChatApp.startShutdown();
+        ChatApp.shutdown();
     }
 }

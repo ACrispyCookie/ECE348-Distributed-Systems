@@ -54,7 +54,7 @@ public class GroupAPI {
         return 0;
     }
 
-    public Object receive(int groupId, boolean block) {
+    public Object receive(int groupId, boolean block) throws InterruptedException {
         if (!groups.containsKey(groupId))
             return null;
 

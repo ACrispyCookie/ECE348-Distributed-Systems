@@ -28,8 +28,10 @@ public class ConnectionTCP {
     }
 
     public void sendPacket(PacketTCP packet) throws IOException {
-        out.writeObject(packet);
-        out.flush();
+        synchronized (out) {
+            out.writeObject(packet);
+            out.flush();
+        }
     }
 
     public String getIp() {
