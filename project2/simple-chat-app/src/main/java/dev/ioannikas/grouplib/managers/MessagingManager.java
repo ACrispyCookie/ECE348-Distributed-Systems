@@ -1,15 +1,16 @@
 package dev.ioannikas.grouplib.managers;
 
 import dev.ioannikas.grouplib.GroupAPI;
-import dev.ioannikas.grouplib.network.serializable.PacketUDP;
+import dev.ioannikas.grouplib.network.serializable.group.PacketUDP;
 import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSUpdateReply;
+import dev.ioannikas.grouplib.network.serializable.group.requests.NormalRequest;
 
 import java.util.List;
 import java.util.concurrent.*;
 
 public class MessagingManager extends GeneralManager {
 
-    private final ConcurrentMap<Integer, BlockingQueue<PacketUDP>> groupPackets;
+    private final ConcurrentMap<Integer, BlockingQueue<NormalRequest>> groupPackets;
 
     public MessagingManager(GroupAPI api) {
         super(api);
@@ -19,15 +20,15 @@ public class MessagingManager extends GeneralManager {
     }
 
     public int send(int groupId, Object data) {
-        PacketUDP packet = new PacketUDP(groupId, data);
+        NormalRequest packet = new NormalRequest(groupId, data);
 
         return 0;
     }
 
-    public PacketUDP receive(int groupId, boolean block) throws InterruptedException {
-        BlockingQueue<PacketUDP> queue = groupPackets.computeIfAbsent(groupId, i -> new LinkedBlockingQueue<>());
+    public NormalRequest receive(int groupId, boolean block) throws InterruptedException {
+        BlockingQueue<NormalRequest> queue = groupPackets.computeIfAbsent(groupId, i -> new LinkedBlockingQueue<>());
 
-        PacketUDP packet;
+        NormalRequest packet;
         if (block)
             packet = queue.take();
         else
@@ -37,8 +38,8 @@ public class MessagingManager extends GeneralManager {
     }
 
     public void handleReceivedPacket(PacketUDP reply) {
-        if (reply.getObject() instanceof GMSUpdateReply) {
-            groupPackets.computeIfAbsent(reply.getGroupId(), k -> new LinkedBlockingQueue<>()).add(reply);
+        if (reply instanceof NormalRequest normal && normal.getData() instanceof GMSUpdateReply) {
+            groupPackets.computeIfAbsent(reply.getGroupId(), k -> new LinkedBlockingQueue<>()).add(normal);
             return;
         } else {
 

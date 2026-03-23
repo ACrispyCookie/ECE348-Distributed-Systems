@@ -1,4 +1,4 @@
-package dev.ioannikas.grouplib.network.serializable;
+package dev.ioannikas.grouplib.network.serializable.group;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;

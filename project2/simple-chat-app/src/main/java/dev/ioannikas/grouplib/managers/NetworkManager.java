@@ -2,11 +2,12 @@ package dev.ioannikas.grouplib.managers;
 
 import dev.ioannikas.chatapp.utility.Printer;
 import dev.ioannikas.grouplib.GroupAPI;
-import dev.ioannikas.grouplib.network.serializable.PacketUDP;
+import dev.ioannikas.grouplib.network.serializable.group.PacketUDP;
 import dev.ioannikas.grouplib.network.serializable.gms.ConnectionTCP;
-import dev.ioannikas.grouplib.network.serializable.ConnectionUDP;
+import dev.ioannikas.grouplib.network.serializable.group.ConnectionUDP;
 import dev.ioannikas.grouplib.network.serializable.gms.PacketTCP;
 import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSReply;
+import dev.ioannikas.grouplib.network.serializable.group.requests.NormalRequest;
 
 import java.io.IOException;
 import java.net.*;
@@ -18,9 +19,6 @@ public class NetworkManager extends GeneralManager {
     private final ConnectionUDP normalConnection;
     private final String ipAddress;
     private final int port;
-
-    private final Object tcpLock = new Object();
-    private final Object udpLock = new Object();
 
     public NetworkManager(GroupAPI api, String gmsIpAddress, int gmsPort, int appPort) throws IOException {
         super(api);
@@ -40,7 +38,7 @@ public class NetworkManager extends GeneralManager {
                 if (incomingObject.getType() != GMSReply.ReplyType.UPDATE)
                     getAPI().getGmsManager().handleReceivedPacket(incomingObject);
                 else if (incomingObject.getType() == GMSReply.ReplyType.UPDATE)
-                    getAPI().getMessagingManager().handleReceivedPacket(new PacketUDP(incomingObject.getGroupId(), incomingObject));
+                    getAPI().getMessagingManager().handleReceivedPacket(new NormalRequest(incomingObject.getGroupId(), incomingObject));
                 else
                     Printer.printDebug("[NetworkManager] Received invalid packet from GMS.");
             } catch (Exception e) {
@@ -70,23 +68,7 @@ public class NetworkManager extends GeneralManager {
     }
 
     public void sendGms(PacketTCP packet) throws IOException {
-        synchronized (tcpLock) {
-            gmsConnection.sendPacket(packet);
-        }
-    }
-
-    public void sendNormal(PacketUDP packet) throws IOException {
-        synchronized (udpLock) {
-            normalConnection.sendPacket(packet);
-        }
-    }
-
-    public ConnectionTCP getGmsConnection() {
-        return gmsConnection;
-    }
-
-    public ConnectionUDP getNormalConnection() {
-        return normalConnection;
+        gmsConnection.sendPacket(packet);
     }
 
     public String getIpAddress() {

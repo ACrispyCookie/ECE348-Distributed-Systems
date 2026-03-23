@@ -124,6 +124,7 @@ public class SingleThreadGMS {
         if (bytesRead == -1) {
             key.cancel();
             clientChannel.close();
+            clients.remove(clientChannel.getRemoteAddress());
             return;
         }
         buffer.flip();

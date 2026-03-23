@@ -2,18 +2,19 @@ package dev.ioannikas.grouplib;
 
 import dev.ioannikas.grouplib.api.JoinReply;
 import dev.ioannikas.grouplib.api.LeaveReply;
-import dev.ioannikas.grouplib.network.serializable.PacketUDP;
+import dev.ioannikas.grouplib.network.serializable.group.PacketUDP;
 import dev.ioannikas.grouplib.managers.GMSManager;
 import dev.ioannikas.grouplib.managers.MessagingManager;
 import dev.ioannikas.grouplib.managers.NetworkManager;
 import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSJoinReply;
 import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSLeaveReply;
 import dev.ioannikas.grouplib.network.serializable.gms.replies.GMSUpdateReply;
+import dev.ioannikas.grouplib.network.serializable.group.requests.NormalRequest;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class GroupAPI {
 
@@ -24,7 +25,7 @@ public class GroupAPI {
     private Map<Integer, String> groups;
 
     public void init(String gmsAddress, int gmsPort, int appPort) throws IOException {
-        this.groups = new HashMap<>();
+        this.groups = new ConcurrentHashMap<>();
         this.networkManager = new NetworkManager(this, gmsAddress, gmsPort, appPort);
         this.gmsManager = new GMSManager(this);
         this.messagingManager = new MessagingManager(this);
@@ -60,11 +61,11 @@ public class GroupAPI {
         if (!groups.containsKey(groupId))
             return null;
 
-        PacketUDP reply = messagingManager.receive(groupId, block);
-        if (reply.getObject() instanceof GMSUpdateReply update)
+        NormalRequest reply = messagingManager.receive(groupId, block);
+        if (reply.getData() instanceof GMSUpdateReply update)
             return update.toApiVersion();
         else
-            return reply.getObject();
+            return reply.getData();
     }
 
     public NetworkManager getNetworkManager() {
