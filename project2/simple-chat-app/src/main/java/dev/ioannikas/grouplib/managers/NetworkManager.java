@@ -56,7 +56,7 @@ public class NetworkManager extends GeneralManager {
     private void udpReceiver() {
         while (!isShuttingDown()) {
             try {
-                PacketUDP incomingPacket = (PacketUDP) gmsConnection.nextObject();
+                PacketUDP incomingPacket = (PacketUDP) normalConnection.nextObject();
 
                 getAPI().getMessagingManager().handleReceivedPacket(incomingPacket);
             } catch (Exception e) {
@@ -75,7 +75,7 @@ public class NetworkManager extends GeneralManager {
         }
     }
 
-    public void sendNormal(PacketTCP packet) throws IOException {
+    public void sendNormal(PacketUDP packet) throws IOException {
         synchronized (udpLock) {
             normalConnection.sendPacket(packet);
         }

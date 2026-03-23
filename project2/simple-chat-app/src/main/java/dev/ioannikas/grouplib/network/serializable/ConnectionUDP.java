@@ -1,7 +1,5 @@
 package dev.ioannikas.grouplib.network.serializable;
 
-import dev.ioannikas.grouplib.network.serializable.gms.PacketTCP;
-
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -27,7 +25,7 @@ public class ConnectionUDP {
         return in.readObject();
     }
 
-    public void sendPacket(PacketTCP packet) throws IOException {
+    public void sendPacket(PacketUDP packet) throws IOException {
         out.writeObject(packet);
         out.flush();
     }
