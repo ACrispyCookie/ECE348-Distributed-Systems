@@ -11,6 +11,7 @@ public class GMS {
     private static final int DEFAULT_PORT = 10100;
     private static boolean shuttingDown = false;
     private static GroupManager groupManager;
+    private static ServerSocket serverSocket;
 
     public static void main(String[] args) {
         int port = DEFAULT_PORT;
@@ -30,17 +31,9 @@ public class GMS {
     }
 
     private static void startAccepting(int port) {
-        try (ServerSocket serverSocket = new ServerSocket(port)) {
-
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                Printer.printInfo("GMS shutting down...");
-                try {
-                    serverSocket.close();
-                } catch (IOException e) {
-                    Printer.printErr("Error closing server socket: " + e.getMessage());
-                }
-                onShutdown();
-            }));
+        try {
+            serverSocket = new ServerSocket(port);
+            Runtime.getRuntime().addShutdownHook(new Thread(GMS::shutdown));
 
             Printer.printInfo("Waiting for connections on port " + port + "...");
             while (!shuttingDown) {
@@ -54,7 +47,13 @@ public class GMS {
         }
     }
 
-    private static void onShutdown() {
+    public static void shutdown() {
+        Printer.printInfo("GMS shutting down...");
+        try {
+            serverSocket.close();
+        } catch (IOException e) {
+            Printer.printErr("Error closing server socket: " + e.getMessage());
+        }
         shuttingDown = true;
         ClientThread.onShutdown();
     }

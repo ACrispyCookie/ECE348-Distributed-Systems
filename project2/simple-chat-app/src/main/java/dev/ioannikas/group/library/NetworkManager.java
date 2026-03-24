@@ -23,7 +23,7 @@ public class NetworkManager extends GeneralManager {
     public NetworkManager(GroupAPI api, String gmsIpAddress, int gmsPort, int appPort) throws IOException {
         super(api);
         this.gmsConnection = new ConnectionTCP(new Socket(gmsIpAddress, gmsPort));
-        this.normalConnection = new ConnectionUDP(new DatagramSocket(appPort));
+        this.normalConnection = null;//new ConnectionUDP(new DatagramSocket(appPort));
         this.ipAddress = findLocalIp();
         this.port = appPort;
 
@@ -103,7 +103,7 @@ public class NetworkManager extends GeneralManager {
     protected void onShutdown() {
         try {
             gmsConnection.close();
-            normalConnection.close();
+//            normalConnection.close();
         } catch (IOException e) {
             Printer.printErr("[NetworkManager] Could not close sockets!");
         }

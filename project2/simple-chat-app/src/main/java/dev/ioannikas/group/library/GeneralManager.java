@@ -26,6 +26,13 @@ public abstract class GeneralManager {
         shuttingDown = true;
         onShutdown();
         threads.forEach(Thread::interrupt);
+        threads.forEach(t -> {
+            try {
+                t.join();
+            } catch (InterruptedException ignored) {
+
+            }
+        });
     }
 
     public boolean isShuttingDown() {
