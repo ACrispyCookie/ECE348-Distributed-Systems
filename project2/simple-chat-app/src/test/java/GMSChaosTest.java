@@ -32,7 +32,6 @@ class GMSChaosTest {
 
     @AfterAll
     static void shutdownGMS() throws InterruptedException {
-        Thread.sleep(2000); //TODO keep better state in client and make protocol engine leave gracefully
         assertSame(0, GMS.connectedClients());
         GMS.shutdown();
         serverThread.join();
@@ -57,7 +56,7 @@ class GMSChaosTest {
 
     @Test
     void testRandomConcurrentChaos() throws InterruptedException, IOException {
-        int numOperations = 500;
+        int numOperations = 2000;
         int numThreads = 10;
 
         ExecutorService executor = Executors.newFixedThreadPool(numThreads);

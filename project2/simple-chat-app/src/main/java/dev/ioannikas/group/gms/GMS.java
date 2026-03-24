@@ -50,8 +50,8 @@ public class GMS {
     public static void shutdown() {
         Printer.printInfo("GMS shutting down...");
         shuttingDown = true;
-        ClientThread.onShutdown();
         try {
+            ClientThread.onShutdown();
             serverSocket.close();
         } catch (IOException e) {
             Printer.printErr("Error closing server socket: " + e.getMessage());

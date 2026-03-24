@@ -3,6 +3,9 @@ import dev.ioannikas.group.api.JoinReply;
 import dev.ioannikas.group.gms.GMS;
 import org.junit.jupiter.api.*;
 
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class GMSIntegrationTest {
@@ -54,12 +57,12 @@ class GMSIntegrationTest {
     }
 
     @Test
-    void testLeaveGroupFiresUpdate() throws InterruptedException {
+    void testLeaveGroupFiresUpdate() throws InterruptedException, ExecutionException {
         client1.join("Chat", "User1");
         int groupId = client2.join("Chat", "User2").getGroupId();
         client1.leave(groupId);
 
-        Object updatePacket = client2.receive(groupId, true);
+        Object updatePacket = client2.receive(List.of(groupId));
         assertNotNull(updatePacket, "Client2 should receive a view update after Client1 leaves");
     }
 }

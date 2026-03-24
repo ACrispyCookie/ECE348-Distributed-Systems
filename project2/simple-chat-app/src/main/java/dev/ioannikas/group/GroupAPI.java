@@ -2,6 +2,7 @@ package dev.ioannikas.group;
 
 import dev.ioannikas.group.api.JoinReply;
 import dev.ioannikas.group.api.LeaveReply;
+import dev.ioannikas.group.api.Pair;
 import dev.ioannikas.group.library.GMSManager;
 import dev.ioannikas.group.library.MessagingManager;
 import dev.ioannikas.group.library.NetworkManager;
@@ -12,8 +13,10 @@ import dev.ioannikas.group.library.serializable.requests.NormalRequest;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 
 public class GroupAPI {
 
@@ -56,15 +59,12 @@ public class GroupAPI {
         return messagingManager.send(groupId, message);
     }
 
-    public Object receive(int groupId, boolean block) throws InterruptedException {
-        if (!groups.containsKey(groupId))
-            return null;
-
-        NormalRequest reply = messagingManager.receive(groupId, block);
+    public Pair<Integer, Object> receive(List<Integer> groups) throws InterruptedException, ExecutionException {
+        NormalRequest reply = messagingManager.receive(groups);
         if (reply.getData() instanceof GMSUpdateReply update)
-            return update.toApiVersion();
+            return new Pair<>(reply.getGroupId(), update);
         else
-            return reply.getData();
+            return new Pair<>(reply.getGroupId(), reply.getData());
     }
 
     public NetworkManager getNetworkManager() {
@@ -80,6 +80,10 @@ public class GroupAPI {
     }
 
     public void shutdown() {
+        for (Map.Entry<Integer, String> entry : groups.entrySet()) {
+            gmsManager.leave(entry.getKey(), entry.getValue());
+        }
+
         gmsManager.shutdown();
         messagingManager.shutdown();
         networkManager.shutdown();

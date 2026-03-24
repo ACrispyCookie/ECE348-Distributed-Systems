@@ -15,12 +15,15 @@ import java.io.IOException;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
 public class ClientThread extends Thread {
 
     private static final int TIMEOUT = 5;
     private static boolean shuttingDown = false;
+    private static final List<ClientThread> threads = new LinkedList<>();
 
     private final GroupManager manager;
     private final ConnectionTCP connection;
@@ -30,6 +33,9 @@ public class ClientThread extends Thread {
         this.manager = manager;
         this.connection = new ConnectionTCP(socket);
         this.groups = new HashMap<>();
+        synchronized (threads) {
+            threads.add(this);
+        }
         setName("client-" + socket.getInetAddress().getHostAddress());
     }
 
@@ -119,6 +125,10 @@ public class ClientThread extends Thread {
         } catch (IOException e) {
             Printer.printErr("Error while closing socket of " + connection.getIp() + ":" + connection.getPort());
         }
+
+        synchronized (threads) {
+            threads.remove(this);
+        }
     }
 
     private void sendUpdatePacket(int groupId, String username, GMSUpdateReply.Action action) {
@@ -139,5 +149,14 @@ public class ClientThread extends Thread {
 
     public static void onShutdown() {
         shuttingDown = true;
+        for (ClientThread thread : threads) {
+            try {
+                thread.join();
+            } catch (InterruptedException ignored) {
+
+            }
+        }
+
+        threads.clear();
     }
 }

@@ -29,13 +29,12 @@ public class ChatManager {
     }
 
     public synchronized void joinChat(int id, String name, String username, List<String> members) {
-        GroupChat chat = new GroupChat(id, name, username, new LinkedList<>(members), new MessageReceiver(id));
+        GroupChat chat = new GroupChat(id, name, username, new LinkedList<>(members));
         chats.put(id, chat);
     }
 
     public synchronized void leaveChat(int groupId) {
-        GroupChat chat = chats.remove(groupId);
-        chat.getManager().shutdown();
+        chats.remove(groupId);
     }
 
     public synchronized int getByIdOrName(String idOrName) {
@@ -55,6 +54,10 @@ public class ChatManager {
             return -1;
 
         return groupId;
+    }
+
+    public synchronized List<Integer> getGroups() {
+        return chats.keySet().stream().toList();
     }
 
     public synchronized String getUsername(int groupId) {
@@ -99,10 +102,8 @@ public class ChatManager {
     }
 
     public synchronized void cleanUp() {
-        for (GroupChat chat : chats.values()) {
+        for (GroupChat chat : chats.values())
             ChatApp.getGroupAPI().leave(chat.getId());
-            chat.getManager().shutdown();
-        }
         chats.clear();
     }
 
@@ -111,15 +112,12 @@ public class ChatManager {
         private final String name;
         private final String username;
         private final List<String> members;
-        private final MessageReceiver manager;
 
-        public GroupChat(int id, String name, String username, List<String> members, MessageReceiver manager) {
+        public GroupChat(int id, String name, String username, List<String> members) {
             this.id = id;
             this.name = name;
             this.username = username;
             this.members = members;
-            this.manager = manager;
-            manager.start();
         }
 
         public int getId() {
@@ -136,10 +134,6 @@ public class ChatManager {
 
         public List<String> getMembers() {
             return members;
-        }
-
-        public MessageReceiver getManager() {
-            return manager;
         }
     }
 }

@@ -81,6 +81,7 @@ public class InputManager {
             selected = reply.getGroupId();
             Printer.printInfo("[ChatApp] You have selected group " + groupName + " (ID:" + reply.getGroupId() + ")!");
         }
+        ChatApp.getReceiver().interrupt();
     }
 
     private void handleLeave(Command command) {
@@ -105,6 +106,7 @@ public class InputManager {
         if (selected == groupId)
             selected = -1;
         Printer.printInfo("[ChatApp] You have left group with ID:" + groupId + "!");
+        ChatApp.getReceiver().interrupt();
     }
 
     private void handleSelect(Command command) {

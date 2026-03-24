@@ -2,6 +2,7 @@ package dev.ioannikas.chatapp;
 
 import dev.ioannikas.chatapp.managers.ChatManager;
 import dev.ioannikas.chatapp.managers.InputManager;
+import dev.ioannikas.chatapp.managers.MessageReceiver;
 import dev.ioannikas.chatapp.utility.Printer;
 import dev.ioannikas.group.GroupAPI;
 
@@ -13,6 +14,7 @@ public class ChatApp {
 
     private static GroupAPI groupAPI;
     private static ChatManager chatManager;
+    private static MessageReceiver receiver;
     private static boolean shuttingDown = false;
     
     public static void main(String[] args) {
@@ -30,6 +32,8 @@ public class ChatApp {
         Printer.printInfo("[ChatApp] Client started! Start by typing a command!");
 
         chatManager  = new ChatManager();
+        receiver = new MessageReceiver();
+        receiver.start();
         new InputManager().runInputManager();
     }
 
@@ -41,9 +45,14 @@ public class ChatApp {
         return chatManager;
     }
 
+    public static MessageReceiver getReceiver() {
+        return receiver;
+    }
+
     public static void shutdown() {
         Printer.printInfo("[ChatApp] Shutting down...");
         shuttingDown = true;
+        receiver.shutdown();
         groupAPI.shutdown();
     }
 

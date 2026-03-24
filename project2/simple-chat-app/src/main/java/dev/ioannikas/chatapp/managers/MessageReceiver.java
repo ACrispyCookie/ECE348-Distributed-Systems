@@ -2,15 +2,16 @@ package dev.ioannikas.chatapp.managers;
 
 import dev.ioannikas.chatapp.ChatApp;
 import dev.ioannikas.chatapp.model.ChatMessage;
+import dev.ioannikas.group.api.Pair;
 import dev.ioannikas.group.api.ViewUpdateMessage;
+
+import java.util.concurrent.ExecutionException;
 
 public class MessageReceiver extends Thread {
 
-    private final int groupId;
     private boolean shutdown = false;
 
-    public MessageReceiver(int groupId) {
-        this.groupId = groupId;
+    public MessageReceiver() {
         setName("sca-message-receiver");
     }
 
@@ -18,16 +19,18 @@ public class MessageReceiver extends Thread {
     public void run() {
         try {
             while (!ChatApp.isShuttingDown() && !shutdown) {
-                Object message = ChatApp.getGroupAPI().receive(groupId, true);
+                Pair<Integer, Object> message = ChatApp.getGroupAPI().receive(ChatApp.getChatManager().getGroups());
 
-                if (message instanceof ViewUpdateMessage update) {
+                if (message.getValue() instanceof ViewUpdateMessage update) {
                     handleUpdate(update);
                 } else {
-                    handleMessage((ChatMessage) message);
+                    handleMessage(message.getKey(), (ChatMessage) message.getValue());
                 }
             }
         } catch (InterruptedException ignored) {
 
+        } catch (ExecutionException e) {
+            e.printStackTrace();
         }
     }
 
@@ -39,16 +42,12 @@ public class MessageReceiver extends Thread {
         }
     }
 
-    private void handleMessage(ChatMessage message) {
+    private void handleMessage(int groupId, ChatMessage message) {
         ChatApp.getChatManager().printChatMessage(groupId, message);
     }
 
     public void shutdown() {
         shutdown = true;
         interrupt();
-    }
-
-    public int getGroupId() {
-        return groupId;
     }
 }
