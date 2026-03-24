@@ -13,9 +13,10 @@ class GMSIntegrationTest {
     private GroupAPI client2;
 
     @BeforeAll
-    static void startGMS() {
+    static void startGMS() throws InterruptedException {
         serverThread = new Thread(() -> GMS.main(new String[]{String.valueOf(GMS_PORT)}));
         serverThread.start();
+        Thread.sleep(200);
     }
 
     @AfterAll
@@ -26,8 +27,6 @@ class GMSIntegrationTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        Thread.sleep(200);
-
         client1 = new GroupAPI();
         client1.init("127.0.0.1", GMS_PORT, 6001);
 

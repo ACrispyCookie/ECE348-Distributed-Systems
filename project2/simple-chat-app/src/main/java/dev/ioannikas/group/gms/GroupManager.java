@@ -39,14 +39,6 @@ public class GroupManager {
         return previous != null ? ReturnCode.SUCCESS : ReturnCode.CLIENT_NOT_FOUND;
     }
 
-    public synchronized String getGroupName(int groupId) {
-        Group group = index.get(groupId);
-        if (group == null)
-            return null;
-
-        return group.getName();
-    }
-
     public synchronized List<ClientInfo> getClients(int groupId) {
         Group group = index.get(groupId);
         if (group == null)
@@ -63,6 +55,13 @@ public class GroupManager {
         for (ClientInfo client : group.getClients()) {
             consumer.accept(client);
         }
+    }
+
+    public synchronized int getClientCount() {
+        int users = 0;
+        for (Group g : index.values())
+            users += g.getClients().size();
+        return users;
     }
 
     public enum ReturnCode {

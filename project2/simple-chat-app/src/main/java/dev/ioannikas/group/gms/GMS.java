@@ -49,12 +49,16 @@ public class GMS {
 
     public static void shutdown() {
         Printer.printInfo("GMS shutting down...");
+        shuttingDown = true;
+        ClientThread.onShutdown();
         try {
             serverSocket.close();
         } catch (IOException e) {
             Printer.printErr("Error closing server socket: " + e.getMessage());
         }
-        shuttingDown = true;
-        ClientThread.onShutdown();
+    }
+
+    public static int connectedClients() {
+        return groupManager.getClientCount();
     }
 }

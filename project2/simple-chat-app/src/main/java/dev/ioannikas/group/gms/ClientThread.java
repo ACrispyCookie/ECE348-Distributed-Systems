@@ -59,7 +59,7 @@ public class ClientThread extends Thread {
 
     private void handleJoin(GMSJoinRequest packet) throws IOException {
         ClientInfo newClient = new ClientInfo(packet.getUsername(), packet.getIpAddress(), packet.getPort(), this);
-        Printer.printInfo("Received join from " + connection.getIp() + ":" + connection.getPort() + "!" + "\n" + newClient + "\nGroup: " + packet.getGroupName());
+        Printer.printInfo("Received join from " + newClient + " Group: " + packet.getGroupName());
 
         int groupId = manager.findOrCreateGroup(packet.getGroupName());
         GroupManager.ReturnCode code = manager.addToGroup(groupId, newClient);
@@ -68,7 +68,7 @@ public class ClientThread extends Thread {
             connection.sendPacket(reply);
             return;
         } else if (code != GroupManager.ReturnCode.SUCCESS) {
-            Printer.printErr("Error while adding member " + connection.getIp() + ":" + connection.getPort() + " [" + packet.getUsername() + "] to group");
+            Printer.printErr("Error while adding member " + connection.getIp() + ":" + connection.getPort() + " [" + packet.getUsername() + "] to group " + groupId + " (" + code + ")");
             GMSJoinReply reply = new GMSJoinReply(groupId, packet.getFutureId(), GMSJoinReply.FailReason.UNKNOWN, null);
             connection.sendPacket(reply);
             return;
@@ -84,11 +84,11 @@ public class ClientThread extends Thread {
     private void handleLeave(GMSLeaveRequest packet) throws IOException {
         int groupId = packet.getGroupId();
         String username = packet.getUsername();
-        Printer.printInfo("Received leave from " + connection.getIp() + ":" + connection.getPort() + "!" + "\nUsername: " + username + "\nGroup: " + groupId);
+        Printer.printInfo("Received leave from " + connection.getIp() + ":" + connection.getPort() + "!" + " Username: " + username + " Group: " + groupId);
 
         GroupManager.ReturnCode code = manager.removeFromGroup(groupId, username);
         if (code != GroupManager.ReturnCode.SUCCESS) {
-            Printer.printErr("Error while adding member " + connection.getIp() + ":" + connection.getPort() + " [" + packet.getUsername() + "] to group");
+            Printer.printErr("Error while removing member " + connection.getIp() + ":" + connection.getPort() + " [" + packet.getUsername() + "] from group " + groupId + " (" + code + ")");
             GMSLeaveReply reply = new GMSLeaveReply(groupId, packet.getFutureId(), GMSLeaveReply.FailReason.UNKNOWN);
             connection.sendPacket(reply);
             return;
@@ -108,7 +108,7 @@ public class ClientThread extends Thread {
 
             GroupManager.ReturnCode code = manager.removeFromGroup(groupId, username);
             if (code != GroupManager.ReturnCode.SUCCESS)
-                Printer.printErr("Error while removing member " + connection.getIp() + ":" + connection.getPort() + " [" + username + "] to group");
+                Printer.printErr("Error while removing member " + connection.getIp() + ":" + connection.getPort() + " [" + username + "] to group " + groupId + " (" + code + ")");
 
             sendUpdatePacket(groupId, username, GMSUpdateReply.Action.LEFT);
         }
