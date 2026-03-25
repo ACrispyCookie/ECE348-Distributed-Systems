@@ -22,7 +22,6 @@ import java.util.Map;
 public class ClientThread extends Thread {
 
     private static final int TIMEOUT = 5;
-    private static boolean shuttingDown = false;
     private static final List<ClientThread> threads = new LinkedList<>();
 
     private final GroupManager manager;
@@ -44,7 +43,7 @@ public class ClientThread extends Thread {
             Printer.printInfo("Client " + connection.getIp() + ":" + connection.getPort() + " connected!");
             connection.getSocket().setSoTimeout(TIMEOUT * 1000);
 
-            while (!shuttingDown) {
+            while (!GMS.isShuttingDown()) {
                 GMSRequest packet = (GMSRequest) connection.nextObject();
                 switch (packet.getType()) {
                     case JOIN -> handleJoin((GMSJoinRequest) packet);
@@ -148,7 +147,6 @@ public class ClientThread extends Thread {
     }
 
     public static void onShutdown() {
-        shuttingDown = true;
         for (ClientThread thread : threads) {
             try {
                 thread.join();

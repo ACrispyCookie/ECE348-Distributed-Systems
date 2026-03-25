@@ -9,11 +9,12 @@ import java.net.Socket;
 public class GMS {
 
     private static final int DEFAULT_PORT = 10100;
-    private static boolean shuttingDown = false;
+    private static boolean shuttingDown;
     private static GroupManager groupManager;
     private static ServerSocket serverSocket;
 
     public static void main(String[] args) {
+        shuttingDown = false;
         int port = DEFAULT_PORT;
 
         if (args.length > 0) {
@@ -51,11 +52,15 @@ public class GMS {
         Printer.printInfo("GMS shutting down...");
         shuttingDown = true;
         try {
-            ClientThread.onShutdown();
             serverSocket.close();
+            ClientThread.onShutdown();
         } catch (IOException e) {
             Printer.printErr("Error closing server socket: " + e.getMessage());
         }
+    }
+
+    public static boolean isShuttingDown() {
+        return shuttingDown;
     }
 
     public static int connectedClients() {
