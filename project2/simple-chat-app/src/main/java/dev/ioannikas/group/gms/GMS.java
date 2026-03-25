@@ -36,15 +36,7 @@ public class GMS {
 
         groupManager = new GroupManager();
 
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            Printer.printInfo("GMS shutting down...");
-            onShutdown();
-            try {
-                selector.close();
-            } catch (IOException e) {
-                Printer.printErr("Error closing server socket: " + e.getMessage());
-            }
-        }));
+        Runtime.getRuntime().addShutdownHook(new Thread(GMS::shutdown));
 
         startServer(port);
     }
@@ -151,7 +143,9 @@ public class GMS {
         return groupManager.getClientCount();
     }
 
-    private static void onShutdown() {
+    public static void shutdown() {
+        Printer.printInfo("GMS shutting down...");
         shuttingDown = true;
+        selector.wakeup();
     }
 }

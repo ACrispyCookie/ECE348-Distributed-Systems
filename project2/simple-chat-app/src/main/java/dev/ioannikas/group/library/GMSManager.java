@@ -75,8 +75,10 @@ public class GMSManager {
 
         CompletableFuture<GMSReply> future = pendingFutures.remove(futureId);
         // Should never happen
-        if (future == null)
+        if (future == null) {
+            System.err.println("The bad thing happened");
             return;
+        }
         future.complete(reply);
     }
 

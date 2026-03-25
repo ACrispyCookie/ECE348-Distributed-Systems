@@ -9,12 +9,12 @@ import java.util.concurrent.*;
 
 public class MessageManager {
 
-    private final ConcurrentMap<Integer, Queue<NormalRequest>> groupPackets;
-    private final Map<List<Integer>, Queue<CompletableFuture<NormalRequest>>> requests;
+    private final ConcurrentMap<Integer, Queue<NormalRequest>> receivedPackets;
+    private final Map<List<Integer>, Queue<CompletableFuture<NormalRequest>>> waitingRequests;
 
     public MessageManager() {
-        this.groupPackets = new ConcurrentHashMap<>();
-        this.requests = new HashMap<>();
+        this.receivedPackets = new ConcurrentHashMap<>();
+        this.waitingRequests = new HashMap<>();
     }
 
     public int send(int groupId, Object data) {
@@ -38,7 +38,7 @@ public class MessageManager {
             if (waiting != null) {
                 waiting.complete(normal);
             } else
-                groupPackets.computeIfAbsent(reply.getGroupId(), k -> new LinkedBlockingQueue<>()).add(normal);
+                receivedPackets.computeIfAbsent(reply.getGroupId(), k -> new LinkedBlockingQueue<>()).add(normal);
             return;
         } else {
 
@@ -48,17 +48,17 @@ public class MessageManager {
     private synchronized CompletableFuture<NormalRequest> requestWaiting(int groupId) {
         List<Integer> selected = null;
 
-        for (List<Integer> waiting : requests.keySet()) {
-            if (waiting.contains(groupId) && !requests.get(waiting).isEmpty())
+        for (List<Integer> waiting : waitingRequests.keySet()) {
+            if (waiting.contains(groupId) && !waitingRequests.get(waiting).isEmpty())
                 selected = waiting;
         }
 
-        return selected != null ? requests.get(selected).remove() : null;
+        return selected != null ? waitingRequests.get(selected).remove() : null;
     }
 
     private synchronized NormalRequest requestMatches(List<Integer> groups) {
         for (int group : groups) {
-            Queue<NormalRequest> queue = groupPackets.get(group);
+            Queue<NormalRequest> queue = receivedPackets.get(group);
             if (queue == null)
                 continue;
 
@@ -70,10 +70,10 @@ public class MessageManager {
     }
 
     private synchronized CompletableFuture<NormalRequest> addRequest(List<Integer> groups) {
-        requests.computeIfAbsent(groups, i -> new LinkedList<>());
+        waitingRequests.computeIfAbsent(groups, i -> new LinkedList<>());
 
         CompletableFuture<NormalRequest> future = new CompletableFuture<>();
-        requests.get(groups).offer(future);
+        waitingRequests.get(groups).offer(future);
         return future;
     }
 }
