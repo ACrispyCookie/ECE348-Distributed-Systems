@@ -28,27 +28,6 @@ public class PacketUDP implements Serializable {
         return buffer.flip();
     }
 
-    public static String readString(ByteBuffer buffer) {
-        int length = buffer.getInt();
-        if (length == -1) {
-            return null;
-        }
-
-        byte[] stringBytes = new byte[length];
-        buffer.get(stringBytes);
-        return new String(stringBytes, StandardCharsets.UTF_8);
-    }
-
-    public static void writeString(ByteBuffer buffer, String str) {
-        if (str == null) {
-            buffer.putInt(-1);
-        } else {
-            byte[] stringBytes = str.getBytes(StandardCharsets.UTF_8);
-            buffer.putInt(stringBytes.length);
-            buffer.put(stringBytes);
-        }
-    }
-
     private enum PacketType {
         NORMAL
     }

@@ -83,10 +83,7 @@ public class GroupAPI {
 
     public static void shutdown() {
         shuttingDown = true;
-        for (Map.Entry<Integer, String> entry : groups.entrySet()) {
-            gmsManager.leave(entry.getKey(), entry.getValue());
-        }
-
+        messageManager.shutdown();
         gmsManager.shutdown();
         networkManager.shutdown();
     }

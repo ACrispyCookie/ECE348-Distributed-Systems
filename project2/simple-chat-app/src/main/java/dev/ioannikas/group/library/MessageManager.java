@@ -1,5 +1,6 @@
 package dev.ioannikas.group.library;
 
+import dev.ioannikas.group.library.catoc.CatocManager;
 import dev.ioannikas.group.library.serializable.PacketUDP;
 import dev.ioannikas.group.gms.serializable.replies.GMSUpdateReply;
 import dev.ioannikas.group.library.serializable.requests.NormalRequest;
@@ -11,15 +12,17 @@ public class MessageManager {
 
     private final ConcurrentMap<Integer, Queue<NormalRequest>> receivedPackets;
     private final Map<List<Integer>, Queue<CompletableFuture<NormalRequest>>> waitingRequests;
+    private final CatocManager catocManager;
 
     public MessageManager() {
         this.receivedPackets = new ConcurrentHashMap<>();
         this.waitingRequests = new HashMap<>();
+        this.catocManager = new CatocManager();
     }
 
     public int send(int groupId, Object data) {
         NormalRequest packet = new NormalRequest(groupId, data);
-
+        catocManager.send(packet);
         return 0;
     }
 
@@ -33,24 +36,37 @@ public class MessageManager {
     }
 
     public synchronized void handleReceivedPacket(PacketUDP reply) {
-        if (reply instanceof NormalRequest normal && normal.getData() instanceof GMSUpdateReply) {
+        if (reply instanceof NormalRequest normal && normal.getData() instanceof GMSUpdateReply update) {
             CompletableFuture<NormalRequest> waiting = requestWaiting(normal.getGroupId());
+            catocManager.updateGroup(update);
             if (waiting != null) {
                 waiting.complete(normal);
             } else
                 receivedPackets.computeIfAbsent(normal.getGroupId(), k -> new LinkedBlockingQueue<>()).add(normal);
-            return;
-        } else {
-
+        } else if (reply instanceof NormalRequest normal) {
+            List<NormalRequest> ready = catocManager.processIncoming(normal); // Will get them from CATOC manager
+            for (NormalRequest req : ready) {
+                CompletableFuture<NormalRequest> waiting = requestWaiting(normal.getGroupId());
+                if (waiting != null) {
+                    waiting.complete(req);
+                } else
+                    receivedPackets.computeIfAbsent(normal.getGroupId(), k -> new LinkedBlockingQueue<>()).add(normal);
+            }
         }
+    }
+
+    public void shutdown() {
+        catocManager.shutdown();
     }
 
     private synchronized CompletableFuture<NormalRequest> requestWaiting(int groupId) {
         List<Integer> selected = null;
 
         for (List<Integer> waiting : waitingRequests.keySet()) {
-            if (waiting.contains(groupId) && !waitingRequests.get(waiting).isEmpty())
+            if (waiting.contains(groupId) && !waitingRequests.get(waiting).isEmpty()) {
                 selected = waiting;
+                break;
+            }
         }
 
         return selected != null ? waitingRequests.get(selected).remove() : null;

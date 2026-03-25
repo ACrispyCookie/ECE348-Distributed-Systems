@@ -1,13 +1,9 @@
 package dev.ioannikas.group.gms.serializable;
 
-import dev.ioannikas.group.gms.serializable.replies.GMSJoinReply;
-
 import java.io.Serial;
 import java.io.Serializable;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
-import java.util.LinkedList;
-import java.util.List;
 
 public class ClientInfo implements Serializable {
 

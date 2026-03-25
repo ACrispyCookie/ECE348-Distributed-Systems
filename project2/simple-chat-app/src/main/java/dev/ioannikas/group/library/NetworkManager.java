@@ -26,30 +26,24 @@ public class NetworkManager {
     private final String ipAddress;
 
     private final Selector selector;
-    private ConnectionTCP gmsConnection;
-    private ConnectionUDP normalConnection;
-
-    private final BlockingQueue<PacketUDP> outbound;
-    private final Thread receiver, sender;
+    private final ConnectionTCP gmsConnection;
+    private final ConnectionUDP normalConnection;
+    private final Thread receiver;
 
     public NetworkManager(String gmsIpAddress, int gmsPort, int appPort) throws IOException {
         this.ipAddress = findLocalIp();
-
         this.selector = Selector.open();
         this.gmsConnection = new ConnectionTCP(selector, gmsIpAddress, gmsPort);
         this.normalConnection = new ConnectionUDP(selector, appPort);
-
-        this.outbound = new LinkedBlockingQueue<>();
         this.receiver = new Thread(this::receiver, "receiver");
-        this.sender = new Thread(this::sender, "sender");
         receiver.start();
-        sender.start();
     }
 
     private void receiver() {
+        ByteBuffer sharedBuffer = ByteBuffer.allocate(2048);
+
         while (!GroupAPI.isShuttingDown()) {
             try {
-                ByteBuffer sharedBuffer = ByteBuffer.allocate(2048);
                 selector.select();
 
                 Set<SelectionKey> selectedKeys = selector.selectedKeys();
@@ -57,6 +51,12 @@ public class NetworkManager {
 
                 while(iter.hasNext()) {
                     SelectionKey key = iter.next();
+                    iter.remove();
+
+                    if (!key.isValid() || !key.isReadable()) {
+                        continue;
+                    }
+                    sharedBuffer.clear();
 
                     if (key.channel() instanceof SocketChannel client) {
                         client.read(sharedBuffer);
@@ -70,8 +70,6 @@ public class NetworkManager {
                         PacketUDP packet = PacketUDP.deserialize(sharedBuffer);
                         GroupAPI.getMessageManager().handleReceivedPacket(packet);
                     }
-
-                    iter.remove();
                 }
             } catch (Exception e) {
                 if (!GroupAPI.isShuttingDown()) {
@@ -81,12 +79,6 @@ public class NetworkManager {
                 return;
             }
         }
-    }
-
-    private void sender() {
-//        while (!GroupAPI.isShuttingDown()) {
-//
-//        }
     }
 
     private void handleGMSPacket(ByteBuffer buffer) throws IOException, ClassNotFoundException {
@@ -102,8 +94,11 @@ public class NetworkManager {
             Printer.printDebug("[NetworkManager] Received invalid packet from GMS.");
     }
 
-    public void sendNormal(PacketUDP packet) {
+    public void sendNormal(PacketUDP packet) throws IOException {
+        ByteBuffer buffer = PacketUDP.serialize(packet);
 
+        while (buffer.hasRemaining())
+            normalConnection.getChannel().write(buffer);
     }
 
     public void sendGms(PacketTCP packet) throws IOException {
@@ -117,6 +112,7 @@ public class NetworkManager {
         try {
             gmsConnection.close();
             normalConnection.close();
+            selector.wakeup();
         } catch (IOException e) {
             Printer.printErr("[NetworkManager] Could not close sockets!");
         }

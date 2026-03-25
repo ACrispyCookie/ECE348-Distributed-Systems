@@ -63,11 +63,12 @@ public class ClientHandler {
         for (int groupId : groups.keySet()) {
             String username = groups.get(groupId);
 
+            ClientInfo user = manager.getClients(groupId).stream().filter(c -> c.getUsername().equals(username)).findAny().get();
             GroupManager.ReturnCode code = manager.removeFromGroup(groupId, username);
             if (code != GroupManager.ReturnCode.SUCCESS)
                 Printer.printErr("Error while removing member " + channel.getRemoteAddress() + " [" + username + "] to group " + groupId + " (" + code + ")");
 
-            sendUpdatePacket(groupId, username, GMSUpdateReply.Action.LEFT);
+            sendUpdatePacket(groupId, user, GMSUpdateReply.Action.LEFT);
         }
 
         groups.clear();
@@ -94,7 +95,7 @@ public class ClientHandler {
         groups.put(groupId, packet.getUsername());
         GMSJoinReply reply = new GMSJoinReply(groupId, packet.getFutureId(), GMSJoinReply.FailReason.NONE, manager.getClients(groupId));
         sendReply(reply);
-        sendUpdatePacket(groupId, packet.getUsername(), GMSUpdateReply.Action.JOINED);
+        sendUpdatePacket(groupId, newClient, GMSUpdateReply.Action.JOINED);
     }
 
     private void handleLeave(GMSLeaveRequest packet) throws IOException {
@@ -102,6 +103,7 @@ public class ClientHandler {
         String username = packet.getUsername();
         Printer.printInfo("Received leave from " + channel.getRemoteAddress() + "!" + " Username: " + username + " Group: " + groupId);
 
+        ClientInfo user = manager.getClients(groupId).stream().filter(c -> c.getUsername().equals(username)).findAny().get();
         GroupManager.ReturnCode code = manager.removeFromGroup(groupId, username);
         if (code != GroupManager.ReturnCode.SUCCESS) {
             Printer.printErr("Error while removing member " + channel.getRemoteAddress() + " [" + packet.getUsername() + "] from group " + groupId + " (" + code + ")");
@@ -113,11 +115,11 @@ public class ClientHandler {
         groups.remove(groupId);
         GMSLeaveReply reply = new GMSLeaveReply(groupId, packet.getFutureId(), GMSLeaveReply.FailReason.NONE);
         sendReply(reply);
-        sendUpdatePacket(groupId, username, GMSUpdateReply.Action.LEFT);
+        sendUpdatePacket(groupId, user, GMSUpdateReply.Action.LEFT);
     }
 
-    private void sendUpdatePacket(int groupId, String username, GMSUpdateReply.Action action) {
-        GMSUpdateReply update = new GMSUpdateReply(groupId, username, action);
+    private void sendUpdatePacket(int groupId, ClientInfo user, GMSUpdateReply.Action action) {
+        GMSUpdateReply update = new GMSUpdateReply(groupId, user, action);
         manager.forEachClient(groupId, (c) -> {
             SocketAddress address = c.getAddress();
 
