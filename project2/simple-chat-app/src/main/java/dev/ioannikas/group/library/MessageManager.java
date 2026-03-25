@@ -1,6 +1,5 @@
 package dev.ioannikas.group.library;
 
-import dev.ioannikas.group.GroupAPI;
 import dev.ioannikas.group.api.Pair;
 import dev.ioannikas.group.library.serializable.PacketUDP;
 import dev.ioannikas.group.gms.serializable.replies.GMSUpdateReply;
@@ -11,17 +10,14 @@ import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.*;
 
-public class MessagingManager extends GeneralManager {
+public class MessageManager {
 
     private final ConcurrentMap<Integer, Queue<NormalRequest>> groupPackets;
     private final Queue<Pair<List<Integer>, CompletableFuture<NormalRequest>>> requests;
 
-    public MessagingManager(GroupAPI api) {
-        super(api);
+    public MessageManager() {
         this.groupPackets = new ConcurrentHashMap<>();
         this.requests = new LinkedList<>();
-
-        start();
     }
 
     public int send(int groupId, Object data) {
@@ -55,15 +51,5 @@ public class MessagingManager extends GeneralManager {
         }
 
         return null;
-    }
-
-    @Override
-    protected List<Thread> getThreads() {
-        return List.of();
-    }
-
-    @Override
-    protected void onShutdown() {
-
     }
 }

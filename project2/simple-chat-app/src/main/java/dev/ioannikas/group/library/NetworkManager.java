@@ -2,48 +2,81 @@ package dev.ioannikas.group.library;
 
 import dev.ioannikas.chatapp.utility.Printer;
 import dev.ioannikas.group.GroupAPI;
-import dev.ioannikas.group.library.serializable.PacketUDP;
 import dev.ioannikas.group.gms.serializable.ConnectionTCP;
 import dev.ioannikas.group.library.serializable.ConnectionUDP;
+import dev.ioannikas.group.library.serializable.PacketUDP;
 import dev.ioannikas.group.gms.serializable.PacketTCP;
 import dev.ioannikas.group.gms.serializable.replies.GMSReply;
 import dev.ioannikas.group.library.serializable.requests.NormalRequest;
 
 import java.io.IOException;
 import java.net.*;
-import java.util.List;
+import java.nio.ByteBuffer;
+import java.nio.channels.DatagramChannel;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.nio.channels.SocketChannel;
+import java.util.Iterator;
+import java.util.Set;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
-public class NetworkManager extends GeneralManager {
+public class NetworkManager {
 
-    private final ConnectionTCP gmsConnection;
-    private final ConnectionUDP normalConnection;
     private final String ipAddress;
-    private final int port;
 
-    public NetworkManager(GroupAPI api, String gmsIpAddress, int gmsPort, int appPort) throws IOException {
-        super(api);
-        this.gmsConnection = new ConnectionTCP(new Socket(gmsIpAddress, gmsPort));
-        this.normalConnection = null;//new ConnectionUDP(new DatagramSocket(appPort));
+    private final Selector selector;
+    private ConnectionTCP gmsConnection;
+    private ConnectionUDP normalConnection;
+
+    private final BlockingQueue<PacketUDP> outbound;
+    private final Thread receiver, sender;
+
+    public NetworkManager(String gmsIpAddress, int gmsPort, int appPort) throws IOException {
         this.ipAddress = findLocalIp();
-        this.port = appPort;
 
-        start();
+        this.selector = Selector.open();
+        this.gmsConnection = new ConnectionTCP(selector, gmsIpAddress, gmsPort);
+        this.normalConnection = new ConnectionUDP(selector, appPort);
+
+        this.outbound = new LinkedBlockingQueue<>();
+        this.receiver = new Thread(this::receiver, "receiver");
+        this.sender = new Thread(this::sender, "sender");
+        receiver.start();
+        sender.start();
     }
 
-    private void tcpReceiver() {
-        while (!isShuttingDown()) {
-            try {
-                GMSReply incomingObject = (GMSReply) gmsConnection.nextObject();
+    private void receiver() {
 
-                if (incomingObject.getType() != GMSReply.ReplyType.UPDATE)
-                    getAPI().getGmsManager().handleReceivedPacket(incomingObject);
-                else if (incomingObject.getType() == GMSReply.ReplyType.UPDATE)
-                    getAPI().getMessagingManager().handleReceivedPacket(new NormalRequest(incomingObject.getGroupId(), incomingObject));
-                else
-                    Printer.printDebug("[NetworkManager] Received invalid packet from GMS.");
+        while (!GroupAPI.isShuttingDown()) {
+            try {
+                ByteBuffer sharedBuffer = ByteBuffer.allocate(2048);
+                selector.select();
+
+                Set<SelectionKey> selectedKeys = selector.selectedKeys();
+                Iterator<SelectionKey> iter = selectedKeys.iterator();
+
+                while(iter.hasNext()) {
+                    SelectionKey key = iter.next();
+
+                    if (key.channel() instanceof SocketChannel client) {
+                        client.read(sharedBuffer);
+                        sharedBuffer.flip();
+                        handleGMSPacket(sharedBuffer);
+                    } else if (key.channel() instanceof DatagramChannel peer) {
+                        InetSocketAddress senderAddr = (InetSocketAddress) peer.receive(sharedBuffer);
+                        if (senderAddr != null)
+                            sharedBuffer.flip();
+
+                        PacketUDP packet = PacketUDP.deserialize(sharedBuffer);
+                        GroupAPI.getMessageManager().handleReceivedPacket(packet);
+                    }
+
+                    iter.remove();
+                }
             } catch (Exception e) {
-                if (!isShuttingDown()) {
-                    Printer.printErr("[NetworkManager] Error communicating with GMS.");
+                if (!GroupAPI.isShuttingDown()) {
+                    Printer.printErr("[NetworkManager] Error receiving packet.");
                     e.printStackTrace();
                 }
                 return;
@@ -51,24 +84,43 @@ public class NetworkManager extends GeneralManager {
         }
     }
 
-    private void udpReceiver() {
-        while (!isShuttingDown()) {
-            try {
-                PacketUDP incomingPacket = (PacketUDP) normalConnection.nextObject();
+    private void sender() {
+//        while (!GroupAPI.isShuttingDown()) {
+//
+//        }
+    }
 
-                getAPI().getMessagingManager().handleReceivedPacket(incomingPacket);
-            } catch (Exception e) {
-                if (!isShuttingDown()) {
-                    Printer.printErr("[NetworkManager] Error receiving packet from group.");
-                    e.printStackTrace();
-                }
-                return;
-            }
-        }
+    private void handleGMSPacket(ByteBuffer buffer) throws IOException, ClassNotFoundException {
+        GMSReply reply = (GMSReply) PacketTCP.deserialize(buffer);
+        if (reply == null)
+            return;
+
+        if (reply.getType() != GMSReply.ReplyType.UPDATE)
+            GroupAPI.getGmsManager().handleReceivedPacket(reply);
+        else if (reply.getType() == GMSReply.ReplyType.UPDATE)
+            GroupAPI.getMessageManager().handleReceivedPacket(new NormalRequest(reply.getGroupId(), reply));
+        else
+            Printer.printDebug("[NetworkManager] Received invalid packet from GMS.");
+    }
+
+    public void sendNormal(PacketUDP packet) {
+
     }
 
     public void sendGms(PacketTCP packet) throws IOException {
-        gmsConnection.sendPacket(packet);
+        ByteBuffer buffer = PacketTCP.serialize(packet);
+
+        while (buffer.hasRemaining())
+            gmsConnection.getChannel().write(buffer);
+    }
+
+    public void shutdown() {
+        try {
+            gmsConnection.close();
+            normalConnection.close();
+        } catch (IOException e) {
+            Printer.printErr("[NetworkManager] Could not close sockets!");
+        }
     }
 
     public String getIpAddress() {
@@ -76,7 +128,7 @@ public class NetworkManager extends GeneralManager {
     }
 
     public int getPort() {
-        return port;
+        return normalConnection.getAddress().getPort();
     }
 
     private String findLocalIp() {
@@ -97,23 +149,5 @@ public class NetworkManager extends GeneralManager {
             Printer.printErr("[NetworkManager] Could not determine local IP address!");
             return "127.0.0.1";
         }
-    }
-
-    @Override
-    protected void onShutdown() {
-        try {
-            gmsConnection.close();
-//            normalConnection.close();
-        } catch (IOException e) {
-            Printer.printErr("[NetworkManager] Could not close sockets!");
-        }
-    }
-
-    @Override
-    protected List<Thread> getThreads() {
-        Thread tcpReceiverThread = new Thread(this::tcpReceiver, "networkmanager-tcp-receiver");
-        Thread udpReceiverThread = new Thread(this::udpReceiver, "networkmanager-udp-receiver");
-
-        return List.of(tcpReceiverThread);
     }
 }

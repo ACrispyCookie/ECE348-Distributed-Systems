@@ -1,4 +1,4 @@
-package dev.ioannikas.group.gms;
+package dev.ioannikas.group.gms.utility;
 
 import dev.ioannikas.group.gms.serializable.ClientInfo;
 
@@ -10,7 +10,7 @@ public class GroupManager {
     private final Map<Integer, Group> index = new HashMap<>();
     private int nextId = 0;
 
-    public synchronized int findOrCreateGroup(String name) {
+    public int findOrCreateGroup(String name) {
         for (Group group : index.values()) {
             if (group.getName().equals(name))
                 return group.getId();
@@ -21,7 +21,7 @@ public class GroupManager {
         return group.getId();
     }
 
-    public synchronized ReturnCode addToGroup(int groupId, ClientInfo client) {
+    public ReturnCode addToGroup(int groupId, ClientInfo client) {
         Group group = index.get(groupId);
         if (group == null)
             return ReturnCode.GROUP_NOT_FOUND;
@@ -30,7 +30,7 @@ public class GroupManager {
         return previous == null ? ReturnCode.SUCCESS : ReturnCode.CLIENT_ALREADY_EXISTS;
     }
 
-    public synchronized ReturnCode removeFromGroup(int groupId, String username) {
+    public ReturnCode removeFromGroup(int groupId, String username) {
         Group group = index.get(groupId);
         if (group == null)
             return ReturnCode.GROUP_NOT_FOUND;
@@ -39,7 +39,7 @@ public class GroupManager {
         return previous != null ? ReturnCode.SUCCESS : ReturnCode.CLIENT_NOT_FOUND;
     }
 
-    public synchronized List<ClientInfo> getClients(int groupId) {
+    public List<ClientInfo> getClients(int groupId) {
         Group group = index.get(groupId);
         if (group == null)
             return null;
@@ -47,7 +47,7 @@ public class GroupManager {
         return new LinkedList<>(group.getClients());
     }
 
-    public synchronized void forEachClient(int groupId, Consumer<ClientInfo> consumer) {
+    public void forEachClient(int groupId, Consumer<ClientInfo> consumer) {
         Group group = index.get(groupId);
         if (group == null)
             return;
@@ -57,7 +57,7 @@ public class GroupManager {
         }
     }
 
-    public synchronized int getClientCount() {
+    public int getClientCount() {
         int users = 0;
         for (Group g : index.values())
             users += g.getClients().size();

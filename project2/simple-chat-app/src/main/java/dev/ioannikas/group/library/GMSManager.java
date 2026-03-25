@@ -11,22 +11,21 @@ import dev.ioannikas.group.gms.serializable.requests.GMSLeaveRequest;
 import dev.ioannikas.group.gms.serializable.requests.GMSRequest;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class GMSManager extends GeneralManager {
+public class GMSManager {
 
     private final int HEARTBEAT_INTERVAL = 2;
+    private final Thread heartbeatSender;
     private final Map<Integer, CompletableFuture<GMSReply>> pendingFutures;
     private final AtomicInteger nextFutureId = new AtomicInteger(1);
 
-    public GMSManager(GroupAPI api) {
-        super(api);
+    public GMSManager() {
         this.pendingFutures = new ConcurrentHashMap<>();
-
-        start();
+        this.heartbeatSender = new Thread(this::sender, "heartbeat-sender");
+        heartbeatSender.start();
     }
 
     public GMSJoinReply join(String groupName, String username, String ipAddress, int port) {
@@ -35,7 +34,7 @@ public class GMSManager extends GeneralManager {
         try {
             GMSJoinRequest packet = new GMSJoinRequest(username, nextFutureId.getAndIncrement(), groupName, ipAddress, port);
             pendingFutures.put(packet.getFutureId(), future);
-            getAPI().getNetworkManager().sendGms(packet);
+            GroupAPI.getNetworkManager().sendGms(packet);
 
             return (GMSJoinReply) future.get();
         } catch (InterruptedException | ExecutionException | IOException e) {
@@ -52,7 +51,7 @@ public class GMSManager extends GeneralManager {
         try {
             GMSLeaveRequest packet = new GMSLeaveRequest(username, nextFutureId.getAndIncrement(), groupId);
             pendingFutures.put(packet.getFutureId(), future);
-            getAPI().getNetworkManager().sendGms(packet);
+            GroupAPI.getNetworkManager().sendGms(packet);
 
             return (GMSLeaveReply) future.get();
         } catch (InterruptedException | ExecutionException | IOException e) {
@@ -82,10 +81,10 @@ public class GMSManager extends GeneralManager {
     }
 
     private void sender() {
-        while(!isShuttingDown()) {
+        while(!GroupAPI.isShuttingDown()) {
             try {
                 Thread.sleep(HEARTBEAT_INTERVAL * 1000);
-                getAPI().getNetworkManager().sendGms(GMSRequest.simpleHeartbeat());
+                GroupAPI.getNetworkManager().sendGms(GMSRequest.simpleHeartbeat());
             } catch (InterruptedException ignored) {
 
             } catch (IOException e) {
@@ -94,17 +93,8 @@ public class GMSManager extends GeneralManager {
         }
     }
 
-    @Override
-    protected List<Thread> getThreads() {
-        Thread sender = new Thread(this::sender);
-        sender.setName("gms-sender");
-
-        return List.of(sender);
-    }
-
-    @Override
-    protected void onShutdown() {
-
+    public void shutdown() {
+        heartbeatSender.interrupt();
     }
 
 }

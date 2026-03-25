@@ -1,48 +1,33 @@
 package dev.ioannikas.group.gms.serializable;
 
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.net.Socket;
+import java.net.InetSocketAddress;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.nio.channels.SocketChannel;
 
 public class ConnectionTCP {
 
-    private final Socket socket;
-    private final ObjectInputStream in;
-    private final ObjectOutputStream out;
+    private final SocketChannel channel;
+    private final InetSocketAddress address;
 
-    public ConnectionTCP(Socket socket) throws IOException {
-        this.socket = socket;
-        this.out = new ObjectOutputStream(socket.getOutputStream());
-        this.in = new ObjectInputStream(socket.getInputStream());
+    public ConnectionTCP(Selector selector, String ipAddress, int port) throws IOException {
+        address = new InetSocketAddress(ipAddress, port);
+        channel = SocketChannel.open();
+        channel.connect(address);
+        channel.configureBlocking(false);
+        channel.register(selector, SelectionKey.OP_READ);
     }
 
     public void close() throws IOException {
-        in.close();
-        out.close();
-        socket.close();
+        channel.close();
     }
 
-    public Object nextObject() throws IOException, ClassNotFoundException {
-        return in.readObject();
+    public SocketChannel getChannel() {
+        return channel;
     }
 
-    public void sendPacket(PacketTCP packet) throws IOException {
-        synchronized (out) {
-            out.writeObject(packet);
-            out.flush();
-        }
-    }
-
-    public String getIp() {
-        return socket.getInetAddress().getHostAddress();
-    }
-
-    public int getPort() {
-        return socket.getPort();
-    }
-
-    public Socket getSocket() {
-        return socket;
+    public InetSocketAddress getAddress() {
+        return address;
     }
 }

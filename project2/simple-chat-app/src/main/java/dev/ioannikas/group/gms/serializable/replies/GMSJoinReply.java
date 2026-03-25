@@ -2,8 +2,13 @@ package dev.ioannikas.group.gms.serializable.replies;
 
 import dev.ioannikas.group.api.JoinReply;
 import dev.ioannikas.group.gms.serializable.ClientInfo;
+import dev.ioannikas.group.gms.serializable.PacketTCP;
+import dev.ioannikas.group.gms.serializable.requests.GMSJoinRequest;
 
 import java.io.Serial;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
 public class GMSJoinReply extends GMSReply {
@@ -37,6 +42,31 @@ public class GMSJoinReply extends GMSReply {
         NONE,
         USERNAME_TAKEN,
         UNKNOWN
+    }
+
+    public static GMSJoinReply deserialize(ByteBuffer buffer) {
+        int groupId = buffer.getInt();
+        int futureId = buffer.getInt();
+        FailReason reason = FailReason.values()[buffer.getInt()];
+        int clientCount = buffer.getInt();
+
+        List<ClientInfo> clients = new LinkedList<>();
+        for (int i = 0; i < clientCount; i++)
+            clients.add(ClientInfo.deserialize(buffer));
+
+        return new GMSJoinReply(groupId, futureId, reason, clients);
+    }
+
+    public static void serialize(GMSJoinReply packet, ByteBuffer buffer) {
+        buffer.putInt(packet.getFutureId());
+        buffer.putInt(packet.getReason().ordinal());
+        buffer.putInt(packet.getClients() == null ? 0 : packet.getClients().size());
+
+        if (packet.getClients() == null)
+            return;
+
+        for (ClientInfo info : packet.getClients())
+            ClientInfo.serialize(info, buffer);
     }
 
     public JoinReply toApiVersion() {

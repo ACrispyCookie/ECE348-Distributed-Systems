@@ -1,6 +1,10 @@
 package dev.ioannikas.group.gms.serializable.requests;
 
+import dev.ioannikas.group.gms.serializable.PacketTCP;
+
+import java.io.IOException;
 import java.io.Serial;
+import java.nio.ByteBuffer;
 
 public class GMSLeaveRequest extends GMSRequest {
 
@@ -15,5 +19,16 @@ public class GMSLeaveRequest extends GMSRequest {
 
     public int getGroupId() {
         return groupId;
+    }
+
+    public static GMSLeaveRequest deserialize(ByteBuffer buffer) {
+        String username = PacketTCP.readString(buffer);
+        int futureId = buffer.getInt();
+        int groupId = buffer.getInt();
+        return new GMSLeaveRequest(username, futureId, groupId);
+    }
+
+    public static void serialize(GMSLeaveRequest packet, ByteBuffer buffer) {
+        buffer.putInt(packet.getGroupId());
     }
 }

@@ -2,6 +2,7 @@ package dev.ioannikas.chatapp.managers;
 
 import dev.ioannikas.chatapp.ChatApp;
 import dev.ioannikas.chatapp.model.ChatMessage;
+import dev.ioannikas.group.GroupAPI;
 import dev.ioannikas.group.api.Pair;
 import dev.ioannikas.group.api.ViewUpdateMessage;
 
@@ -19,7 +20,7 @@ public class MessageReceiver extends Thread {
     public void run() {
         try {
             while (!ChatApp.isShuttingDown() && !shutdown) {
-                Pair<Integer, Object> message = ChatApp.getGroupAPI().receive(ChatApp.getChatManager().getGroups());
+                Pair<Integer, Object> message = GroupAPI.receive(ChatApp.getChatManager().getGroups());
 
                 if (message.getValue() instanceof ViewUpdateMessage update) {
                     handleUpdate(update);

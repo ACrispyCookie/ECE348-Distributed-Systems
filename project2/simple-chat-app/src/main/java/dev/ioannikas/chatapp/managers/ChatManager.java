@@ -3,6 +3,7 @@ package dev.ioannikas.chatapp.managers;
 import dev.ioannikas.chatapp.ChatApp;
 import dev.ioannikas.chatapp.model.ChatMessage;
 import dev.ioannikas.chatapp.utility.Printer;
+import dev.ioannikas.group.GroupAPI;
 
 import java.util.*;
 
@@ -103,7 +104,7 @@ public class ChatManager {
 
     public synchronized void cleanUp() {
         for (GroupChat chat : chats.values())
-            ChatApp.getGroupAPI().leave(chat.getId());
+            GroupAPI.leave(chat.getId());
         chats.clear();
     }
 

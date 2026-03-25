@@ -1,44 +1,33 @@
 package dev.ioannikas.group.library.serializable;
 
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.net.DatagramSocket;
+import java.net.InetSocketAddress;
+import java.nio.channels.DatagramChannel;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
 
 public class ConnectionUDP {
 
-    private final DatagramSocket socket;
-    private ObjectInputStream in;
-    private ObjectOutputStream out;
+    private final DatagramChannel channel;
+    private final InetSocketAddress address;
 
-    public ConnectionUDP(DatagramSocket socket) throws IOException {
-        this.socket = socket;
+    public ConnectionUDP(Selector selector, int port) throws IOException {
+        address = new InetSocketAddress(port);
+        channel = DatagramChannel.open();
+        channel.bind(address);
+        channel.configureBlocking(false);
+        channel.register(selector, SelectionKey.OP_READ);
     }
 
     public void close() throws IOException {
-        in.close();
-        out.close();
-        socket.close();
+        channel.close();
     }
 
-    public Object nextObject() throws IOException, ClassNotFoundException {
-        return in.readObject();
+    public DatagramChannel getChannel() {
+        return channel;
     }
 
-    public void sendPacket(PacketUDP packet) throws IOException {
-        out.writeObject(packet);
-        out.flush();
-    }
-
-    public String getIp() {
-        return socket.getInetAddress().getHostAddress();
-    }
-
-    public int getPort() {
-        return socket.getPort();
-    }
-
-    public DatagramSocket getSocket() {
-        return socket;
+    public InetSocketAddress getAddress() {
+        return address;
     }
 }

@@ -1,4 +1,4 @@
-import dev.ioannikas.group.gms.GroupManager;
+import dev.ioannikas.group.gms.utility.GroupManager;
 import dev.ioannikas.group.gms.serializable.ClientInfo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

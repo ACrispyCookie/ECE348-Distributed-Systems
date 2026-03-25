@@ -1,8 +1,12 @@
 package dev.ioannikas.group.gms.serializable.replies;
 
 import dev.ioannikas.group.api.LeaveReply;
+import dev.ioannikas.group.gms.serializable.ClientInfo;
 
 import java.io.Serial;
+import java.nio.ByteBuffer;
+import java.util.LinkedList;
+import java.util.List;
 
 public class GMSLeaveReply extends GMSReply {
 
@@ -28,6 +32,19 @@ public class GMSLeaveReply extends GMSReply {
     public enum FailReason {
         NONE,
         UNKNOWN
+    }
+
+    public static GMSLeaveReply deserialize(ByteBuffer buffer) {
+        int groupId = buffer.getInt();
+        int futureId = buffer.getInt();
+        FailReason reason = FailReason.values()[buffer.getInt()];
+
+        return new GMSLeaveReply(groupId, futureId, reason);
+    }
+
+    public static void serialize(GMSLeaveReply packet, ByteBuffer buffer) {
+        buffer.putInt(packet.getFutureId());
+        buffer.putInt(packet.getReason().ordinal());
     }
 
     public LeaveReply toApiVersion() {

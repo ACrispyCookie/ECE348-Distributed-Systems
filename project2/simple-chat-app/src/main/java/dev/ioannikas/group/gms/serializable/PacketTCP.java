@@ -1,41 +1,58 @@
 package dev.ioannikas.group.gms.serializable;
 
+import dev.ioannikas.group.gms.serializable.replies.GMSReply;
+import dev.ioannikas.group.gms.serializable.requests.GMSRequest;
+
 import java.io.*;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 
 public class PacketTCP implements Serializable {
 
     @Serial
     private static final long serialVersionUID = 2L;
-    private static final int lengthFieldBytes = 4;
 
-    public static PacketTCP deserialize(byte[] array, int bytesRead) throws IOException, ClassNotFoundException {
-        if (bytesRead < lengthFieldBytes)
-            return null;
-
-        ByteBuffer buffer = ByteBuffer.wrap(array);
-        int packetLength = buffer.getInt();
-
-        if (bytesRead - lengthFieldBytes < packetLength)
-            return null;
-
-        ByteArrayInputStream bais = new ByteArrayInputStream(array, lengthFieldBytes, bytesRead);
-        ObjectInputStream ois = new ObjectInputStream(bais);
-
-        return (PacketTCP) ois.readObject();
+    public static PacketTCP deserialize(ByteBuffer buffer) throws IOException, ClassNotFoundException {
+        PacketType type = buffer.getInt() == PacketType.REQUEST.ordinal() ? PacketType.REQUEST : PacketType.REPLY;
+        if (type == PacketType.REQUEST)
+            return GMSRequest.deserialize(buffer);
+        else
+            return GMSReply.deserialize(buffer);
     }
 
     public static ByteBuffer serialize(PacketTCP packet) throws IOException {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        ObjectOutputStream oos = new ObjectOutputStream(baos);
-        oos.writeObject(packet);
-        oos.flush();
-        byte[] objectBytes = baos.toByteArray();
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        buffer.putInt(packet instanceof GMSRequest ? PacketType.REQUEST.ordinal() : PacketType.REPLY.ordinal());
+        if (packet instanceof GMSRequest req)
+            GMSRequest.serialize(req, buffer);
+        else
+            GMSReply.serialize((GMSReply) packet, buffer);
+        return buffer.flip();
+    }
 
-        ByteBuffer buffer = ByteBuffer.allocate(4 + objectBytes.length);
-        buffer.putInt(objectBytes.length);
-        buffer.put(objectBytes);
-        buffer.flip();
-        return buffer;
+    public static String readString(ByteBuffer buffer) {
+        int length = buffer.getInt();
+        if (length == -1) {
+            return null;
+        }
+
+        byte[] stringBytes = new byte[length];
+        buffer.get(stringBytes);
+        return new String(stringBytes, StandardCharsets.UTF_8);
+    }
+
+    public static void writeString(ByteBuffer buffer, String str) {
+        if (str == null) {
+            buffer.putInt(-1);
+        } else {
+            byte[] stringBytes = str.getBytes(StandardCharsets.UTF_8);
+            buffer.putInt(stringBytes.length);
+            buffer.put(stringBytes);
+        }
+    }
+
+    private enum PacketType {
+        REQUEST,
+        REPLY
     }
 }

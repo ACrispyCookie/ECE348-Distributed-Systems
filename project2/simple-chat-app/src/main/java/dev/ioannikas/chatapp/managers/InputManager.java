@@ -4,6 +4,7 @@ import dev.ioannikas.chatapp.ChatApp;
 import dev.ioannikas.chatapp.model.Command;
 import dev.ioannikas.chatapp.model.ChatMessage;
 import dev.ioannikas.chatapp.utility.Printer;
+import dev.ioannikas.group.GroupAPI;
 import dev.ioannikas.group.api.JoinReply;
 import dev.ioannikas.group.api.LeaveReply;
 
@@ -34,7 +35,7 @@ public class InputManager {
             }
 
             ChatMessage chatMessage = new ChatMessage(ChatApp.getChatManager().getUsername(selected), LocalDateTime.now(), line);
-            ChatApp.getGroupAPI().send(selected, chatMessage);
+            GroupAPI.send(selected, chatMessage);
         }
     }
 
@@ -65,7 +66,7 @@ public class InputManager {
             return;
         }
 
-        JoinReply reply = ChatApp.getGroupAPI().join(groupName, username);
+        JoinReply reply = GroupAPI.join(groupName, username);
         if (reply.getReason() != JoinReply.FailReason.NONE) {
             if (reply.getReason() == JoinReply.FailReason.USERNAME_TAKEN)
                 Printer.printErr("[ChatApp] This username is taken in this group!");
@@ -96,7 +97,7 @@ public class InputManager {
             return;
         }
 
-        LeaveReply reply = ChatApp.getGroupAPI().leave(groupId);
+        LeaveReply reply = GroupAPI.leave(groupId);
         if (reply.getReason() != LeaveReply.FailReason.NONE) {
             Printer.printErr("[ChatApp] Error while leaving a group!");
             return;
