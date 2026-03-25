@@ -1,6 +1,5 @@
 package dev.ioannikas.chatapp.managers;
 
-import dev.ioannikas.chatapp.ChatApp;
 import dev.ioannikas.chatapp.model.ChatMessage;
 import dev.ioannikas.chatapp.utility.Printer;
 import dev.ioannikas.group.GroupAPI;

@@ -113,23 +113,36 @@ public class GMS {
 
     private static void handleRead(SelectionKey key) throws IOException, ClassNotFoundException {
         SocketChannel clientChannel = (SocketChannel) key.channel();
-        ClientHandler clientHandler = getReceiver(clientChannel.getRemoteAddress());
+        ClientHandler clientHandler = null;
 
-        ByteBuffer buffer = ByteBuffer.allocate(8192);
-        int bytesRead = clientChannel.read(buffer);
-        if (bytesRead == -1) {
-            clients.remove(clientChannel.getRemoteAddress());
-            clientHandler.handleFailure();
-            return;
-        }
+        try {
+            clientHandler = getReceiver(clientChannel.getRemoteAddress());
+            ByteBuffer buffer = ByteBuffer.allocate(8192);
+            int bytesRead = clientChannel.read(buffer);
 
-        buffer.flip();
-        while (buffer.hasRemaining()) {
-            int startPos = buffer.position();
+            if (bytesRead == -1) {
+                clients.remove(clientChannel.getRemoteAddress());
+                clientHandler.handleFailure();
+                key.cancel();
+                clientChannel.close();
+                return;
+            }
+
+            buffer.flip();
             clientHandler.handleRequest(buffer);
 
-            if (buffer.position() == startPos) {
-                break;
+        } catch (IOException | ClassNotFoundException e) {
+            Printer.printInfo("Client forcefully disconnected.");
+
+            try {
+                if (clientHandler != null) {
+                    clients.remove(clientChannel.getRemoteAddress());
+                    clientHandler.handleFailure();
+                }
+                key.cancel();
+                clientChannel.close();
+            } catch (IOException cleanupException) {
+                Printer.printErr("Failed to clean up dead socket.");
             }
         }
     }

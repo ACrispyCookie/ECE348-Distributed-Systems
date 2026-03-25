@@ -47,7 +47,6 @@ public class NetworkManager {
     }
 
     private void receiver() {
-
         while (!GroupAPI.isShuttingDown()) {
             try {
                 ByteBuffer sharedBuffer = ByteBuffer.allocate(2048);

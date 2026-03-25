@@ -64,7 +64,7 @@ public class GroupAPI {
     public static Pair<Integer, Object> receive(List<Integer> groups) throws InterruptedException, ExecutionException {
         NormalRequest reply = messageManager.receive(groups);
         if (reply.getData() instanceof GMSUpdateReply update)
-            return new Pair<>(reply.getGroupId(), update);
+            return new Pair<>(reply.getGroupId(), update.toApiVersion());
         else
             return new Pair<>(reply.getGroupId(), reply.getData());
     }

@@ -18,8 +18,8 @@ public class MessageReceiver extends Thread {
 
     @Override
     public void run() {
-        try {
-            while (!ChatApp.isShuttingDown() && !shutdown) {
+        while (!ChatApp.isShuttingDown() && !shutdown) {
+            try {
                 Pair<Integer, Object> message = GroupAPI.receive(ChatApp.getChatManager().getGroups());
 
                 if (message.getValue() instanceof ViewUpdateMessage update) {
@@ -27,11 +27,11 @@ public class MessageReceiver extends Thread {
                 } else {
                     handleMessage(message.getKey(), (ChatMessage) message.getValue());
                 }
-            }
-        } catch (InterruptedException ignored) {
+            } catch (InterruptedException ignored) {
 
-        } catch (ExecutionException e) {
-            e.printStackTrace();
+            } catch (ExecutionException e) {
+                e.printStackTrace();
+            }
         }
     }
 

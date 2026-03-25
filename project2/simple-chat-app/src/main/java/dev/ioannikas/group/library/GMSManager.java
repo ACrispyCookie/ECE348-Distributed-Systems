@@ -89,6 +89,7 @@ public class GMSManager {
 
             } catch (IOException e) {
                 Printer.printErr("[GMSSender] Error communicating with the GMS.");
+                System.exit(1);
             }
         }
     }
