@@ -80,9 +80,6 @@ class GMSChaosTest {
                 String.valueOf(udpPort), username, String.valueOf(numOperations)
         );
 
-        // Optional: If you want to see the errors from the clients in your main console, uncomment this:
-        // builder.inheritIO();
-
         return builder.start();
     }
 }

@@ -47,7 +47,7 @@ public class ChaosClientNode {
                 }
 
                 // Tiny sleep to simulate real network gaps
-                Thread.sleep(random.nextInt(10));
+//                Thread.sleep(random.nextInt(10));
 
             } catch (Exception e) {
                 failedOps++;

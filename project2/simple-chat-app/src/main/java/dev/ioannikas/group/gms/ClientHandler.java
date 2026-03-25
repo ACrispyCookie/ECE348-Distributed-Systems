@@ -45,7 +45,7 @@ public class ClientHandler {
             case LEAVE -> handleLeave((GMSLeaveRequest) request);
             case HEARTBEAT -> {
                 failsAt = System.currentTimeMillis() + (TIMEOUT * 1000L);
-                Printer.printDebug("Received heartbeat from " + channel.getRemoteAddress() + "!");
+//                Printer.printDebug("Received heartbeat from " + channel.getRemoteAddress() + "!");
             }
         }
     }
