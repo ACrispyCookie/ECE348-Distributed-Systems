@@ -38,7 +38,7 @@ public class MessageManager {
             if (waiting != null) {
                 waiting.complete(normal);
             } else
-                receivedPackets.computeIfAbsent(reply.getGroupId(), k -> new LinkedBlockingQueue<>()).add(normal);
+                receivedPackets.computeIfAbsent(normal.getGroupId(), k -> new LinkedBlockingQueue<>()).add(normal);
             return;
         } else {
 

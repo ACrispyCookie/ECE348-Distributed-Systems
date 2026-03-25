@@ -1,68 +1,55 @@
 package dev.ioannikas.group.library.serializable;
 
+import dev.ioannikas.group.library.serializable.requests.GroupDataRequest;
+
 import java.io.*;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 
 public class PacketUDP implements Serializable {
 
     @Serial
     private static final long serialVersionUID = 2L;
-    private static final int lengthFieldBytes = 4;
-    private static int currentSeqNumber = 0;
-
-    private final int groupId;
-    private int seqNumber;
-
-    public PacketUDP(int groupId) {
-        this.groupId = groupId;
-        this.seqNumber = -1;
-    }
-
-    public int getGroupId() {
-        return groupId;
-    }
-
-    public int getSeqNumber() {
-        return seqNumber;
-    }
-
-    public void setNextSeqNumber() {
-        seqNumber = ++currentSeqNumber;
-    }
-
-    public static int getCurrentSeqNumber() {
-        return currentSeqNumber;
-    }
 
     public static PacketUDP deserialize(ByteBuffer buffer) throws IOException, ClassNotFoundException {
-        if (buffer.remaining() < lengthFieldBytes)
-            return null;
-
-        int packetLength = buffer.getInt();
-
-        if (buffer.remaining() < packetLength)
-            return null;
-
-        byte[] objectBytes = new byte[packetLength];
-        buffer.get(objectBytes);
-
-        ByteArrayInputStream bais = new ByteArrayInputStream(objectBytes);
-        ObjectInputStream ois = new ObjectInputStream(bais);
-
-        return (PacketUDP) ois.readObject();
+         PacketType type = PacketType.values()[buffer.getInt()];
+        if (Objects.requireNonNull(type) == PacketType.NORMAL) {
+            return GroupDataRequest.deserialize(buffer);
+        }
+        return null;
     }
 
     public static ByteBuffer serialize(PacketUDP packet) throws IOException {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        ObjectOutputStream oos = new ObjectOutputStream(baos);
-        oos.writeObject(packet);
-        oos.flush();
-        byte[] objectBytes = baos.toByteArray();
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        buffer.putInt(packet instanceof GroupDataRequest ? PacketType.NORMAL.ordinal() : -1);
+        if (packet instanceof GroupDataRequest req)
+            GroupDataRequest.serialize(req, buffer);
+        return buffer.flip();
+    }
 
-        ByteBuffer buffer = ByteBuffer.allocate(4 + objectBytes.length);
-        buffer.putInt(objectBytes.length);
-        buffer.put(objectBytes);
-        buffer.flip();
-        return buffer;
+    public static String readString(ByteBuffer buffer) {
+        int length = buffer.getInt();
+        if (length == -1) {
+            return null;
+        }
+
+        byte[] stringBytes = new byte[length];
+        buffer.get(stringBytes);
+        return new String(stringBytes, StandardCharsets.UTF_8);
+    }
+
+    public static void writeString(ByteBuffer buffer, String str) {
+        if (str == null) {
+            buffer.putInt(-1);
+        } else {
+            byte[] stringBytes = str.getBytes(StandardCharsets.UTF_8);
+            buffer.putInt(stringBytes.length);
+            buffer.put(stringBytes);
+        }
+    }
+
+    private enum PacketType {
+        NORMAL
     }
 }
