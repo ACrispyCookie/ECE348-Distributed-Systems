@@ -3,6 +3,7 @@ package dev.ioannikas.chatapp;
 import dev.ioannikas.chatapp.managers.ChatManager;
 import dev.ioannikas.chatapp.managers.InputManager;
 import dev.ioannikas.chatapp.managers.MessageReceiver;
+import dev.ioannikas.chatapp.model.ChatMessage;
 import dev.ioannikas.chatapp.utility.Printer;
 import dev.ioannikas.group.GroupAPI;
 
@@ -20,7 +21,7 @@ public class ChatApp {
         AppConfig config = parseArguments(args);
 
         try {
-            GroupAPI.init(config.getGmsIp(), config.getGmsPort(), config.getAppPort());
+            GroupAPI.init(config.getGmsIp(), config.getGmsPort(), config.getAppPort(), ChatMessage::deserialize);
         } catch (IOException e) {
             Printer.printErr("[ChatApp] Error initializing GMS! Is the GMS running?");
             e.printStackTrace();

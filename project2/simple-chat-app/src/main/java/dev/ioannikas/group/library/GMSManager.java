@@ -9,6 +9,7 @@ import dev.ioannikas.group.gms.serializable.replies.GMSReply;
 import dev.ioannikas.group.gms.serializable.requests.GMSJoinRequest;
 import dev.ioannikas.group.gms.serializable.requests.GMSLeaveRequest;
 import dev.ioannikas.group.gms.serializable.requests.GMSRequest;
+import dev.ioannikas.group.library.utility.Group;
 
 import java.io.IOException;
 import java.util.Map;
@@ -66,8 +67,10 @@ public class GMSManager {
         int futureId;
 
         if (reply instanceof GMSJoinReply join) {
+            GroupAPI.getMessageManager().addGroup(join.getGroupId(), join.getClients());
             futureId = join.getFutureId();
         } else if (reply instanceof GMSLeaveReply leave) {
+            GroupAPI.getMessageManager().removeGroup(leave.getGroupId());
             futureId = leave.getFutureId();
         } else {
             return;

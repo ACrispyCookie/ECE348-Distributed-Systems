@@ -1,14 +1,17 @@
 package dev.ioannikas.group.library.catoc;
 
+import dev.ioannikas.chatapp.utility.Printer;
+import dev.ioannikas.group.GroupAPI;
 import dev.ioannikas.group.gms.serializable.ClientInfo;
 import dev.ioannikas.group.gms.serializable.replies.GMSUpdateReply;
 import dev.ioannikas.group.library.serializable.requests.NormalRequest;
 
+import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 public class CatocManager {
 
@@ -27,12 +30,18 @@ public class CatocManager {
     }
 
     public void send(NormalRequest request) {
-
+        for (ClientInfo clientInfo : groups.get(request.getGroupId())) {
+            try {
+                GroupAPI.getNetworkManager().sendNormal(request, new InetSocketAddress(clientInfo.getIpAddress(), clientInfo.getPort()));
+            } catch (IOException e) {
+                Printer.printErr("[CatocManager] Error sending request to client " + clientInfo.getUsername() + " on group " + request.getGroupId());
+                e.printStackTrace();
+            }
+        }
     }
 
     public List<NormalRequest> processIncoming(NormalRequest request) {
-        System.out.println("received");
-        return null;
+        return List.of(request);
     }
 
     public void shutdown() {

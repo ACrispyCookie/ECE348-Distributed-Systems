@@ -1,8 +1,11 @@
 package dev.ioannikas.group.library;
 
+import dev.ioannikas.group.api.SerializableObject;
+import dev.ioannikas.group.gms.serializable.ClientInfo;
 import dev.ioannikas.group.library.catoc.CatocManager;
 import dev.ioannikas.group.library.serializable.PacketUDP;
 import dev.ioannikas.group.gms.serializable.replies.GMSUpdateReply;
+import dev.ioannikas.group.library.serializable.requests.GroupDataRequest;
 import dev.ioannikas.group.library.serializable.requests.NormalRequest;
 
 import java.util.*;
@@ -20,8 +23,8 @@ public class MessageManager {
         this.catocManager = new CatocManager();
     }
 
-    public int send(int groupId, Object data) {
-        NormalRequest packet = new NormalRequest(groupId, data);
+    public int send(int groupId, SerializableObject data) {
+        GroupDataRequest packet = new GroupDataRequest(groupId, data, 0);
         catocManager.send(packet);
         return 0;
     }
@@ -53,6 +56,14 @@ public class MessageManager {
                     receivedPackets.computeIfAbsent(normal.getGroupId(), k -> new LinkedBlockingQueue<>()).add(normal);
             }
         }
+    }
+
+    public void addGroup(int groupId, List<ClientInfo> clients) {
+        catocManager.addGroup(groupId, clients);
+    }
+
+    public void removeGroup(int groupId) {
+        catocManager.removeGroup(groupId);
     }
 
     public void shutdown() {

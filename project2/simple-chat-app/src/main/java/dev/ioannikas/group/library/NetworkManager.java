@@ -75,8 +75,7 @@ public class NetworkManager {
                 if (!GroupAPI.isShuttingDown()) {
                     Printer.printErr("[NetworkManager] Error receiving packet.");
                     e.printStackTrace();
-                }
-                return;
+                } else return;
             }
         }
     }
@@ -94,11 +93,11 @@ public class NetworkManager {
             Printer.printDebug("[NetworkManager] Received invalid packet from GMS.");
     }
 
-    public void sendNormal(PacketUDP packet) throws IOException {
+    public void sendNormal(PacketUDP packet, InetSocketAddress destination) throws IOException {
         ByteBuffer buffer = PacketUDP.serialize(packet);
 
         while (buffer.hasRemaining())
-            normalConnection.getChannel().write(buffer);
+            normalConnection.getChannel().send(buffer, destination);
     }
 
     public void sendGms(PacketTCP packet) throws IOException {

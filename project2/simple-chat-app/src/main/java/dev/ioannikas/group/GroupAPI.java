@@ -3,6 +3,7 @@ package dev.ioannikas.group;
 import dev.ioannikas.group.api.JoinReply;
 import dev.ioannikas.group.api.LeaveReply;
 import dev.ioannikas.group.api.Pair;
+import dev.ioannikas.group.api.SerializableObject;
 import dev.ioannikas.group.library.GMSManager;
 import dev.ioannikas.group.library.MessageManager;
 import dev.ioannikas.group.library.NetworkManager;
@@ -12,11 +13,12 @@ import dev.ioannikas.group.gms.serializable.replies.GMSUpdateReply;
 import dev.ioannikas.group.library.serializable.requests.NormalRequest;
 
 import java.io.IOException;
-import java.io.Serializable;
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
 
 public class GroupAPI {
 
@@ -24,15 +26,17 @@ public class GroupAPI {
     private static MessageManager messageManager;
     private static GMSManager gmsManager;
     private static boolean shuttingDown;
+    private static Function<ByteBuffer, SerializableObject> deserializer;
 
     private static Map<Integer, String> groups;
 
-    public static void init(String gmsAddress, int gmsPort, int appPort) throws IOException {
+    public static void init(String gmsAddress, int gmsPort, int appPort, Function<ByteBuffer, SerializableObject> deserializer) throws IOException {
         shuttingDown = false;
         groups = new ConcurrentHashMap<>();
         networkManager = new NetworkManager(gmsAddress, gmsPort, appPort);
         gmsManager = new GMSManager();
         messageManager = new MessageManager();
+        GroupAPI.deserializer = deserializer;
     }
 
     public static JoinReply join(String groupName, String username) {
@@ -54,7 +58,7 @@ public class GroupAPI {
         return reply.toApiVersion();
     }
 
-    public static <T extends Serializable> int send(int groupId, T message) {
+    public static <T extends SerializableObject> int send(int groupId, T message) {
         if (!groups.containsKey(groupId))
             return -1;
 
@@ -79,6 +83,10 @@ public class GroupAPI {
 
     public static GMSManager getGmsManager() {
         return gmsManager;
+    }
+
+    public static Function<ByteBuffer, SerializableObject> getDeserializer() {
+        return deserializer;
     }
 
     public static void shutdown() {
