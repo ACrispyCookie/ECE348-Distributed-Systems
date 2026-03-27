@@ -26,8 +26,8 @@ public class GroupManager {
         if (group == null)
             return ReturnCode.GROUP_NOT_FOUND;
 
-        ClientInfo previous = group.addClient(client);
-        return previous == null ? ReturnCode.SUCCESS : ReturnCode.CLIENT_ALREADY_EXISTS;
+        boolean added = group.addClient(client);
+        return added ? ReturnCode.SUCCESS : ReturnCode.CLIENT_ALREADY_EXISTS;
     }
 
     public ReturnCode removeFromGroup(int groupId, String username) {
@@ -74,12 +74,12 @@ public class GroupManager {
     private static class Group {
         private final int id;
         private final String name;
-        private final Map<String, ClientInfo> clients;
+        private final List<ClientInfo> clients;
 
         public Group(String name, int id) {
             this.name = name;
             this.id = id;
-            this.clients = new HashMap<>();
+            this.clients = new LinkedList<>();
         }
 
         public int getId() {
@@ -90,16 +90,25 @@ public class GroupManager {
             return name;
         }
 
-        public ClientInfo addClient(ClientInfo client) {
-            return clients.putIfAbsent(client.getUsername(), client);
+        public boolean addClient(ClientInfo client) {
+            boolean added = clients.add(client);
+            return added;
         }
 
         public ClientInfo removeClient(String username) {
-            return clients.remove(username);
+            ClientInfo info = null;
+            for (ClientInfo client : clients) {
+                if (client.getUsername().equals(username)) {
+                    info = client;
+                }
+            }
+
+            clients.remove(info);
+            return info;
         }
 
-        public Collection<ClientInfo> getClients() {
-            return clients.values();
+        public List<ClientInfo> getClients() {
+            return clients;
         }
     }
 }

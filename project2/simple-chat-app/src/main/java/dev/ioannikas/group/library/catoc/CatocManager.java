@@ -7,6 +7,7 @@ import dev.ioannikas.group.api.SerializableObject;
 import dev.ioannikas.group.gms.serializable.ClientInfo;
 import dev.ioannikas.group.gms.serializable.replies.GMSUpdateReply;
 import dev.ioannikas.group.library.serializable.requests.NormalRequest;
+import dev.ioannikas.group.library.serializable.requests.TRMNumberRequest;
 import dev.ioannikas.group.library.serializable.requests.TRMRequest;
 import dev.ioannikas.group.library.serializable.requests.URMRequest;
 
@@ -36,7 +37,6 @@ public class CatocManager {
     }
 
     public synchronized List<GroupMessagePair> receive(String myUsername, NormalRequest request) {
-        Printer.printDebug("[CatocManager] Received from " + request.getData() + " with " + request.getGroupId());
         return groups.get(request.getGroupId()).receive(myUsername, (URMRequest) request.getData())
                 .stream().map(o -> new GroupMessagePair(request.getGroupId(), o)).toList();
     }
@@ -50,8 +50,8 @@ public class CatocManager {
     }
 
     public synchronized List<GroupMessagePair> updateGroup(GMSUpdateReply reply) {
-        Printer.printDebug("[CatocManager] Received from " + reply.getClient() + " with " + reply.getClientAction() + " and " + reply.getGroupId());
-        return groups.get(reply.getGroupId()).update(reply.getClient(), reply.getClientAction())
+        Printer.printDebug("[CatocManager] Received update from " + reply.getClient() + " with " + reply.getClientAction() + " and " + reply.getGroupId());
+        return groups.get(reply.getGroupId()).update(api.getUsername(reply.getGroupId()), reply.getClient(), reply.getClientAction())
                 .stream().map(o -> new GroupMessagePair(reply.getGroupId(), o)).toList();
     }
 
@@ -116,6 +116,7 @@ public class CatocManager {
         }
 
         public List<Object> receive(String myUser, URMRequest request) {
+            Printer.printDebug("[CatocManager] (Group " + groupId + ") Received URM Request from " + request.getSender() + " with ID " + request.getMessageId());
             String msgId = request.getMessageId();
             String sender = request.getSender();
             List<Object> readyMsgs = new ArrayList<>();
@@ -195,33 +196,62 @@ public class CatocManager {
     }
 
     private class TRMState {
+        private int sequenceNumber;
+        private int delivered;
+        private int deliveryNumber;
+        private final Map<String, SerializableObject> messages;
+        private final Map<Integer, String> deliveryOrder;
+
         private final int groupId;
         private final List<ClientInfo> clients;
         private final URMState urm;
 
         public TRMState(int groupId, List<ClientInfo> clients, Object condition) {
+            this.sequenceNumber = 0;
+            this.deliveryNumber = 0;
+            this.delivered = 0;
+            this.messages = new HashMap<>();
+            this.deliveryOrder = new HashMap<>();
+
             this.clients = new ArrayList<>(clients);
             this.groupId = groupId;
             urm = new URMState(groupId, this.clients, condition);
         }
 
         public void send(String myUser, SerializableObject data) {
-            urm.send(myUser, new TRMRequest("1", data));
+            sequenceNumber++;
+            urm.send(myUser, new TRMRequest(myUser + sequenceNumber, data));
         }
 
         public List<SerializableObject> receive(String myUser, URMRequest request) {
-            return urm.receive(myUser, request).stream().map(o -> ((TRMRequest) o).getData()).toList();
+            List<Object> received = urm.receive(myUser, request);
+
+            List<SerializableObject> ready = new ArrayList<>();
+            for (Object trmRequest : received) {
+                if (trmRequest instanceof TRMRequest msg)
+                    ready.addAll(receiveTRMMessage(myUser, msg));
+                else
+                    ready.addAll(receiveTRMNumber((TRMNumberRequest) trmRequest));
+            }
+
+            return ready;
         }
 
         public int resend(String myUser) {
             return urm.resend(myUser);
         }
 
-        public List<SerializableObject> update(ClientInfo user, GMSUpdateReply.Action action) {
+        public List<SerializableObject> update(String myUser, ClientInfo user, GMSUpdateReply.Action action) {
             updateGroup(user, action);
-            if (action == GMSUpdateReply.Action.LEFT)
-                return urm.handleFailure().stream().map(o -> ((TRMRequest) o).getData()).toList();
-            return new ArrayList<>();
+
+            List<SerializableObject> ready = new ArrayList<>();
+            if (action == GMSUpdateReply.Action.LEFT) {
+                List<Object> received = urm.handleFailure();
+                for (Object trmRequest : received) {
+                    ready.addAll(handleFault(myUser, trmRequest));
+                }
+            }
+            return ready;
         }
 
         private void updateGroup(ClientInfo user, GMSUpdateReply.Action action) {
@@ -230,6 +260,63 @@ public class CatocManager {
             } else if (action == GMSUpdateReply.Action.LEFT) {
                 clients.remove(user);
             }
+        }
+
+        private List<SerializableObject> handleFault(String myUser, Object request) {
+            List<SerializableObject> ready = new ArrayList<>();
+
+            if (request instanceof TRMRequest msg) {
+                ready.addAll(receiveTRMMessage(myUser, msg));
+            } else if (request instanceof TRMNumberRequest msg) {
+                ready.addAll(receiveTRMNumber(msg));
+            }
+
+            return ready;
+        }
+
+        private List<SerializableObject> receiveTRMMessage(String myUser, TRMRequest request) {
+            Printer.printDebug("[CatocManager] (Group " + groupId + ") Received TRM Request with ID " + request.getMessageId() + " with data " + request.getData());
+            messages.put(request.getMessageId(), request.getData());
+            List<SerializableObject> objects = checkBuffer();
+            if (amICoordinator(myUser)) {
+                deliveryNumber++;
+                Printer.printDebug("[CatocManager] (Group " + groupId + ") Sending TRM Number with ID " + request.getMessageId() + " with number " + deliveryNumber);
+                urm.send(myUser, new TRMNumberRequest(request.getMessageId(), deliveryNumber));
+            }
+            return objects;
+        }
+
+        private List<SerializableObject> receiveTRMNumber(TRMNumberRequest request) {
+            Printer.printDebug("[CatocManager] (Group " + groupId + ") Received TRM Number with ID " + request.getMessageId() + " with number " + request.getDeliveryNumber());
+
+            /* This is correct since we have implemented URM and
+               can assume that no messages are in transmit when someone joins
+               even if no messages are sent and everyone crashes
+               the chat continues with a reset delivery number*/
+            if (this.delivered == 0 && request.getDeliveryNumber() > 1)
+                this.delivered = request.getDeliveryNumber() - 1;
+
+            deliveryOrder.put(request.getDeliveryNumber(), request.getMessageId());
+            deliveryNumber = Math.max(deliveryNumber, request.getDeliveryNumber());
+            return checkBuffer();
+        }
+
+        private List<SerializableObject> checkBuffer() {
+            List<SerializableObject> ready = new ArrayList<>();
+
+            String id = deliveryOrder.get(delivered + 1);
+            while (id != null && messages.get(id) != null) {
+                ready.add(messages.remove(id));
+                deliveryOrder.remove(delivered + 1);
+                delivered++;
+                id = deliveryOrder.get(delivered + 1);
+            }
+
+            return ready;
+        }
+
+        private boolean amICoordinator(String myUser) {
+            return clients.get(0).getUsername().equals(myUser);
         }
     }
 }

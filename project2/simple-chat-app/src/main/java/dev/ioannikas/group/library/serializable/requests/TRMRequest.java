@@ -8,16 +8,16 @@ import java.nio.ByteBuffer;
 
 public class TRMRequest {
 
-    private final String sequenceNumber;
+    private final String messageId;
     private final SerializableObject data;
 
-    public TRMRequest(String sequenceNumber, SerializableObject data) {
-        this.sequenceNumber = sequenceNumber;
+    public TRMRequest(String messageId, SerializableObject data) {
+        this.messageId = messageId;
         this.data = data;
     }
 
-    public String getSequenceNumber() {
-        return sequenceNumber;
+    public String getMessageId() {
+        return messageId;
     }
 
     public SerializableObject getData() {
@@ -31,7 +31,7 @@ public class TRMRequest {
     }
 
     public static void serialize(TRMRequest packet, ByteBuffer buffer) {
-        PacketTCP.writeString(buffer, packet.getSequenceNumber());
+        PacketTCP.writeString(buffer, packet.getMessageId());
         packet.data.serialize(buffer);
     }
 }
