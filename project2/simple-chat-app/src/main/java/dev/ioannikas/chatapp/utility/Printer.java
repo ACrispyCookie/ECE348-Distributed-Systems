@@ -5,13 +5,15 @@ import java.time.format.DateTimeFormatter;
 
 public class Printer {
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final boolean DEBUG = false;
 
     public static void printInfo(String message) {
         print("INFO", message);
     }
 
     public static void printDebug(String message) {
-        print("DEBUG", message);
+        if (DEBUG)
+            print("DEBUG", message);
     }
 
     public static void printMessage(String name, int id, String message) {

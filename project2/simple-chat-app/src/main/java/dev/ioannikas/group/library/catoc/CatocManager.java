@@ -50,7 +50,7 @@ public class CatocManager {
     }
 
     public synchronized List<GroupMessagePair> updateGroup(GMSUpdateReply reply) {
-        Printer.printDebug("[CatocManager] Received update from " + reply.getClient() + " with " + reply.getClientAction() + " and " + reply.getGroupId());
+        Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] Received update from " + reply.getClient() + " with " + reply.getClientAction() + " and " + reply.getGroupId());
         return groups.get(reply.getGroupId()).update(api.getUsername(reply.getGroupId()), reply.getClient(), reply.getClientAction())
                 .stream().map(o -> new GroupMessagePair(reply.getGroupId(), o)).toList();
     }
@@ -116,7 +116,7 @@ public class CatocManager {
         }
 
         public List<Object> receive(String myUser, URMRequest request) {
-            Printer.printDebug("[CatocManager] (Group " + groupId + ") Received URM Request from " + request.getSender() + " with ID " + request.getMessageId());
+            Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] (Group " + groupId + ") Received URM Request from " + request.getSender() + " with ID " + request.getMessageId());
             String msgId = request.getMessageId();
             String sender = request.getSender();
             List<Object> readyMsgs = new ArrayList<>();
@@ -148,13 +148,13 @@ public class CatocManager {
 
         public int resend(String myUser) {
             int count = messageBuffer.size();
-            Printer.printDebug("[CatocManager] Resending msges....");
+            Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] Resending msges....");
             for (Map.Entry<String, Object> entry : messageBuffer.entrySet()) {
                 String msgId = entry.getKey();
                 List<ClientInfo> notAcked = clients.stream().filter(c -> !receivedAcks.get(msgId).contains(c.getUsername())).toList();
                 basicSend(myUser, msgId, entry.getValue(), notAcked);
             }
-            Printer.printDebug("[CatocManager] Resent " + count + " messages....");
+            Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] Resent " + count + " messages....");
             return count;
         }
 
@@ -275,26 +275,26 @@ public class CatocManager {
         }
 
         private List<SerializableObject> receiveTRMMessage(String myUser, TRMRequest request) {
-            Printer.printDebug("[CatocManager] (Group " + groupId + ") Received TRM Request with ID " + request.getMessageId() + " with data " + request.getData());
+            Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] (Group " + groupId + ") Received TRM Request with ID " + request.getMessageId() + " with data " + request.getData());
             messages.put(request.getMessageId(), request.getData());
             List<SerializableObject> objects = checkBuffer();
             if (amICoordinator(myUser)) {
                 deliveryNumber++;
-                Printer.printDebug("[CatocManager] (Group " + groupId + ") Sending TRM Number with ID " + request.getMessageId() + " with number " + deliveryNumber);
+                Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] (Group " + groupId + ") Sending TRM Number with ID " + request.getMessageId() + " with number " + deliveryNumber);
                 urm.send(myUser, new TRMNumberRequest(request.getMessageId(), deliveryNumber));
             }
             return objects;
         }
 
         private List<SerializableObject> receiveTRMNumber(TRMNumberRequest request) {
-            Printer.printDebug("[CatocManager] (Group " + groupId + ") Received TRM Number with ID " + request.getMessageId() + " with number " + request.getDeliveryNumber());
+            Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] (Group " + groupId + ") Received TRM Number with ID " + request.getMessageId() + " with number " + request.getDeliveryNumber());
 
             /* This is correct since we have implemented URM and
                can assume that no messages are in transmit when someone joins
                even if no messages are sent and everyone crashes
                the chat continues with a reset delivery number*/
-            if (this.delivered == 0 && request.getDeliveryNumber() > 1)
-                this.delivered = request.getDeliveryNumber() - 1;
+//            if (this.delivered == 0 && request.getDeliveryNumber() > 1)
+//                this.delivered = request.getDeliveryNumber() - 1;
 
             deliveryOrder.put(request.getDeliveryNumber(), request.getMessageId());
             deliveryNumber = Math.max(deliveryNumber, request.getDeliveryNumber());
@@ -307,6 +307,7 @@ public class CatocManager {
             String id = deliveryOrder.get(delivered + 1);
             while (id != null && messages.get(id) != null) {
                 ready.add(messages.remove(id));
+                Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] (Group " + groupId + ") TRM Request with ID " + id + " is being delivered");
                 deliveryOrder.remove(delivered + 1);
                 delivered++;
                 id = deliveryOrder.get(delivered + 1);

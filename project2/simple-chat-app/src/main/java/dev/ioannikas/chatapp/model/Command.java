@@ -47,6 +47,7 @@ public class Command {
         LEAVE,
         SELECT,
         INFO,
+        SPAM,
         EXIT
     }
 }

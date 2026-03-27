@@ -31,11 +31,16 @@ public class MessageManager {
     }
 
     public GroupMessagePair receive(List<Integer> receivingList) throws InterruptedException, ExecutionException {
-        GroupMessagePair matched = requestMatches(receivingList);
-        if (matched != null)
-            return matched;
+        CompletableFuture<GroupMessagePair> future;
 
-        CompletableFuture<GroupMessagePair> future = addRequest(receivingList);
+        synchronized (this) {
+            GroupMessagePair matched = requestMatches(receivingList);
+            if (matched != null)
+                return matched;
+
+            future = addRequest(receivingList);
+        }
+
         return future.get();
     }
 
@@ -74,7 +79,7 @@ public class MessageManager {
         catocManager.shutdown();
     }
 
-    private synchronized CompletableFuture<GroupMessagePair> requestWaiting(int groupId) {
+    private CompletableFuture<GroupMessagePair> requestWaiting(int groupId) {
         List<Integer> selected = null;
 
         for (List<Integer> waiting : waitingRequests.keySet()) {
@@ -87,7 +92,7 @@ public class MessageManager {
         return selected != null ? waitingRequests.get(selected).remove() : null;
     }
 
-    private synchronized GroupMessagePair requestMatches(List<Integer> groups) {
+    private GroupMessagePair requestMatches(List<Integer> groups) {
         for (int group : groups) {
             Queue<GroupMessagePair> queue = receivedPackets.get(group);
             if (queue == null)

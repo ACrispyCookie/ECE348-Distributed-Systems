@@ -96,8 +96,10 @@ public class NetworkManager {
     public void sendNormal(PacketUDP packet, InetSocketAddress destination) throws IOException {
         ByteBuffer buffer = PacketUDP.serialize(packet);
 
-        while (buffer.hasRemaining())
-            normalConnection.getChannel().send(buffer, destination);
+        int bytesSent = normalConnection.getChannel().send(buffer, destination);
+        if (bytesSent == 0) {
+            Printer.printDebug("[NetworkManager] OS UDP Buffer full! Packet dropped locally.");
+        }
     }
 
     public void sendGms(PacketTCP packet) throws IOException {
@@ -122,7 +124,7 @@ public class NetworkManager {
     }
 
     public int getPort() {
-        return normalConnection.getAddress().getPort();
+        return normalConnection.getPort();
     }
 
     private String findLocalIp() {

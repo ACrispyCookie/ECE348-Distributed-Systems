@@ -1,3 +1,5 @@
+package gms;
+
 import dev.ioannikas.chatapp.model.ChatMessage;
 import dev.ioannikas.group.GroupAPI;
 import dev.ioannikas.group.api.JoinReply;

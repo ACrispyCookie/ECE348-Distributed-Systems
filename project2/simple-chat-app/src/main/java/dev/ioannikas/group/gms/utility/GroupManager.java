@@ -91,8 +91,10 @@ public class GroupManager {
         }
 
         public boolean addClient(ClientInfo client) {
-            boolean added = clients.add(client);
-            return added;
+            if (clients.stream().anyMatch(c -> c.getUsername().equals(client.getUsername())))
+                return false;
+            clients.add(client);
+            return true;
         }
 
         public ClientInfo removeClient(String username) {

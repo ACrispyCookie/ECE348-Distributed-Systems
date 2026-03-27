@@ -9,6 +9,7 @@ import dev.ioannikas.group.api.JoinReply;
 import dev.ioannikas.group.api.LeaveReply;
 
 import java.time.LocalDateTime;
+import java.util.Random;
 import java.util.Scanner;
 
 public class InputManager {
@@ -46,6 +47,7 @@ public class InputManager {
             case LEAVE -> handleLeave(command);
             case SELECT -> handleSelect(command);
             case INFO -> handleInfo();
+            case SPAM -> handleSpam(command);
             case EXIT -> handleExit();
         }
 
@@ -136,8 +138,50 @@ public class InputManager {
         ChatApp.getChatManager().printChatInfo(selected);
     }
 
+    private void handleSpam(Command command) {
+        if (command.getArgs().length != 1) {
+            Printer.printErr("[ChatApp] Invalid usage: /spam <amount of messages>");
+            return;
+        }
+
+        int amount;
+        try {
+            amount = Integer.parseInt(command.getArgs()[0]);
+            if (amount <= 0)
+                amount = -1;
+        } catch (Exception e) {
+            amount = -1;
+        }
+
+        if (amount == -1) {
+            Printer.printErr("[ChatApp] Please enter a positive number!");
+            return;
+        }
+
+        if (selected == -1) {
+            Printer.printErr("[ChatApp] You must select a chat to spam!");
+            return;
+        }
+
+        for (int i = 0; i < amount; i++) {
+            ChatMessage chatMessage = new ChatMessage(ChatApp.getChatManager().getUsername(selected), LocalDateTime.now(), randomMessage());
+            if (ChatApp.getApi().send(selected, chatMessage) == -1)
+                Printer.printErr("[ChatApp] You are not in this group! (How did we get here?)");
+        }
+    }
+
     private void handleExit() {
         ChatApp.getChatManager().cleanUp();
         ChatApp.shutdown();
+    }
+
+    private static final Random RANDOM = new Random();
+
+    private String randomMessage() {
+        int length = RANDOM.nextInt(10) + 5;
+        return RANDOM.ints('a', 'z' + 1)
+                .limit(length)
+                .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
+                .toString();
     }
 }

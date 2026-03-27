@@ -12,11 +12,11 @@ public class ConnectionUDP {
     private final InetSocketAddress address;
 
     public ConnectionUDP(Selector selector, int port) throws IOException {
-        address = new InetSocketAddress(port);
         channel = DatagramChannel.open();
-        channel.bind(address);
+        channel.bind(new InetSocketAddress(port));
         channel.configureBlocking(false);
         channel.register(selector, SelectionKey.OP_READ);
+        address = (InetSocketAddress) channel.getLocalAddress();
     }
 
     public void close() throws IOException {
@@ -27,7 +27,7 @@ public class ConnectionUDP {
         return channel;
     }
 
-    public InetSocketAddress getAddress() {
-        return address;
+    public int getPort() {
+        return address.getPort();
     }
 }
