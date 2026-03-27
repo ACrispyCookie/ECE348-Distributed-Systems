@@ -1,5 +1,6 @@
 package dev.ioannikas.group.library.serializable.requests;
 
+import dev.ioannikas.group.GroupAPI;
 import dev.ioannikas.group.gms.serializable.PacketTCP;
 
 import java.nio.ByteBuffer;
@@ -30,13 +31,13 @@ public class URMRequest {
         return data;
     }
 
-    public static URMRequest deserialize(ByteBuffer buffer) {
+    public static URMRequest deserialize(GroupAPI api, ByteBuffer buffer) {
         String sender = PacketTCP.readString(buffer);
         String sequenceNumber = PacketTCP.readString(buffer);
         Type type = Type.values()[buffer.getInt()];
         Object data;
         if (type == Type.TRM_REQUEST)
-            data = TRMRequest.deserialize(buffer);
+            data = TRMRequest.deserialize(api, buffer);
         else
             data = TRMNumberRequest.deserialize(buffer);
         return new URMRequest(sender, sequenceNumber, data);

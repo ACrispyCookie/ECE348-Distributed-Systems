@@ -1,87 +1,127 @@
+import dev.ioannikas.chatapp.model.ChatMessage;
+import dev.ioannikas.group.GroupAPI;
+import dev.ioannikas.group.api.JoinReply;
 import dev.ioannikas.group.gms.GMS;
 import org.junit.jupiter.api.*;
 
-import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
+import java.util.Map;
+import java.util.Random;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class GMSChaosTest {
 
-    private static final int GMS_PORT = 10100;
+    private static final int GMS_PORT = 5055;
     private static Thread serverThread;
-    private final int NUM_CLIENTS = 2;
-    private final int OPS_PER_CLIENT = 1; // 20 clients * 100 ops = 2000 total operations
+
+    private final int NUM_CLIENTS = 20;
+    private final List<GroupAPI> clients = new ArrayList<>();
+
+    private final Map<GroupAPI, List<Integer>> clientActiveGroups = new ConcurrentHashMap<>();
 
     @BeforeAll
     static void startGMS() throws InterruptedException {
         serverThread = new Thread(() -> GMS.main(new String[]{String.valueOf(GMS_PORT)}));
         serverThread.start();
-        Thread.sleep(500); // Give server time to bind
+        Thread.sleep(300);
     }
 
     @AfterAll
     static void shutdownGMS() throws InterruptedException {
         assertSame(0, GMS.connectedClients());
-
         GMS.shutdown();
         serverThread.join();
     }
 
-    @Test
-    void testProcessBasedConcurrentChaos() throws Exception {
-        System.out.println("Starting Process Chaos Test with " + (NUM_CLIENTS * OPS_PER_CLIENT) + " operations...");
-
-        List<Process> activeProcesses = new ArrayList<>();
-
+    @BeforeEach
+    void setUp() throws Exception {
         for (int i = 0; i < NUM_CLIENTS; i++) {
-            int udpPort = 6000 + i;
-            String username = "ChaosUser_" + i;
-            Process p = launchChaosNode(udpPort, username, OPS_PER_CLIENT);
-            activeProcesses.add(p);
+            GroupAPI client = new GroupAPI("127.0.0.1", GMS_PORT, 10200 + i, ChatMessage::deserialize);
+            clients.add(client);
+            clientActiveGroups.put(client, new CopyOnWriteArrayList<>());
         }
-
-        int failedProcesses = 0;
-        for (Process p : activeProcesses) {
-            boolean finished = p.waitFor(30, TimeUnit.SECONDS);
-
-            assertTrue(finished, "A chaos process deadlocked and timed out!");
-
-            if (p.exitValue() != 0) {
-                failedProcesses++;
-            }
-        }
-
-        System.out.println("Chaos complete. Failed client nodes: " + failedProcesses);
-
-        assertTrue(failedProcesses < (NUM_CLIENTS * 0.2),
-                "Too many client nodes crashed! Thread-safety issues likely in GMS.");
-
-        Process survivor = launchChaosNode(7777, "Survivor", 1);
-        assertTrue(survivor.waitFor(5, TimeUnit.SECONDS));
-        assertEquals(0, survivor.exitValue(), "Server stopped responding to joins after chaos test!");
     }
 
-    private Process launchChaosNode(int udpPort, String username, int numOperations) throws Exception {
-        String javaHome = System.getProperty("java.home");
-        String javaBin = javaHome + File.separator + "bin" + File.separator + "java";
-        String classpath = System.getProperty("java.class.path");
-        String className = "dev.ioannikas.group.ChaosClientNode";
+    @AfterEach
+    void tearDown() {
+        for (GroupAPI client : clients) {
+            client.shutdown();
+        }
+    }
 
-        List<String> command = new ArrayList<>(List.of(
-                javaBin, "-cp", classpath
-        ));
+    @Test
+    void testRandomConcurrentChaos() throws InterruptedException, IOException {
+        int numOperations = 2000;
+        int numThreads = 10;
 
-        if (username.equals("ChaosUser_0")) {
-//            command.add("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005");
-            System.out.println("Waiting for debugger attachment on port 5005 for " + username + "...");
+        ExecutorService executor = Executors.newFixedThreadPool(numThreads);
+        Random random = new Random();
+        AtomicInteger failedOperations = new AtomicInteger(0);
+
+        String[] groupNames = {"General", "Help", "Random", "DistributedSystems"};
+
+        System.out.println("Starting Chaos Test with " + numOperations + " operations...");
+
+        for (int i = 0; i < numOperations; i++) {
+            executor.submit(() -> {
+                try {
+                    GroupAPI client = clients.get(random.nextInt(NUM_CLIENTS));
+                    List<Integer> myGroups = clientActiveGroups.get(client);
+
+                    int action = random.nextInt(2);
+
+                    if (action == 0 || myGroups.isEmpty()) {
+                        // JOIN A RANDOM GROUP
+                        String groupToJoin = groupNames[random.nextInt(groupNames.length)];
+                        String username = "User_" + client.getNetworkManager().getPort();
+
+                        JoinReply reply = client.join(groupToJoin, username);
+                        if (reply != null && reply.getReason() != JoinReply.FailReason.UNKNOWN) {
+                            if (!myGroups.contains(reply.getGroupId())) {
+                                myGroups.add(reply.getGroupId());
+                            }
+                        } else {
+                            failedOperations.incrementAndGet();
+                        }
+
+                    } else {
+                        // LEAVE A RANDOM GROUP
+                        int groupIdToLeave = myGroups.get(random.nextInt(myGroups.size()));
+                        client.leave(groupIdToLeave);
+                        myGroups.remove(Integer.valueOf(groupIdToLeave));
+
+                    }
+                } catch (Exception e) {
+                    failedOperations.incrementAndGet();
+                    e.printStackTrace();
+                }
+            });
         }
 
-        command.addAll(List.of(className, String.valueOf(udpPort), username, String.valueOf(numOperations)));
+        executor.shutdown();
+        boolean finished = executor.awaitTermination(30, TimeUnit.SECONDS);
+        assertTrue(finished, "Chaos test timed out! Possible deadlock in GMS or Client APIs.");
 
-        ProcessBuilder builder = new ProcessBuilder(command);
-        return builder.start();
+        System.out.println("Chaos complete. Failed ops: " + failedOperations.get());
+
+        // Assert that the system survived without excessive failures
+        // (A few failures might be acceptable if a user tries to leave a group the moment another thread kicks them, etc.)
+        assertTrue(failedOperations.get() < (numOperations * 0.1),
+                "Too many operations failed! Thread-safety issues likely in GMS.");
+
+        // --- THE SURVIVOR CHECK ---
+        // Let's verify the server isn't frozen.
+        GroupAPI testClient = new GroupAPI("127.0.0.1", GMS_PORT, 7777, ChatMessage::deserialize);
+        JoinReply finalJoin = testClient.join("SurvivorGroup", "Survivor");
+
+        assertNotNull(finalJoin, "Server stopped responding to joins after chaos test!");
+        assertSame(JoinReply.FailReason.NONE, finalJoin.getReason(), "Final join failed after chaos!");
+
+        testClient.shutdown();
     }
 }

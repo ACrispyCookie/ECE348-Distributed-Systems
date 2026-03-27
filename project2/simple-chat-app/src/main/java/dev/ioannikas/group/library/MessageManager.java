@@ -16,12 +16,14 @@ public class MessageManager {
 
     private final ConcurrentMap<Integer, Queue<GroupMessagePair>> receivedPackets;
     private final Map<List<Integer>, Queue<CompletableFuture<GroupMessagePair>>> waitingRequests;
+    private final GroupAPI api;
     private final CatocManager catocManager;
 
-    public MessageManager() {
+    public MessageManager(GroupAPI api) {
+        this.api = api;
         this.receivedPackets = new ConcurrentHashMap<>();
         this.waitingRequests = new HashMap<>();
-        this.catocManager = new CatocManager();
+        this.catocManager = new CatocManager(api);
     }
 
     public void send(int groupId, String username, SerializableObject data) {
@@ -49,7 +51,7 @@ public class MessageManager {
             } else
                 receivedPackets.computeIfAbsent(normal.getGroupId(), k -> new LinkedBlockingQueue<>()).add(new GroupMessagePair(normal.getGroupId(), update));
         } else if (reply instanceof NormalRequest normal) {
-            List<GroupMessagePair> ready = catocManager.receive(GroupAPI.getUsername(normal.getGroupId()), normal);
+            List<GroupMessagePair> ready = catocManager.receive(api.getUsername(normal.getGroupId()), normal);
             for (GroupMessagePair req : ready) {
                 CompletableFuture<GroupMessagePair> waiting = requestWaiting(normal.getGroupId());
                 if (waiting != null) {

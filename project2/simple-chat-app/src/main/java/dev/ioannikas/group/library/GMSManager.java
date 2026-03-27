@@ -19,10 +19,12 @@ public class GMSManager {
 
     private final int HEARTBEAT_INTERVAL = 2;
     private final Thread heartbeatSender;
+    private final GroupAPI api;
     private final Map<Integer, CompletableFuture<GMSReply>> pendingFutures;
     private final AtomicInteger nextFutureId = new AtomicInteger(1);
 
-    public GMSManager() {
+    public GMSManager(GroupAPI api) {
+        this.api = api;
         this.pendingFutures = new ConcurrentHashMap<>();
         this.heartbeatSender = new Thread(this::sender, "heartbeat-sender");
         heartbeatSender.start();
@@ -34,7 +36,7 @@ public class GMSManager {
         try {
             GMSJoinRequest packet = new GMSJoinRequest(username, nextFutureId.getAndIncrement(), groupName, ipAddress, port);
             pendingFutures.put(packet.getFutureId(), future);
-            GroupAPI.getNetworkManager().sendGms(packet);
+            api.getNetworkManager().sendGms(packet);
 
             return (GMSJoinReply) future.get();
         } catch (InterruptedException | ExecutionException | IOException e) {
@@ -51,7 +53,7 @@ public class GMSManager {
         try {
             GMSLeaveRequest packet = new GMSLeaveRequest(username, nextFutureId.getAndIncrement(), groupId);
             pendingFutures.put(packet.getFutureId(), future);
-            GroupAPI.getNetworkManager().sendGms(packet);
+            api.getNetworkManager().sendGms(packet);
 
             return (GMSLeaveReply) future.get();
         } catch (InterruptedException | ExecutionException | IOException e) {
@@ -66,10 +68,10 @@ public class GMSManager {
         int futureId;
 
         if (reply instanceof GMSJoinReply join) {
-            GroupAPI.getMessageManager().addGroup(join.getGroupId(), join.getClients());
+            api.getMessageManager().addGroup(join.getGroupId(), join.getClients());
             futureId = join.getFutureId();
         } else if (reply instanceof GMSLeaveReply leave) {
-            GroupAPI.getMessageManager().removeGroup(leave.getGroupId());
+            api.getMessageManager().removeGroup(leave.getGroupId());
             futureId = leave.getFutureId();
         } else {
             return;
@@ -77,18 +79,16 @@ public class GMSManager {
 
         CompletableFuture<GMSReply> future = pendingFutures.remove(futureId);
         // Should never happen
-        if (future == null) {
-            System.err.println("The bad thing happened");
+        if (future == null)
             return;
-        }
         future.complete(reply);
     }
 
     private void sender() {
-        while(!GroupAPI.isShuttingDown()) {
+        while(!api.isShuttingDown()) {
             try {
                 Thread.sleep(HEARTBEAT_INTERVAL * 1000);
-                GroupAPI.getNetworkManager().sendGms(GMSRequest.simpleHeartbeat());
+                api.getNetworkManager().sendGms(GMSRequest.simpleHeartbeat());
             } catch (InterruptedException ignored) {
 
             } catch (IOException e) {

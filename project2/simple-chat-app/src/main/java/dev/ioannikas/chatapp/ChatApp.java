@@ -13,6 +13,7 @@ import java.nio.file.Paths;
 
 public class ChatApp {
 
+    private static GroupAPI api;
     private static ChatManager chatManager;
     private static MessageReceiver receiver;
     private static boolean shuttingDown = false;
@@ -21,7 +22,7 @@ public class ChatApp {
         AppConfig config = parseArguments(args);
 
         try {
-            GroupAPI.init(config.getGmsIp(), config.getGmsPort(), config.getAppPort(), ChatMessage::deserialize);
+            api = new GroupAPI(config.getGmsIp(), config.getGmsPort(), config.getAppPort(), ChatMessage::deserialize);
         } catch (IOException e) {
             Printer.printErr("[ChatApp] Error initializing GMS! Is the GMS running?");
             e.printStackTrace();
@@ -36,6 +37,10 @@ public class ChatApp {
         new InputManager().runInputManager();
     }
 
+    public static GroupAPI getApi() {
+        return api;
+    }
+
     public static ChatManager getChatManager() {
         return chatManager;
     }
@@ -48,7 +53,7 @@ public class ChatApp {
         Printer.printInfo("[ChatApp] Shutting down...");
         shuttingDown = true;
         receiver.shutdown();
-        GroupAPI.shutdown();
+        api.shutdown();
     }
 
     public static boolean isShuttingDown() {

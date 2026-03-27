@@ -1,5 +1,6 @@
 package dev.ioannikas.group.library.serializable.requests;
 
+import dev.ioannikas.group.GroupAPI;
 import dev.ioannikas.group.library.serializable.PacketUDP;
 
 import java.io.Serial;
@@ -25,9 +26,9 @@ public class NormalRequest extends PacketUDP {
         return data;
     }
 
-    public static NormalRequest deserialize(ByteBuffer buffer) {
+    public static NormalRequest deserialize(GroupAPI api, ByteBuffer buffer) {
         int groupId = buffer.getInt();
-        URMRequest request = URMRequest.deserialize(buffer);
+        URMRequest request = URMRequest.deserialize(api, buffer);
         return new NormalRequest(groupId, request);
     }
 

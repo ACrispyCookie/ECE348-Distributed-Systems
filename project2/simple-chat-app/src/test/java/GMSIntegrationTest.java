@@ -1,56 +1,66 @@
+import dev.ioannikas.chatapp.model.ChatMessage;
+import dev.ioannikas.group.GroupAPI;
+import dev.ioannikas.group.api.JoinReply;
 import dev.ioannikas.group.gms.GMS;
 import org.junit.jupiter.api.*;
+
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 class GMSIntegrationTest {
 
     private static final int GMS_PORT = 10100;
     private static Thread serverThread;
-    private Process client1Process;
-    private Process client2Process;
+    private GroupAPI client1;
+    private GroupAPI client2;
 
     @BeforeAll
     static void startGMS() throws InterruptedException {
         serverThread = new Thread(() -> GMS.main(new String[]{String.valueOf(GMS_PORT)}));
         serverThread.start();
-        Thread.sleep(500); // Give the server time to bind to the port
+        Thread.sleep(200);
     }
 
     @AfterAll
-    static void shutdownGMS() {
-        serverThread.interrupt();
+    static void shutdownGMS() throws InterruptedException {
+        GMS.shutdown();
+        serverThread.join();
+    }
+
+    @BeforeEach
+    void setUp() throws Exception {
+        client1 = new GroupAPI("127.0.0.1", GMS_PORT, 10200, ChatMessage::deserialize);
+        client2 = new GroupAPI("127.0.0.1", GMS_PORT, 10201, ChatMessage::deserialize);
     }
 
     @AfterEach
     void tearDown() {
-        if (client1Process != null) client1Process.destroy();
-        if (client2Process != null) client2Process.destroy();
+        if (client1 != null) client1.shutdown();
+        if (client2 != null) client2.shutdown();
     }
 
     @Test
-    void testTwoClientsCanJoinSameGroupViaProcesses() throws Exception {
-        client1Process = launchClient(6001, "User1", "GlobalChat");
-        client2Process = launchClient(6002, "User2", "GlobalChat");
+    void testTwoClientsCanJoinSameGroup() {
+        JoinReply reply1 = client1.join("GlobalChat", "User1");
+        JoinReply reply2 = client2.join("GlobalChat", "User2");
 
-        int exitCode1 = client1Process.waitFor();
-        int exitCode2 = client2Process.waitFor();
+        assertNotNull(reply1, "Reply1 should not be null");
+        assertNotNull(reply2, "Reply2 should not be null");
+        assertSame(JoinReply.FailReason.NONE, reply1.getReason(), "User1 should join successfully");
+        assertSame(JoinReply.FailReason.NONE, reply2.getReason(), "User2 should join successfully");
 
-        Assertions.assertEquals(0, exitCode1, "Client 1 crashed!");
-        Assertions.assertEquals(0, exitCode2, "Client 2 crashed!");
+        assertEquals(reply1.getGroupId(), reply2.getGroupId(), "Both users should be assigned the same Group ID");
     }
 
-    private Process launchClient(int udpPort, String username, String groupName) throws Exception {
-        String javaHome = System.getProperty("java.home");
-        String javaBin = javaHome + "/bin/java";
-        String classpath = System.getProperty("java.class.path");
-        String className = "dev.ioannikas.group.TestClientNode";
+    @Test
+    void testLeaveGroupFiresUpdate() throws InterruptedException, ExecutionException {
+        client1.join("Chat", "User1");
+        int groupId = client2.join("Chat", "User2").getGroupId();
+        client1.leave(groupId);
 
-        ProcessBuilder builder = new ProcessBuilder(
-                javaBin, "-cp", classpath, className,
-                String.valueOf(udpPort), username, groupName
-        );
-
-        builder.inheritIO();
-
-        return builder.start();
+        Object updatePacket = client2.receive(List.of(groupId));
+        assertNotNull(updatePacket, "Client2 should receive a view update after Client1 leaves");
     }
 }

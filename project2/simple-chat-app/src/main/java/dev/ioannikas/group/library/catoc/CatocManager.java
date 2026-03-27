@@ -17,9 +17,11 @@ import java.util.stream.Collectors;
 
 public class CatocManager {
 
+    private final GroupAPI api;
     private final Map<Integer, TRMState> groups;
 
-    public CatocManager() {
+    public CatocManager(GroupAPI api) {
+        this.api = api;
         groups = new HashMap<>();
     }
 
@@ -28,7 +30,7 @@ public class CatocManager {
     }
 
     public synchronized List<GroupMessagePair> receive(String myUsername, NormalRequest request) {
-        Printer.printDebug("Received from " + request.getData() + " with " + request.getGroupId());
+        Printer.printDebug("[CatocManager] Received from " + request.getData() + " with " + request.getGroupId());
         return groups.get(request.getGroupId()).receive(myUsername, (URMRequest) request.getData())
                 .stream().map(o -> new GroupMessagePair(request.getGroupId(), o)).toList();
     }
@@ -42,7 +44,7 @@ public class CatocManager {
     }
 
     public synchronized List<GroupMessagePair> updateGroup(GMSUpdateReply reply) {
-        Printer.printDebug("Received from " + reply.getClient() + " with " + reply.getClientAction() + " and " + reply.getGroupId());
+        Printer.printDebug("[CatocManager] Received from " + reply.getClient() + " with " + reply.getClientAction() + " and " + reply.getGroupId());
         return groups.get(reply.getGroupId()).update(reply.getClient(), reply.getClientAction())
                 .stream().map(o -> new GroupMessagePair(reply.getGroupId(), o)).toList();
     }
@@ -51,7 +53,7 @@ public class CatocManager {
         TRMState.shutdown();
     }
 
-    private static class URMState {
+    private class URMState {
         private int sequenceNumber;
         private final Set<String> receivedMessages; // TODO think about storing something else per client
         private final Map<String, Set<String>> receivedAcks;
@@ -129,7 +131,7 @@ public class CatocManager {
             for (ClientInfo clientInfo : clients) {
                 try {
                     URMRequest urmRequest = new URMRequest(sender, messageId, data);
-                    GroupAPI.getNetworkManager().sendNormal(new NormalRequest(groupId, urmRequest), new InetSocketAddress(clientInfo.getIpAddress(), clientInfo.getPort()));
+                    api.getNetworkManager().sendNormal(new NormalRequest(groupId, urmRequest), new InetSocketAddress(clientInfo.getIpAddress(), clientInfo.getPort()));
                 } catch (IOException e) {
                     Printer.printErr("[CatocManager] Error sending request to client " + clientInfo.getUsername() + " on group " + groupId);
                     e.printStackTrace();
@@ -149,7 +151,7 @@ public class CatocManager {
 
     }
 
-    private static class TRMState {
+    private class TRMState {
         private final int groupId;
         private final List<ClientInfo> clients;
         private final URMState urm;

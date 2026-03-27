@@ -24,9 +24,9 @@ public class TRMRequest {
         return data;
     }
 
-    public static TRMRequest deserialize(ByteBuffer buffer) {
+    public static TRMRequest deserialize(GroupAPI api, ByteBuffer buffer) {
         String sequenceNumber = PacketTCP.readString(buffer);
-        SerializableObject data = GroupAPI.getDeserializer().apply(buffer);
+        SerializableObject data = api.getDeserializer().apply(buffer);
         return new TRMRequest(sequenceNumber, data);
     }
 

@@ -21,24 +21,24 @@ import java.util.function.Function;
 
 public class GroupAPI {
 
-    private static NetworkManager networkManager;
-    private static MessageManager messageManager;
-    private static GMSManager gmsManager;
-    private static boolean shuttingDown;
-    private static Function<ByteBuffer, SerializableObject> deserializer;
+    private final NetworkManager networkManager;
+    private final MessageManager messageManager;
+    private final GMSManager gmsManager;
+    private boolean shuttingDown;
+    private final Function<ByteBuffer, SerializableObject> deserializer;
 
-    private static Map<Integer, String> groups;
+    private final Map<Integer, String> groups;
 
-    public static void init(String gmsAddress, int gmsPort, int appPort, Function<ByteBuffer, SerializableObject> deserializer) throws IOException {
+    public GroupAPI(String gmsAddress, int gmsPort, int appPort, Function<ByteBuffer, SerializableObject> deserializer) throws IOException {
         shuttingDown = false;
         groups = new ConcurrentHashMap<>();
-        networkManager = new NetworkManager(gmsAddress, gmsPort, appPort);
-        gmsManager = new GMSManager();
-        messageManager = new MessageManager();
-        GroupAPI.deserializer = deserializer;
+        networkManager = new NetworkManager(this, gmsAddress, gmsPort, appPort);
+        gmsManager = new GMSManager(this);
+        messageManager = new MessageManager(this);
+        this.deserializer = deserializer;
     }
 
-    public static JoinReply join(String groupName, String username) {
+    public JoinReply join(String groupName, String username) {
         GMSJoinReply reply = gmsManager.join(groupName, username, networkManager.getIpAddress(), networkManager.getPort());
         if (reply.getReason() == GMSJoinReply.FailReason.NONE)
             groups.put(reply.getGroupId(), username);
@@ -46,7 +46,7 @@ public class GroupAPI {
         return reply.toApiVersion();
     }
 
-    public static LeaveReply leave(int groupId) {
+    public LeaveReply leave(int groupId) {
         if (!groups.containsKey(groupId))
             return null;
 
@@ -57,7 +57,7 @@ public class GroupAPI {
         return reply.toApiVersion();
     }
 
-    public static <T extends SerializableObject> int send(int groupId, T message) {
+    public <T extends SerializableObject> int send(int groupId, T message) {
         if (!groups.containsKey(groupId))
             return -1;
 
@@ -65,7 +65,7 @@ public class GroupAPI {
         return 0;
     }
 
-    public static GroupMessagePair receive(List<Integer> groups) throws InterruptedException, ExecutionException {
+    public GroupMessagePair receive(List<Integer> groups) throws InterruptedException, ExecutionException {
         GroupMessagePair reply = messageManager.receive(groups);
         if (reply.getMessage() instanceof GMSUpdateReply update)
             return new GroupMessagePair(reply.getGroupId(), update.toApiVersion());
@@ -73,34 +73,34 @@ public class GroupAPI {
             return new GroupMessagePair(reply.getGroupId(), reply.getMessage());
     }
 
-    public static NetworkManager getNetworkManager() {
+    public NetworkManager getNetworkManager() {
         return networkManager;
     }
 
-    public static MessageManager getMessageManager() {
+    public MessageManager getMessageManager() {
         return messageManager;
     }
 
-    public static GMSManager getGmsManager() {
+    public GMSManager getGmsManager() {
         return gmsManager;
     }
 
-    public static String getUsername(int groupId) {
+    public String getUsername(int groupId) {
         return groups.get(groupId);
     }
 
-    public static Function<ByteBuffer, SerializableObject> getDeserializer() {
+    public Function<ByteBuffer, SerializableObject> getDeserializer() {
         return deserializer;
     }
 
-    public static void shutdown() {
+    public void shutdown() {
         shuttingDown = true;
         messageManager.shutdown();
         gmsManager.shutdown();
         networkManager.shutdown();
     }
 
-    public static boolean isShuttingDown() {
+    public boolean isShuttingDown() {
         return shuttingDown;
     }
 }

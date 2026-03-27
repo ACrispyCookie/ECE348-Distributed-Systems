@@ -1,5 +1,6 @@
 package dev.ioannikas.group.library.serializable;
 
+import dev.ioannikas.group.GroupAPI;
 import dev.ioannikas.group.library.serializable.requests.NormalRequest;
 
 import java.io.*;
@@ -11,10 +12,10 @@ public class PacketUDP implements Serializable {
     @Serial
     private static final long serialVersionUID = 2L;
 
-    public static PacketUDP deserialize(ByteBuffer buffer) throws IOException, ClassNotFoundException {
+    public static PacketUDP deserialize(GroupAPI api, ByteBuffer buffer) throws IOException, ClassNotFoundException {
          PacketType type = PacketType.values()[buffer.getInt()];
         if (Objects.requireNonNull(type) == PacketType.NORMAL) {
-            return NormalRequest.deserialize(buffer);
+            return NormalRequest.deserialize(api, buffer);
         }
         return null;
     }

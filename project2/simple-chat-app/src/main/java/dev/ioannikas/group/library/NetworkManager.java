@@ -21,6 +21,7 @@ import java.util.Set;
 
 public class NetworkManager {
 
+    private final GroupAPI api;
     private final String ipAddress;
 
     private final Selector selector;
@@ -28,7 +29,8 @@ public class NetworkManager {
     private final ConnectionUDP normalConnection;
     private final Thread receiver;
 
-    public NetworkManager(String gmsIpAddress, int gmsPort, int appPort) throws IOException {
+    public NetworkManager(GroupAPI api, String gmsIpAddress, int gmsPort, int appPort) throws IOException {
+        this.api = api;
         this.ipAddress = findLocalIp();
         this.selector = Selector.open();
         this.normalConnection = new ConnectionUDP(selector, appPort);
@@ -40,7 +42,7 @@ public class NetworkManager {
     private void receiver() {
         ByteBuffer sharedBuffer = ByteBuffer.allocate(2048);
 
-        while (!GroupAPI.isShuttingDown()) {
+        while (!api.isShuttingDown()) {
             try {
                 selector.select();
 
@@ -65,12 +67,12 @@ public class NetworkManager {
                         if (senderAddr != null)
                             sharedBuffer.flip();
 
-                        PacketUDP packet = PacketUDP.deserialize(sharedBuffer);
-                        GroupAPI.getMessageManager().handleReceivedPacket(packet);
+                        PacketUDP packet = PacketUDP.deserialize(api, sharedBuffer);
+                        api.getMessageManager().handleReceivedPacket(packet);
                     }
                 }
             } catch (Exception e) {
-                if (!GroupAPI.isShuttingDown()) {
+                if (!api.isShuttingDown()) {
                     Printer.printErr("[NetworkManager] Error receiving packet.");
                     e.printStackTrace();
                 } else return;
@@ -84,9 +86,9 @@ public class NetworkManager {
             return;
 
         if (reply.getType() != GMSReply.ReplyType.UPDATE)
-            GroupAPI.getGmsManager().handleReceivedPacket(reply);
+            api.getGmsManager().handleReceivedPacket(reply);
         else if (reply.getType() == GMSReply.ReplyType.UPDATE)
-            GroupAPI.getMessageManager().handleReceivedPacket(new NormalRequest(reply.getGroupId(), reply));
+            api.getMessageManager().handleReceivedPacket(new NormalRequest(reply.getGroupId(), reply));
         else
             Printer.printDebug("[NetworkManager] Received invalid packet from GMS.");
     }

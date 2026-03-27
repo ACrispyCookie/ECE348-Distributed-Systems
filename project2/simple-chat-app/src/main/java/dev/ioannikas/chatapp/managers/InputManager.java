@@ -35,7 +35,7 @@ public class InputManager {
             }
 
             ChatMessage chatMessage = new ChatMessage(ChatApp.getChatManager().getUsername(selected), LocalDateTime.now(), line);
-            if (GroupAPI.send(selected, chatMessage) == -1)
+            if (ChatApp.getApi().send(selected, chatMessage) == -1)
                 Printer.printErr("[ChatApp] You are not in this group! (How did we get here?)");
         }
     }
@@ -67,7 +67,7 @@ public class InputManager {
             return;
         }
 
-        JoinReply reply = GroupAPI.join(groupName, username);
+        JoinReply reply = ChatApp.getApi().join(groupName, username);
         if (reply.getReason() != JoinReply.FailReason.NONE) {
             if (reply.getReason() == JoinReply.FailReason.USERNAME_TAKEN)
                 Printer.printErr("[ChatApp] This username is taken in this group!");
@@ -98,7 +98,7 @@ public class InputManager {
             return;
         }
 
-        LeaveReply reply = GroupAPI.leave(groupId);
+        LeaveReply reply = ChatApp.getApi().leave(groupId);
         if (reply.getReason() != LeaveReply.FailReason.NONE) {
             Printer.printErr("[ChatApp] Error while leaving a group!");
             return;
