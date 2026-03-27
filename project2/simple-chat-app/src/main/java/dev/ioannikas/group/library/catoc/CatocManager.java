@@ -22,7 +22,7 @@ public class CatocManager {
     private final Map<Integer, TRMState> groups;
 
     private final Thread retransmitter;
-    private final int RESEND_TIMEOUT = 5;
+    private final long RESEND_TIMEOUT = 100;
 
     public CatocManager(GroupAPI api) {
         this.api = api;
@@ -81,7 +81,7 @@ public class CatocManager {
                         Printer.printDebug("[CatocManager] Buffer not empty sleeping for less");
                     }
                 }
-                Thread.sleep(RESEND_TIMEOUT * 1000L);
+                Thread.sleep(RESEND_TIMEOUT);
             } catch (InterruptedException e) {
                 if (!api.isShuttingDown()) Printer.printDebug("[CatocManager] Error running retransmitter!");
             }
@@ -112,6 +112,16 @@ public class CatocManager {
         public void send(String myUser, Object data) {
             sequenceNumber++;
             // TODO Figure out if we rely on UDP loopback or else add it to the messageBuffer
+            String msgId = myUser + sequenceNumber;
+
+            receivedMessages.add(msgId);
+            messageBuffer.put(msgId, data);
+            receivedAcks.put(msgId, new HashSet<>());
+
+            // Wake up the retransmitter
+            synchronized (retransmissionCondition) {
+                retransmissionCondition.notifyAll();
+            }
             basicSend(myUser, myUser + sequenceNumber, data);
         }
 
@@ -127,7 +137,10 @@ public class CatocManager {
             if (!receivedMessages.contains(msgId)) {
                 receivedMessages.add(msgId);
                 messageBuffer.put(msgId, request.getData());
-                retransmissionCondition.notify();
+
+                synchronized (retransmissionCondition) {
+                    retransmissionCondition.notifyAll();
+                }
 
                 if (!sender.equals(myUser))
                     basicSend(myUser, msgId, request.getData());
@@ -138,9 +151,9 @@ public class CatocManager {
                     .map(ClientInfo::getUsername)
                     .collect(Collectors.toSet());
 
-            if (receivedAcks.get(msgId).containsAll(usernames)) {
+            if (receivedAcks.get(msgId).containsAll(usernames) && messageBuffer.containsKey(msgId)) {
                 readyMsgs.add(messageBuffer.remove(msgId));
-                receivedAcks.remove(msgId);
+//                receivedAcks.remove(msgId);
             }
 
             return readyMsgs;
@@ -151,8 +164,7 @@ public class CatocManager {
             Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] Resending msges....");
             for (Map.Entry<String, Object> entry : messageBuffer.entrySet()) {
                 String msgId = entry.getKey();
-                List<ClientInfo> notAcked = clients.stream().filter(c -> !receivedAcks.get(msgId).contains(c.getUsername())).toList();
-                basicSend(myUser, msgId, entry.getValue(), notAcked);
+                basicSend(myUser, msgId, entry.getValue());
             }
             Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] Resent " + count + " messages....");
             return count;

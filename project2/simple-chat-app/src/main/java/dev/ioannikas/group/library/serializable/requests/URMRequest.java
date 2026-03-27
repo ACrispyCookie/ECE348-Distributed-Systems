@@ -1,6 +1,7 @@
 package dev.ioannikas.group.library.serializable.requests;
 
 import dev.ioannikas.group.GroupAPI;
+import dev.ioannikas.group.api.SerializableObject;
 import dev.ioannikas.group.gms.serializable.PacketTCP;
 
 import java.nio.ByteBuffer;
@@ -15,7 +16,12 @@ public class URMRequest {
     public URMRequest(String sender, String messageId, Object data) {
         this.sender = sender;
         this.messageId = messageId;
-        this.type = data instanceof TRMRequest ? Type.TRM_REQUEST : Type.TRM_NUMBER_REQUEST;
+        if (data instanceof TRMRequest)
+            this.type = Type.TRM_REQUEST;
+        else if (data instanceof TRMNumberRequest)
+            this.type = Type.TRM_NUMBER_REQUEST;
+        else
+            this.type = Type.OTHER;
         this.data = data;
     }
 
@@ -38,8 +44,10 @@ public class URMRequest {
         Object data;
         if (type == Type.TRM_REQUEST)
             data = TRMRequest.deserialize(api, buffer);
-        else
+        else if (type == Type.TRM_NUMBER_REQUEST)
             data = TRMNumberRequest.deserialize(buffer);
+        else
+            data = api.getDeserializer().apply(buffer);
         return new URMRequest(sender, sequenceNumber, data);
     }
 
@@ -49,12 +57,16 @@ public class URMRequest {
         buffer.putInt(packet.type.ordinal());
         if (packet.type == Type.TRM_REQUEST)
             TRMRequest.serialize((TRMRequest) packet.getData(), buffer);
-        else
+        else if (packet.type == Type.TRM_NUMBER_REQUEST)
             TRMNumberRequest.serialize((TRMNumberRequest) packet.getData(), buffer);
+        else
+            ((SerializableObject) packet.getData()).serialize(buffer);
+
     }
 
     enum Type {
         TRM_REQUEST,
-        TRM_NUMBER_REQUEST
+        TRM_NUMBER_REQUEST,
+        OTHER
     }
 }

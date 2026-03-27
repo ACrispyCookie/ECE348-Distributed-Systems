@@ -5,7 +5,7 @@ import java.time.format.DateTimeFormatter;
 
 public class Printer {
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-    private static final boolean DEBUG = false;
+    private static final boolean DEBUG = true;
 
     public static void printInfo(String message) {
         print("INFO", message);

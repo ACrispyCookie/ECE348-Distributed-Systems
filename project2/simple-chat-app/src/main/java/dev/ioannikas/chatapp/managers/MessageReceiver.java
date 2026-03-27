@@ -30,6 +30,7 @@ public class MessageReceiver extends Thread {
 
             } catch (ExecutionException e) {
                 e.printStackTrace();
+                System.exit(1);
             }
         }
     }
