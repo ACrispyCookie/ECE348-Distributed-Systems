@@ -4,6 +4,7 @@ import java.io.Serial;
 import java.io.Serializable;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 public class ClientInfo implements Serializable {
 
@@ -60,5 +61,24 @@ public class ClientInfo implements Serializable {
     @Override
     public String toString() {
         return "Username: " + username + " IP: " + ipAddress + " Port: " + port;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if(other == null)
+            return false;
+
+        if (other.getClass() != this.getClass())
+            return false;
+
+        final ClientInfo info = (ClientInfo) other;
+        if (!Objects.equals(this.username, info.username))
+            return false;
+
+
+        if (!Objects.equals(this.ipAddress, info.ipAddress))
+            return false;
+
+        return this.port == info.port;
     }
 }

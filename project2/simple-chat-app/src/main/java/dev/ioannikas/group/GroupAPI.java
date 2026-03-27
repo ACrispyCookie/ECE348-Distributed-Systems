@@ -1,8 +1,8 @@
 package dev.ioannikas.group;
 
+import dev.ioannikas.group.api.GroupMessagePair;
 import dev.ioannikas.group.api.JoinReply;
 import dev.ioannikas.group.api.LeaveReply;
-import dev.ioannikas.group.api.Pair;
 import dev.ioannikas.group.api.SerializableObject;
 import dev.ioannikas.group.library.GMSManager;
 import dev.ioannikas.group.library.MessageManager;
@@ -10,7 +10,6 @@ import dev.ioannikas.group.library.NetworkManager;
 import dev.ioannikas.group.gms.serializable.replies.GMSJoinReply;
 import dev.ioannikas.group.gms.serializable.replies.GMSLeaveReply;
 import dev.ioannikas.group.gms.serializable.replies.GMSUpdateReply;
-import dev.ioannikas.group.library.serializable.requests.NormalRequest;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -62,15 +61,16 @@ public class GroupAPI {
         if (!groups.containsKey(groupId))
             return -1;
 
-        return messageManager.send(groupId, message);
+        messageManager.send(groupId, groups.get(groupId), message);
+        return 0;
     }
 
-    public static Pair<Integer, Object> receive(List<Integer> groups) throws InterruptedException, ExecutionException {
-        NormalRequest reply = messageManager.receive(groups);
-        if (reply.getData() instanceof GMSUpdateReply update)
-            return new Pair<>(reply.getGroupId(), update.toApiVersion());
+    public static GroupMessagePair receive(List<Integer> groups) throws InterruptedException, ExecutionException {
+        GroupMessagePair reply = messageManager.receive(groups);
+        if (reply.getMessage() instanceof GMSUpdateReply update)
+            return new GroupMessagePair(reply.getGroupId(), update.toApiVersion());
         else
-            return new Pair<>(reply.getGroupId(), reply.getData());
+            return new GroupMessagePair(reply.getGroupId(), reply.getMessage());
     }
 
     public static NetworkManager getNetworkManager() {
@@ -83,6 +83,10 @@ public class GroupAPI {
 
     public static GMSManager getGmsManager() {
         return gmsManager;
+    }
+
+    public static String getUsername(int groupId) {
+        return groups.get(groupId);
     }
 
     public static Function<ByteBuffer, SerializableObject> getDeserializer() {

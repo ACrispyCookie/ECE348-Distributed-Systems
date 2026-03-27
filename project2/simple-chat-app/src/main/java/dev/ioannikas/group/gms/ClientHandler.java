@@ -22,7 +22,7 @@ import java.util.Objects;
 
 public class ClientHandler {
 
-    private static final int TIMEOUT = 60;
+    private static final int TIMEOUT = 600;
 
     private final SocketChannel channel;
     private final GroupManager manager;

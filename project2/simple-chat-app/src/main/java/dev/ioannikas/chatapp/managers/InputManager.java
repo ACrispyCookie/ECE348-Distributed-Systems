@@ -35,7 +35,8 @@ public class InputManager {
             }
 
             ChatMessage chatMessage = new ChatMessage(ChatApp.getChatManager().getUsername(selected), LocalDateTime.now(), line);
-            GroupAPI.send(selected, chatMessage);
+            if (GroupAPI.send(selected, chatMessage) == -1)
+                Printer.printErr("[ChatApp] You are not in this group! (How did we get here?)");
         }
     }
 

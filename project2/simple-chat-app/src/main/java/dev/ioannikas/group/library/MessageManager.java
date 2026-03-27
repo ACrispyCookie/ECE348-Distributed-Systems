@@ -1,11 +1,12 @@
 package dev.ioannikas.group.library;
 
+import dev.ioannikas.group.GroupAPI;
+import dev.ioannikas.group.api.GroupMessagePair;
 import dev.ioannikas.group.api.SerializableObject;
 import dev.ioannikas.group.gms.serializable.ClientInfo;
 import dev.ioannikas.group.library.catoc.CatocManager;
 import dev.ioannikas.group.library.serializable.PacketUDP;
 import dev.ioannikas.group.gms.serializable.replies.GMSUpdateReply;
-import dev.ioannikas.group.library.serializable.requests.GroupDataRequest;
 import dev.ioannikas.group.library.serializable.requests.NormalRequest;
 
 import java.util.*;
@@ -13,8 +14,8 @@ import java.util.concurrent.*;
 
 public class MessageManager {
 
-    private final ConcurrentMap<Integer, Queue<NormalRequest>> receivedPackets;
-    private final Map<List<Integer>, Queue<CompletableFuture<NormalRequest>>> waitingRequests;
+    private final ConcurrentMap<Integer, Queue<GroupMessagePair>> receivedPackets;
+    private final Map<List<Integer>, Queue<CompletableFuture<GroupMessagePair>>> waitingRequests;
     private final CatocManager catocManager;
 
     public MessageManager() {
@@ -23,37 +24,37 @@ public class MessageManager {
         this.catocManager = new CatocManager();
     }
 
-    public int send(int groupId, SerializableObject data) {
-        GroupDataRequest packet = new GroupDataRequest(groupId, data, 0);
-        catocManager.send(packet);
-        return 0;
+    public void send(int groupId, String username, SerializableObject data) {
+        catocManager.send(groupId, username, data);
     }
 
-    public NormalRequest receive(List<Integer> receivingList) throws InterruptedException, ExecutionException {
-        NormalRequest matched = requestMatches(receivingList);
+    public GroupMessagePair receive(List<Integer> receivingList) throws InterruptedException, ExecutionException {
+        GroupMessagePair matched = requestMatches(receivingList);
         if (matched != null)
             return matched;
 
-        CompletableFuture<NormalRequest> future = addRequest(receivingList);
+        CompletableFuture<GroupMessagePair> future = addRequest(receivingList);
         return future.get();
     }
 
     public synchronized void handleReceivedPacket(PacketUDP reply) {
         if (reply instanceof NormalRequest normal && normal.getData() instanceof GMSUpdateReply update) {
-            CompletableFuture<NormalRequest> waiting = requestWaiting(normal.getGroupId());
-            catocManager.updateGroup(update);
+            List<GroupMessagePair> completed = catocManager.updateGroup(update);
+            receivedPackets.computeIfAbsent(normal.getGroupId(), k -> new LinkedBlockingQueue<>()).addAll(completed);
+
+            CompletableFuture<GroupMessagePair> waiting = requestWaiting(normal.getGroupId());
             if (waiting != null) {
-                waiting.complete(normal);
+                waiting.complete(new GroupMessagePair(normal.getGroupId(), update));
             } else
-                receivedPackets.computeIfAbsent(normal.getGroupId(), k -> new LinkedBlockingQueue<>()).add(normal);
+                receivedPackets.computeIfAbsent(normal.getGroupId(), k -> new LinkedBlockingQueue<>()).add(new GroupMessagePair(normal.getGroupId(), update));
         } else if (reply instanceof NormalRequest normal) {
-            List<NormalRequest> ready = catocManager.processIncoming(normal); // Will get them from CATOC manager
-            for (NormalRequest req : ready) {
-                CompletableFuture<NormalRequest> waiting = requestWaiting(normal.getGroupId());
+            List<GroupMessagePair> ready = catocManager.receive(GroupAPI.getUsername(normal.getGroupId()), normal);
+            for (GroupMessagePair req : ready) {
+                CompletableFuture<GroupMessagePair> waiting = requestWaiting(normal.getGroupId());
                 if (waiting != null) {
                     waiting.complete(req);
                 } else
-                    receivedPackets.computeIfAbsent(normal.getGroupId(), k -> new LinkedBlockingQueue<>()).add(normal);
+                    receivedPackets.computeIfAbsent(normal.getGroupId(), k -> new LinkedBlockingQueue<>()).add(req);
             }
         }
     }
@@ -70,7 +71,7 @@ public class MessageManager {
         catocManager.shutdown();
     }
 
-    private synchronized CompletableFuture<NormalRequest> requestWaiting(int groupId) {
+    private synchronized CompletableFuture<GroupMessagePair> requestWaiting(int groupId) {
         List<Integer> selected = null;
 
         for (List<Integer> waiting : waitingRequests.keySet()) {
@@ -83,9 +84,9 @@ public class MessageManager {
         return selected != null ? waitingRequests.get(selected).remove() : null;
     }
 
-    private synchronized NormalRequest requestMatches(List<Integer> groups) {
+    private synchronized GroupMessagePair requestMatches(List<Integer> groups) {
         for (int group : groups) {
-            Queue<NormalRequest> queue = receivedPackets.get(group);
+            Queue<GroupMessagePair> queue = receivedPackets.get(group);
             if (queue == null)
                 continue;
 
@@ -96,10 +97,10 @@ public class MessageManager {
         return null;
     }
 
-    private synchronized CompletableFuture<NormalRequest> addRequest(List<Integer> groups) {
+    private synchronized CompletableFuture<GroupMessagePair> addRequest(List<Integer> groups) {
         waitingRequests.computeIfAbsent(groups, i -> new LinkedList<>());
 
-        CompletableFuture<NormalRequest> future = new CompletableFuture<>();
+        CompletableFuture<GroupMessagePair> future = new CompletableFuture<>();
         waitingRequests.get(groups).offer(future);
         return future;
     }

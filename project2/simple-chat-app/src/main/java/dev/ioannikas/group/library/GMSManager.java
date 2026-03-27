@@ -9,7 +9,6 @@ import dev.ioannikas.group.gms.serializable.replies.GMSReply;
 import dev.ioannikas.group.gms.serializable.requests.GMSJoinRequest;
 import dev.ioannikas.group.gms.serializable.requests.GMSLeaveRequest;
 import dev.ioannikas.group.gms.serializable.requests.GMSRequest;
-import dev.ioannikas.group.library.utility.Group;
 
 import java.io.IOException;
 import java.util.Map;

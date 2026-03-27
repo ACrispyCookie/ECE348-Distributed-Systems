@@ -3,7 +3,7 @@ package dev.ioannikas.chatapp.managers;
 import dev.ioannikas.chatapp.ChatApp;
 import dev.ioannikas.chatapp.model.ChatMessage;
 import dev.ioannikas.group.GroupAPI;
-import dev.ioannikas.group.api.Pair;
+import dev.ioannikas.group.api.GroupMessagePair;
 import dev.ioannikas.group.api.ViewUpdateMessage;
 
 import java.util.concurrent.ExecutionException;
@@ -20,12 +20,12 @@ public class MessageReceiver extends Thread {
     public void run() {
         while (!ChatApp.isShuttingDown() && !shutdown) {
             try {
-                Pair<Integer, Object> message = GroupAPI.receive(ChatApp.getChatManager().getGroups());
+                GroupMessagePair message = GroupAPI.receive(ChatApp.getChatManager().getGroups());
 
-                if (message.getValue() instanceof ViewUpdateMessage update) {
+                if (message.getMessage() instanceof ViewUpdateMessage update) {
                     handleUpdate(update);
                 } else {
-                    handleMessage(message.getKey(), (ChatMessage) message.getValue());
+                    handleMessage(message.getGroupId(), (ChatMessage) message.getMessage());
                 }
             } catch (InterruptedException ignored) {
 

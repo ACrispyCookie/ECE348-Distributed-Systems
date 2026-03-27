@@ -25,12 +25,14 @@ public class NormalRequest extends PacketUDP {
         return data;
     }
 
-    public static PacketUDP deserialize(ByteBuffer buffer) {
-        return GroupDataRequest.deserialize(buffer);
+    public static NormalRequest deserialize(ByteBuffer buffer) {
+        int groupId = buffer.getInt();
+        URMRequest request = URMRequest.deserialize(buffer);
+        return new NormalRequest(groupId, request);
     }
 
     public static void serialize(NormalRequest packet, ByteBuffer buffer) {
         buffer.putInt(packet.getGroupId());
-        GroupDataRequest.serialize((GroupDataRequest) packet, buffer);
+        URMRequest.serialize((URMRequest) packet.getData(), buffer);
     }
 }
