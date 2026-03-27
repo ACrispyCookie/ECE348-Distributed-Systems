@@ -18,3 +18,24 @@ dependencies {
 test {
     useJUnitPlatform()
 }
+
+tasks.named('jar') {
+    enabled=false
+    dependsOn('ChatApp', 'GMS')
+}
+
+tasks.register('ChatApp', Jar) {
+    archiveFileName = 'ChatApp.jar'
+    manifest {
+        attributes 'Main-Class': 'dev.ioannikas.chatapp.ChatApp'
+    }
+    from sourceSets.main.output
+}
+
+tasks.register('GMS', Jar) {
+    archiveFileName = 'GMS.jar'
+    manifest {
+        attributes 'Main-Class': 'dev.ioannikas.group.gms.GMS'
+    }
+    from sourceSets.main.output
+}
