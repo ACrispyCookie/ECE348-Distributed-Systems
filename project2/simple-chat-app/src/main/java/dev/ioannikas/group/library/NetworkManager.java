@@ -31,8 +31,8 @@ public class NetworkManager {
     public NetworkManager(String gmsIpAddress, int gmsPort, int appPort) throws IOException {
         this.ipAddress = findLocalIp();
         this.selector = Selector.open();
-        this.gmsConnection = new ConnectionTCP(selector, gmsIpAddress, gmsPort);
         this.normalConnection = new ConnectionUDP(selector, appPort);
+        this.gmsConnection = new ConnectionTCP(selector, gmsIpAddress, gmsPort);
         this.receiver = new Thread(this::receiver, "receiver");
         receiver.start();
     }

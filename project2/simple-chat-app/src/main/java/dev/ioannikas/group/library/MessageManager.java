@@ -40,7 +40,8 @@ public class MessageManager {
     public synchronized void handleReceivedPacket(PacketUDP reply) {
         if (reply instanceof NormalRequest normal && normal.getData() instanceof GMSUpdateReply update) {
             List<GroupMessagePair> completed = catocManager.updateGroup(update);
-            receivedPackets.computeIfAbsent(normal.getGroupId(), k -> new LinkedBlockingQueue<>()).addAll(completed);
+            if (!completed.isEmpty())
+                receivedPackets.computeIfAbsent(normal.getGroupId(), k -> new LinkedBlockingQueue<>()).addAll(completed);
 
             CompletableFuture<GroupMessagePair> waiting = requestWaiting(normal.getGroupId());
             if (waiting != null) {

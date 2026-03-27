@@ -28,6 +28,7 @@ public class CatocManager {
     }
 
     public synchronized List<GroupMessagePair> receive(String myUsername, NormalRequest request) {
+        Printer.printDebug("Received from " + request.getData() + " with " + request.getGroupId());
         return groups.get(request.getGroupId()).receive(myUsername, (URMRequest) request.getData())
                 .stream().map(o -> new GroupMessagePair(request.getGroupId(), o)).toList();
     }
@@ -41,7 +42,8 @@ public class CatocManager {
     }
 
     public synchronized List<GroupMessagePair> updateGroup(GMSUpdateReply reply) {
-        return groups.get(reply.getGroupId()).handleFailure(reply.getClient(), reply.getClientAction())
+        Printer.printDebug("Received from " + reply.getClient() + " with " + reply.getClientAction() + " and " + reply.getGroupId());
+        return groups.get(reply.getGroupId()).update(reply.getClient(), reply.getClientAction())
                 .stream().map(o -> new GroupMessagePair(reply.getGroupId(), o)).toList();
     }
 
@@ -110,9 +112,14 @@ public class CatocManager {
                     .map(ClientInfo::getUsername)
                     .collect(Collectors.toSet());
 
-            for (Map.Entry<String, Set<String>> entry : receivedAcks.entrySet()) {
-                if (entry.getValue().containsAll(usernames))
+            Iterator<Map.Entry<String, Set<String>>> iterator = receivedAcks.entrySet().iterator();
+            while (iterator.hasNext()) {
+                Map.Entry<String, Set<String>> entry = iterator.next();
+
+                if (entry.getValue().containsAll(usernames)) {
                     readyMsgs.add(messageBuffer.remove(entry.getKey()));
+                    iterator.remove();
+                }
             }
 
             return readyMsgs;
@@ -161,9 +168,11 @@ public class CatocManager {
             return urm.receive(myUser, request).stream().map(o -> ((TRMRequest) o).getData()).toList();
         }
 
-        public List<SerializableObject> handleFailure(ClientInfo user, GMSUpdateReply.Action action) {
+        public List<SerializableObject> update(ClientInfo user, GMSUpdateReply.Action action) {
             updateGroup(user, action);
-            return urm.handleFailure().stream().map(o -> ((TRMRequest) o).getData()).toList();
+            if (action == GMSUpdateReply.Action.LEFT)
+                return urm.handleFailure().stream().map(o -> ((TRMRequest) o).getData()).toList();
+            return new ArrayList<>();
         }
 
         private void updateGroup(ClientInfo user, GMSUpdateReply.Action action) {

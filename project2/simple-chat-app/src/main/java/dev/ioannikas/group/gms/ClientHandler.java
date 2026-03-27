@@ -127,6 +127,7 @@ public class ClientHandler {
                 if (address == channel.getRemoteAddress())
                     return;
                 ClientHandler clientHandler = GMS.getReceiver(address);
+                Printer.printDebug("Sending to " + clientHandler.groups.get(groupId) + " a packet of " + action + " for " + user);
                 clientHandler.sendReply(update);
             } catch (IOException e) {
                 Printer.printErr("Error sending update packet to " + address);
