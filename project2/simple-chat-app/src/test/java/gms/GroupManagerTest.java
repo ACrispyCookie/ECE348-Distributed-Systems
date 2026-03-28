@@ -1,3 +1,5 @@
+package gms;
+
 import dev.ioannikas.group.gms.utility.GroupManager;
 import dev.ioannikas.group.gms.serializable.ClientInfo;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,7 +30,7 @@ class GroupManagerTest {
     @Test
     void testAddToGroupSuccess() {
         int groupId = groupManager.findOrCreateGroup("TestGroup");
-        ClientInfo client = new ClientInfo("Alice", "127.0.0.1", 5000);
+        ClientInfo client = new ClientInfo("Alice", "127.0.0.1", 10000);
 
         GroupManager.ReturnCode result = groupManager.addToGroup(groupId, client);
 
@@ -39,8 +41,8 @@ class GroupManagerTest {
     @Test
     void testPreventDuplicateUsernames() {
         int groupId = groupManager.findOrCreateGroup("TestGroup");
-        ClientInfo client1 = new ClientInfo("Alice", "127.0.0.1", 5000);
-        ClientInfo client2 = new ClientInfo("Alice", "192.168.1.5", 5001); // Same username!
+        ClientInfo client1 = new ClientInfo("Alice", "127.0.0.1", 10000);
+        ClientInfo client2 = new ClientInfo("Alice", "192.168.1.5", 10000); // Same username!
 
         groupManager.addToGroup(groupId, client1);
         GroupManager.ReturnCode duplicateResult = groupManager.addToGroup(groupId, client2);
@@ -52,7 +54,7 @@ class GroupManagerTest {
     @Test
     void testLeaveGroup() {
         int groupId = groupManager.findOrCreateGroup("TestGroup");
-        groupManager.addToGroup(groupId, new ClientInfo("Bob", "127.0.0.1", 5000));
+        groupManager.addToGroup(groupId, new ClientInfo("Bob", "127.0.0.1", 10000));
 
         GroupManager.ReturnCode leaveResult = groupManager.removeFromGroup(groupId, "Bob");
         GroupManager.ReturnCode leaveAgain = groupManager.removeFromGroup(groupId, "Bob");

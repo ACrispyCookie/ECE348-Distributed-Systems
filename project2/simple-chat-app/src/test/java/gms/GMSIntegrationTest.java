@@ -33,8 +33,8 @@ class GMSIntegrationTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        client1 = new GroupAPI("127.0.0.1", GMS_PORT, 10200, ChatMessage::deserialize);
-        client2 = new GroupAPI("127.0.0.1", GMS_PORT, 10201, ChatMessage::deserialize);
+        client1 = new GroupAPI("127.0.0.1", GMS_PORT, 10200, false, ChatMessage::deserialize);
+        client2 = new GroupAPI("127.0.0.1", GMS_PORT, 10201, false, ChatMessage::deserialize);
     }
 
     @AfterEach

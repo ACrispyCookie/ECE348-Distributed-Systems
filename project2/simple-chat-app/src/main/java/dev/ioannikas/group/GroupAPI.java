@@ -29,12 +29,12 @@ public class GroupAPI {
 
     private final Map<Integer, String> groups;
 
-    public GroupAPI(String gmsAddress, int gmsPort, int appPort, Function<ByteBuffer, SerializableObject> deserializer) throws IOException {
+    public GroupAPI(String gmsAddress, int gmsPort, int appPort, boolean enableTrm, Function<ByteBuffer, SerializableObject> deserializer) throws IOException {
         shuttingDown = false;
         groups = new ConcurrentHashMap<>();
         networkManager = new NetworkManager(this, gmsAddress, gmsPort, appPort);
         gmsManager = new GMSManager(this);
-        messageManager = new MessageManager(this);
+        messageManager = new MessageManager(this, enableTrm);
         this.deserializer = deserializer;
     }
 

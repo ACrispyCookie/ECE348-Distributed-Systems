@@ -17,14 +17,15 @@ public class CatocManager {
 
     private final GroupAPI api;
     private final Map<Integer, TRMState> groups;
+    private final boolean trmEnabled;
 
     private final Thread retransmitter;
     private final long RESEND_TIMEOUT = 100;
 
-    public CatocManager(GroupAPI api) {
+    public CatocManager(GroupAPI api, boolean trmEnabled) {
         this.api = api;
         groups = new HashMap<>();
-
+        this.trmEnabled = trmEnabled;
         retransmitter = new Thread(this::retransmitter, "retransmitter");
         retransmitter.start();
     }
@@ -39,7 +40,7 @@ public class CatocManager {
     }
 
     public synchronized void addGroup(int groupId, List<ClientInfo> clients) {
-        groups.putIfAbsent(groupId, new TRMState(groupId, clients, this));
+        groups.putIfAbsent(groupId, new TRMState(groupId, clients, this, trmEnabled));
     }
 
     public synchronized void removeGroup(int groupId) {
@@ -280,38 +281,46 @@ public class CatocManager {
         private final int groupId;
         private final List<ClientInfo> clients;
         private final URMState urm;
+        private final boolean trmEnabled;
 
-        public TRMState(int groupId, List<ClientInfo> clients, Object condition) {
+        public TRMState(int groupId, List<ClientInfo> clients, Object condition, boolean trmEnabled) {
             this.sequenceNumber = 0;
             this.deliveryNumber = 0;
             this.delivered = 0;
             this.messages = new HashMap<>();
             this.deliveryOrder = new HashMap<>();
 
+            this.trmEnabled = trmEnabled;
             this.clients = new ArrayList<>(clients);
             this.groupId = groupId;
             urm = new URMState(groupId, this.clients, condition);
         }
 
         public void send(String myUser, SerializableObject data) {
-            sequenceNumber++;
-            urm.send(myUser, new TRMRequest(myUser + sequenceNumber, data));
-//            urm.send(myUser, data);
+            if (trmEnabled) {
+                sequenceNumber++;
+                urm.send(myUser, new TRMRequest(myUser + sequenceNumber, data));
+            } else {
+                urm.send(myUser, data);
+            }
         }
 
         public List<SerializableObject> receive(String myUser, NormalRequest request) {
-            List<Object> received = urm.receive(myUser, request);
+            if (trmEnabled) {
+                List<Object> received = urm.receive(myUser, request);
 
-            List<SerializableObject> ready = new ArrayList<>();
-            for (Object trmRequest : received) {
-                if (trmRequest instanceof TRMRequest msg)
-                    ready.addAll(receiveTRMMessage(myUser, msg));
-                else
-                    ready.addAll(receiveTRMNumber((TRMNumberRequest) trmRequest));
+                List<SerializableObject> ready = new ArrayList<>();
+                for (Object trmRequest : received) {
+                    if (trmRequest instanceof TRMRequest msg)
+                        ready.addAll(receiveTRMMessage(myUser, msg));
+                    else
+                        ready.addAll(receiveTRMNumber((TRMNumberRequest) trmRequest));
+                }
+
+                return ready;
+            } else {
+                return urm.receive(myUser, request).stream().map(o -> (SerializableObject) o).toList();
             }
-
-            return ready;
-//            return urm.receive(myUser, request).stream().map(o -> (SerializableObject) o).toList();
         }
 
         public int resend(String myUser) {
@@ -322,11 +331,15 @@ public class CatocManager {
             updateGroup(user, action);
 
             List<SerializableObject> ready = new ArrayList<>();
-            if (action == GMSUpdateReply.Action.LEFT) {
-                List<Object> received = urm.handleFailure(user.getUsername());
-                for (Object trmRequest : received) {
-                    ready.addAll(handleFault(myUser, trmRequest));
+            if (trmEnabled) {
+                if (action == GMSUpdateReply.Action.LEFT) {
+                    List<Object> received = urm.handleFailure(user.getUsername());
+                    for (Object trmRequest : received) {
+                        ready.addAll(handleFault(myUser, trmRequest));
+                    }
                 }
+            } else {
+                ready.addAll(urm.handleFailure(user.getUsername()).stream().map(o -> (SerializableObject) o).toList());
             }
             return ready;
         }

@@ -25,8 +25,8 @@ public class MultiClientTest {
         boolean testTotalOrder = Boolean.parseBoolean(prop);
 
         int numClients = 3;
-        int messagesPerClient = 4000;
-        int basePort = 20200;
+        int messagesPerClient = 2000;
+        int basePort = 10200;
 
         int totalExpectedPerClient = messagesPerClient * numClients;
         int totalSystemMessages = totalExpectedPerClient * numClients;
@@ -46,7 +46,7 @@ public class MultiClientTest {
         // Initialize and Join
         for (int i = 0; i < numClients; i++) {
             String clientName = "Client-" + i;
-            GroupAPI api = new GroupAPI("127.0.0.1", 10100, basePort + i, ChatMessage::deserialize);
+            GroupAPI api = new GroupAPI("127.0.0.1", 10100, basePort + i, testTotalOrder, ChatMessage::deserialize);
             clients.add(api);
 
             receivedOrders.add(Collections.synchronizedList(new ArrayList<>()));

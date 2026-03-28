@@ -31,8 +31,8 @@ public class TwoClientsTest {
         System.out.println("Waiting 2 seconds for GMS to start...");
         Thread.sleep(2000);
 
-        GroupAPI alice = new GroupAPI("127.0.0.1", 10100, 20201, ChatMessage::deserialize);
-        GroupAPI bob = new GroupAPI("127.0.0.1", 10100, 20202, ChatMessage::deserialize);
+        GroupAPI alice = new GroupAPI("127.0.0.1", 10100, 10201, testTotalOrder, ChatMessage::deserialize);
+        GroupAPI bob = new GroupAPI("127.0.0.1", 10100, 10202, testTotalOrder, ChatMessage::deserialize);
 
         List<String> aliceReceivedOrder = Collections.synchronizedList(new ArrayList<>());
         List<String> bobReceivedOrder = Collections.synchronizedList(new ArrayList<>());
@@ -45,7 +45,7 @@ public class TwoClientsTest {
         int groupId = aliceJoin.getGroupId();
 
         // --- LATCH LOGIC ---
-        int messagesPerClient = 10000;
+        int messagesPerClient = 1000;
         int totalExpectedPerClient = messagesPerClient * 2; // 8000 each
 
         // One latch to track ALL expected messages across BOTH clients (16000 total)

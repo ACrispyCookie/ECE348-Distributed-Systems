@@ -5,6 +5,7 @@ import dev.ioannikas.group.GroupAPI;
 import dev.ioannikas.group.api.GroupMessagePair;
 import dev.ioannikas.group.api.JoinReply;
 import dev.ioannikas.group.gms.GMS;
+import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -13,9 +14,12 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+
 public class SingleClientSpamTest {
 
-    public static void main(String[] args) throws Exception {
+    @Test
+    void runRapidBlastTest() throws Exception {
         System.out.println("--- Starting Single Client Spam Test ---");
 
         Thread gmsThread = new Thread(() -> GMS.main(new String[]{"10100"}));
@@ -23,7 +27,7 @@ public class SingleClientSpamTest {
         System.out.println("Waiting 2 seconds for GMS to start...");
         Thread.sleep(2000);
 
-        GroupAPI alice = new GroupAPI("127.0.0.1", 10100, 20201, ChatMessage::deserialize);
+        GroupAPI alice = new GroupAPI("127.0.0.1", 10100, 10201, false, ChatMessage::deserialize);
         List<String> receivedOrder = Collections.synchronizedList(new ArrayList<>());
 
         System.out.println("Alice connecting to group...");
@@ -76,6 +80,6 @@ public class SingleClientSpamTest {
         alice.shutdown();
         GMS.shutdown();
 
-        System.exit(returnExit);
+        assertFalse(returnExit == 1, "Test failed — see output above for details.");
     }
 }

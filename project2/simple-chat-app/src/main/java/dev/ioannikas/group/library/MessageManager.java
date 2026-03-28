@@ -19,11 +19,11 @@ public class MessageManager {
     private final GroupAPI api;
     private final CatocManager catocManager;
 
-    public MessageManager(GroupAPI api) {
+    public MessageManager(GroupAPI api, boolean enableTrm) {
         this.api = api;
         this.receivedPackets = new ConcurrentHashMap<>();
         this.waitingRequests = new HashMap<>();
-        this.catocManager = new CatocManager(api);
+        this.catocManager = new CatocManager(api, enableTrm);
     }
 
     public void send(int groupId, String username, SerializableObject data) {
