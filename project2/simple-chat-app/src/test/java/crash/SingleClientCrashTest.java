@@ -106,7 +106,7 @@ public class SingleClientCrashTest {
             System.out.println("Client-" + i + " received: " + receivedOrders.get(i).size() + " messages.");
         }
 
-        // We use Client-1 as the new "source of truth" since Client-0 is dead
+        // We use Client-1 as the reference
         List<String> referenceList = receivedOrders.get(1);
 
         if (referenceList.isEmpty()) {

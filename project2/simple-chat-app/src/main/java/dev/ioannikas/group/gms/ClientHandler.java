@@ -19,6 +19,7 @@ import java.nio.channels.SocketChannel;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 public class ClientHandler {
 
@@ -63,12 +64,15 @@ public class ClientHandler {
         for (int groupId : groups.keySet()) {
             String username = groups.get(groupId);
 
-            ClientInfo user = manager.getClients(groupId).stream().filter(c -> c.getUsername().equals(username)).findAny().get();
+            Optional<ClientInfo> user = manager.getClients(groupId).stream().filter(c -> c.getUsername().equals(username)).findAny();
+            if (user.isEmpty())
+                continue;
+
             GroupManager.ReturnCode code = manager.removeFromGroup(groupId, username);
             if (code != GroupManager.ReturnCode.SUCCESS)
                 Printer.printErr("Error while removing member " + channel.getRemoteAddress() + " [" + username + "] to group " + groupId + " (" + code + ")");
 
-            sendUpdatePacket(groupId, user, GMSUpdateReply.Action.LEFT);
+            sendUpdatePacket(groupId, user.get(), GMSUpdateReply.Action.LEFT);
         }
 
         groups.clear();
@@ -103,7 +107,13 @@ public class ClientHandler {
         String username = packet.getUsername();
         Printer.printInfo("Received leave from " + channel.getRemoteAddress() + "!" + " Username: " + username + " Group: " + groupId);
 
-        ClientInfo user = manager.getClients(groupId).stream().filter(c -> c.getUsername().equals(username)).findAny().get();
+        Optional<ClientInfo> user = manager.getClients(groupId).stream().filter(c -> c.getUsername().equals(username)).findAny();
+        if (user.isEmpty()) {
+            GMSLeaveReply reply = new GMSLeaveReply(groupId, packet.getFutureId(), GMSLeaveReply.FailReason.UNKNOWN);
+            sendReply(reply);
+            return;
+        }
+
         GroupManager.ReturnCode code = manager.removeFromGroup(groupId, username);
         if (code != GroupManager.ReturnCode.SUCCESS) {
             Printer.printErr("Error while removing member " + channel.getRemoteAddress() + " [" + packet.getUsername() + "] from group " + groupId + " (" + code + ")");
@@ -115,7 +125,7 @@ public class ClientHandler {
         groups.remove(groupId);
         GMSLeaveReply reply = new GMSLeaveReply(groupId, packet.getFutureId(), GMSLeaveReply.FailReason.NONE);
         sendReply(reply);
-        sendUpdatePacket(groupId, user, GMSUpdateReply.Action.LEFT);
+        sendUpdatePacket(groupId, user.get(), GMSUpdateReply.Action.LEFT);
     }
 
     private void sendUpdatePacket(int groupId, ClientInfo user, GMSUpdateReply.Action action) {

@@ -123,7 +123,7 @@ public class CatocTest {
             System.err.println("FAIL: Someone dropped messages! CATOC failed to deliver everything.");
             fail = true;
         } else {
-            // Validation 1: Verify TOTAL ORDER (Everyone matches Client-0)
+            // Validation 1: Verify Total
             List<String> referenceList = receivedOrders.get(0);
             boolean totalOrderMaintained = true;
 
@@ -140,7 +140,7 @@ public class CatocTest {
                 System.out.println("SUCCESS: Total Order (TRM) is correct across all " + numClients + " clients!");
 
                 if (!verifyCausality(referenceList)) {
-                    System.err.println("FAIL: Total order was achieved, but CAUSALITY was violated!");
+                    System.err.println("FAIL: Total order was achieved, but causality was violated!");
                     fail = true;
                 } else {
                     System.out.println("SUCCESS: Causal order is verified!");

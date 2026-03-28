@@ -90,7 +90,7 @@ public class MultiClientCrashTest {
                     for (int j = 1; j <= blastSize; j++) {
                         api.send(gId, new ChatMessage("Client-" + clientIndex, LocalDateTime.now(), "Msg-" + clientIndex + "-" + j));
 
-                        // If this is Client-0 and we reached the crash point, pull the plug!
+                        // If this is Client-0 and we reached the crash point
                         if (clientIndex == 0 && j == crashPoint) {
                             System.err.println("Client-0 crashed!");
                             api.shutdown();
@@ -120,7 +120,7 @@ public class MultiClientCrashTest {
             System.out.println("Client-" + i + " received: " + receivedOrders.get(i).size() + " total messages.");
         }
 
-        // We use Client-1 as the new "source of truth"
+        // We use Client-1
         List<String> referenceList = receivedOrders.get(1);
 
         if (referenceList.isEmpty()) {
