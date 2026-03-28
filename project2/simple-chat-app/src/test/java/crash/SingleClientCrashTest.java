@@ -42,7 +42,7 @@ public class SingleClientCrashTest {
         for (int i = 0; i < numClients; i++) {
             String clientName = "Client-" + i;
 
-            GroupAPI api = new GroupAPI("127.0.0.1", 10100, basePort + i, testTotalOrder, ChatMessage::deserialize);
+            GroupAPI api = new GroupAPI("127.0.0.1", 10100, basePort + i, testTotalOrder, false, ChatMessage::deserialize);
             clients.add(api);
 
             receivedOrders.add(Collections.synchronizedList(new ArrayList<>()));

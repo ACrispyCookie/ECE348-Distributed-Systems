@@ -11,6 +11,7 @@ import dev.ioannikas.group.library.serializable.requests.*;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 public class CatocManager {
@@ -18,20 +19,22 @@ public class CatocManager {
     private final GroupAPI api;
     private final Map<Integer, TRMState> groups;
     private final boolean trmEnabled;
+    private final boolean crmEnabled;
 
     private final Thread retransmitter;
     private final long RESEND_TIMEOUT = 100;
 
-    public CatocManager(GroupAPI api, boolean trmEnabled) {
+    public CatocManager(GroupAPI api, boolean trmEnabled, boolean crmEnabled) {
         this.api = api;
         groups = new HashMap<>();
         this.trmEnabled = trmEnabled;
+        this.crmEnabled = crmEnabled;
         retransmitter = new Thread(this::retransmitter, "retransmitter");
         retransmitter.start();
     }
 
-    public synchronized void send(int groupId, String myUsername, SerializableObject data) {
-        groups.get(groupId).send(myUsername, data);
+    public synchronized CompletableFuture<Integer> send(int groupId, String myUsername, SerializableObject data) {
+        return groups.get(groupId).send(myUsername, data);
     }
 
     public synchronized List<GroupMessagePair> receive(String myUsername, NormalRequest request) {
@@ -40,7 +43,7 @@ public class CatocManager {
     }
 
     public synchronized void addGroup(int groupId, List<ClientInfo> clients) {
-        groups.putIfAbsent(groupId, new TRMState(groupId, clients, this, trmEnabled));
+        groups.putIfAbsent(groupId, new TRMState(groupId, clients, this, trmEnabled, crmEnabled));
     }
 
     public synchronized void removeGroup(int groupId) {
@@ -277,32 +280,45 @@ public class CatocManager {
         private int deliveryNumber;
         private final Map<String, SerializableObject> messages;
         private final Map<Integer, String> deliveryOrder;
+        private String sendRequestId;
+        private CompletableFuture<Integer> sendRequest;
 
         private final int groupId;
         private final List<ClientInfo> clients;
         private final URMState urm;
         private final boolean trmEnabled;
+        private final boolean crmEnabled;
 
-        public TRMState(int groupId, List<ClientInfo> clients, Object condition, boolean trmEnabled) {
+        public TRMState(int groupId, List<ClientInfo> clients, Object condition, boolean trmEnabled, boolean crmEnabled) {
             this.sequenceNumber = 0;
             this.deliveryNumber = 0;
             this.delivered = 0;
             this.messages = new HashMap<>();
             this.deliveryOrder = new HashMap<>();
+            this.sendRequest = null;
+            this.sendRequestId = null;
 
             this.trmEnabled = trmEnabled;
+            this.crmEnabled = crmEnabled;
             this.clients = new ArrayList<>(clients);
             this.groupId = groupId;
             urm = new URMState(groupId, this.clients, condition);
         }
 
-        public void send(String myUser, SerializableObject data) {
+        public CompletableFuture<Integer> send(String myUser, SerializableObject data) {
             if (trmEnabled) {
+                if (crmEnabled) {
+                    sendRequestId = myUser + (sequenceNumber + 1);
+                    sendRequest = new CompletableFuture<>();
+                }
                 sequenceNumber++;
                 urm.send(myUser, new TRMRequest(myUser + sequenceNumber, data));
+
+                return sendRequest;
             } else {
                 urm.send(myUser, data);
             }
+            return sendRequest;
         }
 
         public List<SerializableObject> receive(String myUser, NormalRequest request) {
@@ -311,10 +327,21 @@ public class CatocManager {
 
                 List<SerializableObject> ready = new ArrayList<>();
                 for (Object trmRequest : received) {
-                    if (trmRequest instanceof TRMRequest msg)
+                    String msgId;
+
+                    if (trmRequest instanceof TRMRequest msg) {
                         ready.addAll(receiveTRMMessage(myUser, msg));
-                    else
+                        msgId = msg.getMessageId();
+                    } else {
                         ready.addAll(receiveTRMNumber((TRMNumberRequest) trmRequest));
+                        msgId = ((TRMNumberRequest) trmRequest).getMessageId();
+                    }
+
+                    if (sendRequestId != null && sendRequestId.equals(msgId)) {
+                        sendRequest.complete(0);
+                        sendRequestId = null;
+                        sendRequest = null;
+                    }
                 }
 
                 return ready;

@@ -20,6 +20,7 @@ public class ConnectionUDP {
     }
 
     public void close() throws IOException {
+        channel.socket().close();
         channel.close();
     }
 

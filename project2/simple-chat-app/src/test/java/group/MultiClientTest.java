@@ -46,7 +46,7 @@ public class MultiClientTest {
         // Initialize and Join
         for (int i = 0; i < numClients; i++) {
             String clientName = "Client-" + i;
-            GroupAPI api = new GroupAPI("127.0.0.1", 10100, basePort + i, testTotalOrder, ChatMessage::deserialize);
+            GroupAPI api = new GroupAPI("127.0.0.1", 10100, basePort + i, testTotalOrder, true, ChatMessage::deserialize);
             clients.add(api);
 
             receivedOrders.add(Collections.synchronizedList(new ArrayList<>()));

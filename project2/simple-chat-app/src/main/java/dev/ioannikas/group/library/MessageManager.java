@@ -19,15 +19,28 @@ public class MessageManager {
     private final GroupAPI api;
     private final CatocManager catocManager;
 
-    public MessageManager(GroupAPI api, boolean enableTrm) {
+    public MessageManager(GroupAPI api, boolean enableTrm, boolean enableCrm) {
         this.api = api;
         this.receivedPackets = new ConcurrentHashMap<>();
         this.waitingRequests = new HashMap<>();
-        this.catocManager = new CatocManager(api, enableTrm);
+        this.catocManager = new CatocManager(api, enableTrm, enableCrm);
     }
 
     public void send(int groupId, String username, SerializableObject data) {
-        catocManager.send(groupId, username, data);
+        CompletableFuture<Integer> future = catocManager.send(groupId, username, data);
+
+        if (future == null) return;
+
+        while(!api.isShuttingDown()) {
+            try {
+                future.get();
+                break;
+            } catch (InterruptedException ignored) {
+
+            } catch (ExecutionException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     public GroupMessagePair receive(List<Integer> receivingList) throws InterruptedException, ExecutionException {

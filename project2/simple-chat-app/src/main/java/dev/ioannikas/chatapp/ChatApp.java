@@ -22,7 +22,7 @@ public class ChatApp {
         AppConfig config = parseArguments(args);
 
         try {
-            api = new GroupAPI(config.getGmsIp(), config.getGmsPort(), config.getAppPort(), config.isTrmEnabled(), ChatMessage::deserialize);
+            api = new GroupAPI(config.getGmsIp(), config.getGmsPort(), config.getAppPort(), config.isTrmEnabled(), config.isCrmEnabled(), ChatMessage::deserialize);
         } catch (IOException e) {
             Printer.printErr("[ChatApp] Error initializing GMS! Is the GMS running?");
             e.printStackTrace();
@@ -65,12 +65,14 @@ public class ChatApp {
         private final int gmsPort;
         private final int appPort;
         private final boolean trmEnabled;
+        private final boolean crmEnabled;
 
-        public AppConfig(String gmsIp, int gmsPort, int appPort, boolean trmEnabled) {
+        public AppConfig(String gmsIp, int gmsPort, int appPort, boolean trmEnabled, boolean crmEnabled) {
             this.gmsIp = gmsIp;
             this.gmsPort = gmsPort;
             this.appPort = appPort;
             this.trmEnabled = trmEnabled;
+            this.crmEnabled = crmEnabled;
         }
 
         public String getGmsIp() { return gmsIp; }
@@ -79,11 +81,12 @@ public class ChatApp {
         public boolean isTrmEnabled() {
             return trmEnabled;
         }
+        public boolean isCrmEnabled() {
+            return crmEnabled;
+        }
     }
 
     private static AppConfig parseArguments(String[] args) {
-        int defaultAppPort = 0;
-
         if (args.length >= 2 && args.length <= 4) {
             try {
                 String ip = args[0];
@@ -92,14 +95,17 @@ public class ChatApp {
                 String flag = null;
 
                 for (int i = 2; i < args.length; i++) {
-                    if (args[i].length() == 1 && Character.isLetter(args[i].charAt(0))) {
+                    if (args[i].matches("[tc]+")) {
                         flag = args[i];
                     } else {
                         appPort = Integer.parseInt(args[i]);
                     }
                 }
 
-                return new AppConfig(ip, port, appPort, flag == null);
+                boolean trmEnabled = flag == null || !flag.contains("t");
+                boolean crmEnabled = flag == null || !flag.contains("c");
+
+                return new AppConfig(ip, port, appPort, trmEnabled, crmEnabled);
             } catch (NumberFormatException e) {
                 Printer.printErr("[ChatApp] Invalid port number provided in arguments. Exiting.");
                 System.exit(1);
@@ -133,7 +139,10 @@ public class ChatApp {
                 flag = content.split("\"flag\"\\s*:\\s*\"")[1].split("\"")[0];
             }
 
-            return new AppConfig(ip, port, appPort, flag == null);
+            boolean trmEnabled = flag == null || !flag.contains("t");
+            boolean crmEnabled = flag == null || !flag.contains("c");
+
+            return new AppConfig(ip, port, appPort, trmEnabled, crmEnabled);
         } catch (Exception e) {
             Printer.printErr("[ChatApp] Failed to read or parse config file: " + filePath);
             System.exit(1);
@@ -143,7 +152,7 @@ public class ChatApp {
 
     private static void printUsage() {
         System.out.println("Usage:");
-        System.out.println("  java -jar simple-chat-app.jar <GMS_IP> <GMS_PORT> [APP_UDP_PORT] [u]");
+        System.out.println("  java -jar simple-chat-app.jar <GMS_IP> <GMS_PORT> [APP_UDP_PORT] [tc]");
         System.out.println("  java -jar simple-chat-app.jar <path_to_config.json>");
     }
 }

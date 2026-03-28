@@ -43,7 +43,7 @@ class GMSChaosTest {
     @BeforeEach
     void setUp() throws Exception {
         for (int i = 0; i < NUM_CLIENTS; i++) {
-            GroupAPI client = new GroupAPI("127.0.0.1", GMS_PORT, 10200 + i, false, ChatMessage::deserialize);
+            GroupAPI client = new GroupAPI("127.0.0.1", GMS_PORT, 10200 + i, false, false, ChatMessage::deserialize);
             clients.add(client);
             clientActiveGroups.put(client, new CopyOnWriteArrayList<>());
         }
@@ -116,9 +116,8 @@ class GMSChaosTest {
         assertTrue(failedOperations.get() < (numOperations * 0.1),
                 "Too many operations failed! Thread-safety issues likely in GMS.");
 
-        // --- THE SURVIVOR CHECK ---
         // Let's verify the server isn't frozen.
-        GroupAPI testClient = new GroupAPI("127.0.0.1", GMS_PORT, 7777, false, ChatMessage::deserialize);
+        GroupAPI testClient = new GroupAPI("127.0.0.1", GMS_PORT, 7777, false, false, ChatMessage::deserialize);
         JoinReply finalJoin = testClient.join("SurvivorGroup", "Survivor");
 
         assertNotNull(finalJoin, "Server stopped responding to joins after chaos test!");

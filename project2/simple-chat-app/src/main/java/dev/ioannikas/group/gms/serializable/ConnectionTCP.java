@@ -20,6 +20,7 @@ public class ConnectionTCP {
     }
 
     public void close() throws IOException {
+        channel.socket().close();
         channel.close();
     }
 
