@@ -3,7 +3,6 @@ package dev.ioannikas.chatapp.managers;
 import dev.ioannikas.chatapp.ChatApp;
 import dev.ioannikas.chatapp.model.ChatMessage;
 import dev.ioannikas.chatapp.utility.Printer;
-import dev.ioannikas.group.GroupAPI;
 
 import java.util.*;
 
@@ -57,8 +56,8 @@ public class ChatManager {
         return groupId;
     }
 
-    public synchronized List<Integer> getGroups() {
-        return chats.keySet().stream().toList();
+    public synchronized Set<Integer> getGroups() {
+        return new HashSet<>(chats.keySet());
     }
 
     public synchronized String getUsername(int groupId) {

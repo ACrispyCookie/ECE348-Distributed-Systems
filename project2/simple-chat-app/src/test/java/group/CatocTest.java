@@ -65,7 +65,7 @@ public class CatocTest {
             new Thread(() -> {
                 try {
                     while (!api.isShuttingDown()) {
-                        GroupMessagePair pair = api.receive(List.of(gId));
+                        GroupMessagePair pair = api.receive(Set.of(gId));
                         if (pair.getMessage() instanceof ChatMessage msg) {
                             receivedOrders.get(clientIndex).add(msg.getMessage());
                             receiveLatch.countDown();

@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -28,7 +29,7 @@ public class MultiClientCrashTest {
         int crashPoint = 2800;
         int basePort = 10200;
 
-        System.out.println("--- Starting " + (testTotalOrder ? "TRM" : "URM") + " Concurrent Crash Test with " + numClients + " clients ---");
+        System.out.println("--- Starting " + (testTotalOrder ? "TRM" : "URM") + " Concurrent crash test with " + numClients + " clients ---");
 
         Thread gmsThread = new Thread(() -> GMS.main(new String[]{"10100"}));
         gmsThread.start();
@@ -62,7 +63,7 @@ public class MultiClientCrashTest {
             new Thread(() -> {
                 try {
                     while (!api.isShuttingDown()) {
-                        GroupMessagePair pair = api.receive(List.of(gId));
+                        GroupMessagePair pair = api.receive(Set.of(gId));
                         if (pair.getMessage() instanceof ChatMessage msg) {
                             receivedOrders.get(clientIndex).add(msg.getMessage());
                         }

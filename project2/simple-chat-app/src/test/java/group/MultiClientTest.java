@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -25,7 +26,7 @@ public class MultiClientTest {
         boolean testTotalOrder = Boolean.parseBoolean(prop);
 
         int numClients = 3;
-        int messagesPerClient = 2000;
+        int messagesPerClient = 10000;
         int basePort = 10200;
 
         int totalExpectedPerClient = messagesPerClient * numClients;
@@ -71,7 +72,7 @@ public class MultiClientTest {
             new Thread(() -> {
                 try {
                     while (!api.isShuttingDown()) {
-                        GroupMessagePair pair = api.receive(List.of(gId));
+                        GroupMessagePair pair = api.receive(Set.of(gId));
                         if (pair.getMessage() instanceof ChatMessage msg) {
                             receivedOrders.get(clientIndex).add(msg.getMessage());
                             receiveLatch.countDown();

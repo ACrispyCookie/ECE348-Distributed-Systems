@@ -13,8 +13,8 @@ import dev.ioannikas.group.gms.serializable.replies.GMSUpdateReply;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
@@ -65,7 +65,7 @@ public class GroupAPI {
         return 0;
     }
 
-    public GroupMessagePair receive(List<Integer> groups) throws InterruptedException, ExecutionException {
+    public GroupMessagePair receive(Set<Integer> groups) throws InterruptedException, ExecutionException {
         GroupMessagePair reply = messageManager.receive(groups);
         if (reply.getMessage() instanceof GMSUpdateReply update)
             return new GroupMessagePair(reply.getGroupId(), update.toApiVersion());

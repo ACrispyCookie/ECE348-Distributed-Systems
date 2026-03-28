@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
@@ -62,7 +63,7 @@ public class SingleClientCrashTest {
             new Thread(() -> {
                 try {
                     while (!api.isShuttingDown()) {
-                        GroupMessagePair pair = api.receive(List.of(gId));
+                        GroupMessagePair pair = api.receive(Set.of(gId));
                         if (pair.getMessage() instanceof ChatMessage msg) {
                             receivedOrders.get(clientIndex).add(msg.getMessage());
                         }
@@ -96,7 +97,7 @@ public class SingleClientCrashTest {
         kamikazeThread.join(); // Wait for Client-0 to finish crashing
 
         System.out.println("Waiting 10 seconds...");
-        Thread.sleep(120000); // Fixed wait because we don't know exactly how many messages survived
+        Thread.sleep(30000); // Fixed wait because we don't know exactly how many messages survived
 
         System.out.println("\n--- TEST RESULTS ---");
         boolean fail = false;

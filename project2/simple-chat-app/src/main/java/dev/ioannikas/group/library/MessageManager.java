@@ -15,7 +15,7 @@ import java.util.concurrent.*;
 public class MessageManager {
 
     private final ConcurrentMap<Integer, Queue<GroupMessagePair>> receivedPackets;
-    private final Map<List<Integer>, Queue<CompletableFuture<GroupMessagePair>>> waitingRequests;
+    private final Map<Set<Integer>, Queue<CompletableFuture<GroupMessagePair>>> waitingRequests;
     private final GroupAPI api;
     private final CatocManager catocManager;
 
@@ -43,7 +43,7 @@ public class MessageManager {
         }
     }
 
-    public GroupMessagePair receive(List<Integer> receivingList) throws InterruptedException, ExecutionException {
+    public GroupMessagePair receive(Set<Integer> receivingList) throws InterruptedException, ExecutionException {
         CompletableFuture<GroupMessagePair> future;
 
         synchronized (this) {
@@ -54,7 +54,16 @@ public class MessageManager {
             future = addRequest(receivingList);
         }
 
-        return future.get();
+        try {
+            return future.get();
+        } catch (InterruptedException e) {
+            synchronized (this) {
+                for (Queue<CompletableFuture<GroupMessagePair>> queue : waitingRequests.values()) {
+                    queue.remove(future);
+                }
+            }
+            throw e;
+        }
     }
 
     public synchronized void handleReceivedPacket(PacketUDP reply) {
@@ -93,9 +102,9 @@ public class MessageManager {
     }
 
     private CompletableFuture<GroupMessagePair> requestWaiting(int groupId) {
-        List<Integer> selected = null;
+        Set<Integer> selected = null;
 
-        for (List<Integer> waiting : waitingRequests.keySet()) {
+        for (Set<Integer> waiting : waitingRequests.keySet()) {
             if (waiting.contains(groupId) && !waitingRequests.get(waiting).isEmpty()) {
                 selected = waiting;
                 break;
@@ -105,7 +114,7 @@ public class MessageManager {
         return selected != null ? waitingRequests.get(selected).remove() : null;
     }
 
-    private GroupMessagePair requestMatches(List<Integer> groups) {
+    private GroupMessagePair requestMatches(Set<Integer> groups) {
         for (int group : groups) {
             Queue<GroupMessagePair> queue = receivedPackets.get(group);
             if (queue == null)
@@ -118,7 +127,7 @@ public class MessageManager {
         return null;
     }
 
-    private synchronized CompletableFuture<GroupMessagePair> addRequest(List<Integer> groups) {
+    private synchronized CompletableFuture<GroupMessagePair> addRequest(Set<Integer> groups) {
         waitingRequests.computeIfAbsent(groups, i -> new LinkedList<>());
 
         CompletableFuture<GroupMessagePair> future = new CompletableFuture<>();

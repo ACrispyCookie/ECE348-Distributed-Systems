@@ -6,7 +6,7 @@ import dev.ioannikas.group.api.JoinReply;
 import dev.ioannikas.group.gms.GMS;
 import org.junit.jupiter.api.*;
 
-import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -63,7 +63,7 @@ class GMSIntegrationTest {
         int groupId = client2.join("Chat", "User2").getGroupId();
         client1.leave(groupId);
 
-        Object updatePacket = client2.receive(List.of(groupId));
+        Object updatePacket = client2.receive(Set.of(groupId));
         assertNotNull(updatePacket, "Client2 should receive a view update after Client1 leaves");
     }
 }
