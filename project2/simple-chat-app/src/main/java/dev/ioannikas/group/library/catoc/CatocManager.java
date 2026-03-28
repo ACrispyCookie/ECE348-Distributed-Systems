@@ -110,8 +110,6 @@ public class CatocManager {
 
         public void send(String myUser, URMRequest msg) {
             for (ClientInfo info : clients) {
-                // TODO Optimization: Don't send to self (need to change upper layers)
-
                 int seqNum = sequenceNumbers.merge(info.getUsername(), 1, (current, start) -> current + 1);
                 pending.computeIfAbsent(info.getUsername(), k -> new HashMap<>()).put(seqNum, msg);
 
@@ -119,7 +117,6 @@ public class CatocManager {
                 basicSend(bmReq, info);
             }
 
-            // Wake up retransmitter
             synchronized (retrConditional) { retrConditional.notifyAll(); }
         }
 
@@ -409,10 +406,7 @@ public class CatocManager {
         private List<SerializableObject> receiveTRMNumber(TRMNumberRequest request) {
             Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] (Group " + groupId + ") Received TRM Number with ID " + request.getMessageId() + " with number " + request.getDeliveryNumber());
 
-            /* This is correct since we have implemented URM and
-               can assume that no messages are in transmit when someone joins
-               even if no messages are sent and everyone crashes
-               the chat continues with a reset delivery number*/
+            /* TODO Fix newly joined member not having up-to-date delivery numbers*/
 //            if (this.delivered == 0 && request.getDeliveryNumber() > 1)
 //                this.delivered = request.getDeliveryNumber() - 1;
 

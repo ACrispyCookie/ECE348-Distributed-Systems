@@ -5,10 +5,8 @@ import dev.ioannikas.group.GroupAPI;
 import dev.ioannikas.group.api.GroupMessagePair;
 import dev.ioannikas.group.gms.GMS;
 import dev.ioannikas.group.gms.serializable.PacketTCP;
-// IMPORTANT: Ensure this path matches your actual project structure
 import dev.ioannikas.group.gms.serializable.requests.GMSJoinRequest;
 
-import dev.ioannikas.group.gms.serializable.requests.GMSRequest;
 import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;
