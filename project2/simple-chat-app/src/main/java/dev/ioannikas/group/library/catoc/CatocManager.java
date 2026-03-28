@@ -6,10 +6,7 @@ import dev.ioannikas.group.api.GroupMessagePair;
 import dev.ioannikas.group.api.SerializableObject;
 import dev.ioannikas.group.gms.serializable.ClientInfo;
 import dev.ioannikas.group.gms.serializable.replies.GMSUpdateReply;
-import dev.ioannikas.group.library.serializable.requests.NormalRequest;
-import dev.ioannikas.group.library.serializable.requests.TRMNumberRequest;
-import dev.ioannikas.group.library.serializable.requests.TRMRequest;
-import dev.ioannikas.group.library.serializable.requests.URMRequest;
+import dev.ioannikas.group.library.serializable.requests.*;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -37,7 +34,7 @@ public class CatocManager {
     }
 
     public synchronized List<GroupMessagePair> receive(String myUsername, NormalRequest request) {
-        return groups.get(request.getGroupId()).receive(myUsername, (URMRequest) request.getData())
+        return groups.get(request.getGroupId()).receive(myUsername, request)
                 .stream().map(o -> new GroupMessagePair(request.getGroupId(), o)).toList();
     }
 
@@ -88,6 +85,89 @@ public class CatocManager {
         }
     }
 
+    private class BMState {
+        private Map<String, Integer> sequenceNumbers;
+        private Map<String, Map<Integer, URMRequest>> pending;
+
+        private int groupId;
+        private final List<ClientInfo> clients;
+        private final Object retrConditional;
+
+        public BMState(int groupId, List<ClientInfo> clients, Object retrConditional) {
+            this.sequenceNumbers = new HashMap<>();
+            this.pending = new HashMap<>();
+            this.groupId = groupId;
+            this.clients = clients;
+            this.retrConditional = retrConditional;
+        }
+
+        public void send(String myUser, URMRequest msg) {
+            for (ClientInfo info : clients) {
+                // TODO Optimization: Don't send to self (need to change upper layers)
+
+                int seqNum = sequenceNumbers.merge(info.getUsername(), 1, (current, start) -> current + 1);
+                pending.computeIfAbsent(info.getUsername(), k -> new HashMap<>()).put(seqNum, msg);
+
+                BMRequest bmReq = new BMRequest(myUser, seqNum, msg);
+                basicSend(bmReq, info);
+            }
+
+            // Wake up retransmitter
+            synchronized (retrConditional) { retrConditional.notifyAll(); }
+        }
+
+        public URMRequest receive(String myUser, NormalRequest normal) {
+            Object payload = normal.getData();
+            if (payload instanceof BMRequest req) {
+//                Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] (Group " + groupId + ") Received BM Request from " + req.getSender() + " with ID " + req.getSequenceNumber());
+                Optional<ClientInfo> sender = clients.stream()
+                        .filter(c -> c.getUsername().equals(req.getSender()))
+                        .findFirst();
+
+                if (sender.isPresent()) {
+                    basicSend(new BMAckRequest(myUser, req.getSequenceNumber()), sender.get());
+                    return req.getData();
+                }
+            } else if (payload instanceof BMAckRequest ack) {
+//                Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] (Group " + groupId + ") Received BM ACKRequest from " + ack.getSender() + " with ID " + ack.getSequenceNumber());
+                Map<Integer, URMRequest> userPending = pending.get(ack.getSender());
+                if (userPending != null) {
+                    userPending.remove(ack.getSequenceNumber());
+                }
+                return null;
+            }
+            return null;
+        }
+
+        public int resend(String myUser) {
+            int count = 0;
+            for (String user : pending.keySet()) {
+                Optional<ClientInfo> sender = clients.stream()
+                        .filter(c -> c.getUsername().equals(user))
+                        .findFirst();
+
+                if (sender.isPresent()) {
+                    Set<Map.Entry<Integer, URMRequest>> entrySet = pending.get(user).entrySet();
+                    count += entrySet.size();
+                    for (Map.Entry<Integer, URMRequest> toSend : entrySet) {
+                        BMRequest bmReq = new BMRequest(myUser, toSend.getKey(), toSend.getValue());
+                        basicSend(bmReq, sender.get());
+                    }
+                }
+            }
+            return count;
+        }
+
+        private void basicSend(Object payload, ClientInfo target) {
+            try {
+                NormalRequest request = new NormalRequest(groupId, payload);
+                api.getNetworkManager().sendNormal(request, new InetSocketAddress(target.getIpAddress(), target.getPort()));
+            } catch (IOException e) {
+                Printer.printErr("[BMState] Error sending UDP packet...");
+            }
+        }
+    }
+
     private class URMState {
         private int sequenceNumber;
         private final Set<String> receivedMessages; // TODO think about storing something else per client
@@ -96,7 +176,7 @@ public class CatocManager {
 
         private final int groupId;
         private final List<ClientInfo> clients;
-        private final Object retransmissionCondition;
+        private final BMState bm;
 
         public URMState(int groupId, List<ClientInfo> clients, Object condition) {
             this.sequenceNumber = 0;
@@ -106,26 +186,26 @@ public class CatocManager {
 
             this.groupId = groupId;
             this.clients = clients;
-            this.retransmissionCondition = condition;
+            this.bm = new BMState(groupId, clients, condition);
         }
 
         public void send(String myUser, Object data) {
             sequenceNumber++;
             // TODO Figure out if we rely on UDP loopback or else add it to the messageBuffer
-            String msgId = myUser + sequenceNumber;
+//            String msgId = myUser + sequenceNumber;
+//
+//            receivedMessages.add(msgId);
+//            messageBuffer.put(msgId, data);
+//            receivedAcks.put(msgId, new HashSet<>());
 
-            receivedMessages.add(msgId);
-            messageBuffer.put(msgId, data);
-            receivedAcks.put(msgId, new HashSet<>());
-
-            // Wake up the retransmitter
-            synchronized (retransmissionCondition) {
-                retransmissionCondition.notifyAll();
-            }
-            basicSend(myUser, myUser + sequenceNumber, data);
+            bm.send(myUser, new URMRequest(myUser, myUser + sequenceNumber, data));
         }
 
-        public List<Object> receive(String myUser, URMRequest request) {
+        public List<Object> receive(String myUser, NormalRequest normal) {
+            URMRequest request = bm.receive(myUser, normal);
+            if (request == null)
+                return new ArrayList<>();
+
             Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] (Group " + groupId + ") Received URM Request from " + request.getSender() + " with ID " + request.getMessageId());
             String msgId = request.getMessageId();
             String sender = request.getSender();
@@ -138,12 +218,8 @@ public class CatocManager {
                 receivedMessages.add(msgId);
                 messageBuffer.put(msgId, request.getData());
 
-                synchronized (retransmissionCondition) {
-                    retransmissionCondition.notifyAll();
-                }
-
                 if (!sender.equals(myUser))
-                    basicSend(myUser, msgId, request.getData());
+                    bm.send(myUser, new URMRequest(myUser, msgId, request.getData()));
             }
 
             receivedAcks.computeIfAbsent(msgId, k -> new HashSet<>()).add(sender);
@@ -160,14 +236,7 @@ public class CatocManager {
         }
 
         public int resend(String myUser) {
-            int count = messageBuffer.size();
-            Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] Resending msges....");
-            for (Map.Entry<String, Object> entry : messageBuffer.entrySet()) {
-                String msgId = entry.getKey();
-                basicSend(myUser, msgId, entry.getValue());
-            }
-            Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] Resent " + count + " messages....");
-            return count;
+            return bm.resend(myUser);
         }
 
         public List<Object> handleFailure() {
@@ -188,22 +257,6 @@ public class CatocManager {
             }
 
             return readyMsgs;
-        }
-
-        private void basicSend(String sender, String messageId, Object data) {
-            basicSend(sender, messageId, data, clients);
-        }
-
-        private void basicSend(String sender, String messageId, Object data, List<ClientInfo> clients) {
-            for (ClientInfo clientInfo : clients) {
-                try {
-                    URMRequest urmRequest = new URMRequest(sender, messageId, data);
-                    api.getNetworkManager().sendNormal(new NormalRequest(groupId, urmRequest), new InetSocketAddress(clientInfo.getIpAddress(), clientInfo.getPort()));
-                } catch (IOException e) {
-                    Printer.printErr("[CatocManager] Error sending request to client " + clientInfo.getUsername() + " on group " + groupId);
-                    e.printStackTrace();
-                }
-            }
         }
     }
 
@@ -231,22 +284,24 @@ public class CatocManager {
         }
 
         public void send(String myUser, SerializableObject data) {
-            sequenceNumber++;
-            urm.send(myUser, new TRMRequest(myUser + sequenceNumber, data));
+//            sequenceNumber++;
+//            urm.send(myUser, new TRMRequest(myUser + sequenceNumber, data));
+            urm.send(myUser, data);
         }
 
-        public List<SerializableObject> receive(String myUser, URMRequest request) {
-            List<Object> received = urm.receive(myUser, request);
-
-            List<SerializableObject> ready = new ArrayList<>();
-            for (Object trmRequest : received) {
-                if (trmRequest instanceof TRMRequest msg)
-                    ready.addAll(receiveTRMMessage(myUser, msg));
-                else
-                    ready.addAll(receiveTRMNumber((TRMNumberRequest) trmRequest));
-            }
-
-            return ready;
+        public List<SerializableObject> receive(String myUser, NormalRequest request) {
+//            List<Object> received = urm.receive(myUser, request);
+//
+//            List<SerializableObject> ready = new ArrayList<>();
+//            for (Object trmRequest : received) {
+//                if (trmRequest instanceof TRMRequest msg)
+//                    ready.addAll(receiveTRMMessage(myUser, msg));
+//                else
+//                    ready.addAll(receiveTRMNumber((TRMNumberRequest) trmRequest));
+//            }
+//
+//            return ready;
+            return urm.receive(myUser, request).stream().map(o -> (SerializableObject) o).toList();
         }
 
         public int resend(String myUser) {
@@ -305,8 +360,8 @@ public class CatocManager {
                can assume that no messages are in transmit when someone joins
                even if no messages are sent and everyone crashes
                the chat continues with a reset delivery number*/
-//            if (this.delivered == 0 && request.getDeliveryNumber() > 1)
-//                this.delivered = request.getDeliveryNumber() - 1;
+            if (this.delivered == 0 && request.getDeliveryNumber() > 1)
+                this.delivered = request.getDeliveryNumber() - 1;
 
             deliveryOrder.put(request.getDeliveryNumber(), request.getMessageId());
             deliveryNumber = Math.max(deliveryNumber, request.getDeliveryNumber());
