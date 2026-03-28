@@ -10,6 +10,8 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 public class SingleClientSpamTest {
 
@@ -28,13 +30,17 @@ public class SingleClientSpamTest {
         JoinReply aliceJoin = alice.join("SpamGroup", "Alice");
         int groupId = aliceJoin.getGroupId();
 
-        Thread.sleep(1000);
+        int spamCount = 10000;
+        System.out.println("Alice is spamming " + spamCount + " messages instantly...");
+
+        CountDownLatch messageLatch = new CountDownLatch(spamCount);
         Thread aliceReceiver = new Thread(() -> {
             try {
                 while (!alice.isShuttingDown()) {
                     GroupMessagePair pair = alice.receive(List.of(groupId));
                     if (pair.getMessage() instanceof ChatMessage msg) {
                         receivedOrder.add(msg.getMessage());
+                        messageLatch.countDown();
                     }
                 }
             } catch (Exception e) {
@@ -43,26 +49,33 @@ public class SingleClientSpamTest {
         });
         aliceReceiver.start();
 
-        int spamCount = 1000;
-        System.out.println("Alice is spamming " + spamCount + " messages instantly...");
+        // Send the messages
         for (int i = 1; i <= spamCount; i++) {
             alice.send(groupId, new ChatMessage("Alice", LocalDateTime.now(), "Message-" + i));
         }
 
-        System.out.println("Finished sending. Waiting 10 seconds for local buffers to drain...");
-        Thread.sleep(100000);
+        System.out.println("Finished sending. Waiting for network buffers to drain...");
+        boolean allReceived = messageLatch.await(120, TimeUnit.SECONDS);
 
         System.out.println("\n--- TEST RESULTS ---");
         System.out.println("Alice received: " + receivedOrder.size() + " out of " + spamCount + " messages.");
 
-        if (receivedOrder.size() != spamCount)
-            System.err.println("FAIL: Alice dropped her own messages! Local self-injection failed.");
+        int returnExit = 0;
+        if (!allReceived) {
+            System.err.println("FAIL: Test timed out! Alice dropped messages. Retransmitter failed to rescue them.");
+            returnExit = 1;
+        } else if (receivedOrder.size() != spamCount) {
+            System.err.println("FAIL: Count mismatch!");
+            returnExit = 1;
+        } else {
+            System.out.println("SUCCESS: Alice received all messages!");
+        }
 
         // Clean up
         System.out.println("Shutting down...");
         alice.shutdown();
         GMS.shutdown();
 
-        System.exit(0);
+        System.exit(returnExit);
     }
 }

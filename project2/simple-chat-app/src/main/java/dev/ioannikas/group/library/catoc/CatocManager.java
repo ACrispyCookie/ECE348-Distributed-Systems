@@ -158,6 +158,15 @@ public class CatocManager {
             return count;
         }
 
+        public void handleFailure(String username) {
+            Map<Integer, URMRequest> seqs = pending.remove(username);
+            if (seqs != null) {
+                seqs.clear();
+            }
+
+            sequenceNumbers.remove(username);
+        }
+
         private void basicSend(Object payload, ClientInfo target) {
             try {
                 NormalRequest request = new NormalRequest(groupId, payload);
@@ -239,7 +248,8 @@ public class CatocManager {
             return bm.resend(myUser);
         }
 
-        public List<Object> handleFailure() {
+        public List<Object> handleFailure(String username) {
+            bm.handleFailure(username);
             List<Object> readyMsgs = new ArrayList<>();
 
             Set<String> usernames = clients.stream()
@@ -284,24 +294,24 @@ public class CatocManager {
         }
 
         public void send(String myUser, SerializableObject data) {
-//            sequenceNumber++;
-//            urm.send(myUser, new TRMRequest(myUser + sequenceNumber, data));
-            urm.send(myUser, data);
+            sequenceNumber++;
+            urm.send(myUser, new TRMRequest(myUser + sequenceNumber, data));
+//            urm.send(myUser, data);
         }
 
         public List<SerializableObject> receive(String myUser, NormalRequest request) {
-//            List<Object> received = urm.receive(myUser, request);
-//
-//            List<SerializableObject> ready = new ArrayList<>();
-//            for (Object trmRequest : received) {
-//                if (trmRequest instanceof TRMRequest msg)
-//                    ready.addAll(receiveTRMMessage(myUser, msg));
-//                else
-//                    ready.addAll(receiveTRMNumber((TRMNumberRequest) trmRequest));
-//            }
-//
-//            return ready;
-            return urm.receive(myUser, request).stream().map(o -> (SerializableObject) o).toList();
+            List<Object> received = urm.receive(myUser, request);
+
+            List<SerializableObject> ready = new ArrayList<>();
+            for (Object trmRequest : received) {
+                if (trmRequest instanceof TRMRequest msg)
+                    ready.addAll(receiveTRMMessage(myUser, msg));
+                else
+                    ready.addAll(receiveTRMNumber((TRMNumberRequest) trmRequest));
+            }
+
+            return ready;
+//            return urm.receive(myUser, request).stream().map(o -> (SerializableObject) o).toList();
         }
 
         public int resend(String myUser) {
@@ -313,7 +323,7 @@ public class CatocManager {
 
             List<SerializableObject> ready = new ArrayList<>();
             if (action == GMSUpdateReply.Action.LEFT) {
-                List<Object> received = urm.handleFailure();
+                List<Object> received = urm.handleFailure(user.getUsername());
                 for (Object trmRequest : received) {
                     ready.addAll(handleFault(myUser, trmRequest));
                 }
@@ -360,8 +370,8 @@ public class CatocManager {
                can assume that no messages are in transmit when someone joins
                even if no messages are sent and everyone crashes
                the chat continues with a reset delivery number*/
-            if (this.delivered == 0 && request.getDeliveryNumber() > 1)
-                this.delivered = request.getDeliveryNumber() - 1;
+//            if (this.delivered == 0 && request.getDeliveryNumber() > 1)
+//                this.delivered = request.getDeliveryNumber() - 1;
 
             deliveryOrder.put(request.getDeliveryNumber(), request.getMessageId());
             deliveryNumber = Math.max(deliveryNumber, request.getDeliveryNumber());
