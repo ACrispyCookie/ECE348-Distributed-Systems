@@ -61,7 +61,9 @@ public class NetworkManager {
                     if (key.channel() instanceof SocketChannel client) {
                         client.read(sharedBuffer);
                         sharedBuffer.flip();
-                        handleGMSPacket(sharedBuffer);
+
+                        while (sharedBuffer.hasRemaining())
+                            handleGMSPacket(sharedBuffer);
                     } else if (key.channel() instanceof DatagramChannel peer) {
                         InetSocketAddress senderAddr = (InetSocketAddress) peer.receive(sharedBuffer);
                         if (senderAddr != null)

@@ -121,7 +121,9 @@ public class GMS {
             }
 
             buffer.flip();
-            clientHandler.handleRequest(buffer);
+            while (buffer.hasRemaining()) {
+                clientHandler.handleRequest(buffer);
+            }
 
         } catch (IOException | ClassNotFoundException e) {
             Printer.printInfo("Client forcefully disconnected.");

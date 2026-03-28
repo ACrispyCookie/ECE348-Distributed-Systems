@@ -34,6 +34,7 @@ public class GMSManager {
         CompletableFuture<GMSReply> future = new CompletableFuture<>();
 
         try {
+            Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] Sending join request for " + groupName + " with " + username + " and " + ipAddress);
             GMSJoinRequest packet = new GMSJoinRequest(username, nextFutureId.getAndIncrement(), groupName, ipAddress, port);
             pendingFutures.put(packet.getFutureId(), future);
             api.getNetworkManager().sendGms(packet);
@@ -51,6 +52,7 @@ public class GMSManager {
         CompletableFuture<GMSReply> future = new CompletableFuture<>();
 
         try {
+            Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] Sending leave request for " + groupId + " with " + username);
             GMSLeaveRequest packet = new GMSLeaveRequest(username, nextFutureId.getAndIncrement(), groupId);
             pendingFutures.put(packet.getFutureId(), future);
             api.getNetworkManager().sendGms(packet);
@@ -68,9 +70,11 @@ public class GMSManager {
         int futureId;
 
         if (reply instanceof GMSJoinReply join) {
+            Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] Received join reply for " + join.getGroupId() + " with " + join.getClients() + " and " + join.getReason());
             api.getMessageManager().addGroup(join.getGroupId(), join.getClients());
             futureId = join.getFutureId();
         } else if (reply instanceof GMSLeaveReply leave) {
+            Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] Received leave reply for " + leave.getGroupId() + " with " + leave.getReason());
             api.getMessageManager().removeGroup(leave.getGroupId());
             futureId = leave.getFutureId();
         } else {

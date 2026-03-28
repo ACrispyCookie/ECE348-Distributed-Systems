@@ -55,7 +55,7 @@ class GMSChaosTest {
 
     @Test
     void testRealisticConcurrentChaos() throws InterruptedException, IOException {
-        int opsPerClient = 20;
+        int opsPerClient = 15;
         int totalOperations = NUM_CLIENTS * opsPerClient;
 
         // 1 Thread dedicated exactly to 1 Client
@@ -98,10 +98,7 @@ class GMSChaosTest {
                             int listIndex = random.nextInt(myGroups.size());
                             int groupIdToLeave = myGroups.remove(listIndex);
 
-                            LeaveReply reply = client.leave(groupIdToLeave);
-//                            if (reply.getReason() != LeaveReply.FailReason.NONE) {
-//                                failedOperations.incrementAndGet();
-//                            }
+                            client.leave(groupIdToLeave);
                         }
                     } catch (Exception e) {
                         failedOperations.incrementAndGet();

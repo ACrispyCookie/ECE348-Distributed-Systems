@@ -21,7 +21,7 @@ public class PacketTCP implements Serializable {
     }
 
     public static ByteBuffer serialize(PacketTCP packet) throws IOException {
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        ByteBuffer buffer = ByteBuffer.allocate(65536);
         buffer.putInt(packet instanceof GMSRequest ? PacketType.REQUEST.ordinal() : PacketType.REPLY.ordinal());
         if (packet instanceof GMSRequest req)
             GMSRequest.serialize(req, buffer);
