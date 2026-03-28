@@ -27,8 +27,8 @@ public class MultiClientTest {
         boolean testCausalOrder = Boolean.parseBoolean(propC);
         String type = testTotalOrder ? testCausalOrder ? "CTRM" : "TRM" : "URM";
 
-        int numClients = 2;
-        int messagesPerClient = 1000;
+        int numClients = 3;
+        int messagesPerClient = 1500;
         int basePort = 10200;
 
         int totalExpectedPerClient = messagesPerClient * numClients;
@@ -146,7 +146,10 @@ public class MultiClientTest {
                         break;
                     }
                 }
-                if (!fail) {
+                if (fail) {
+                    for (int i = 0; i < numClients; i++)
+                        System.err.println("Client-" + i + " is:" + receivedOrders.get(i));
+                } else {
                     System.out.println("SUCCESS: Total Order (TRM) is correct across all " + numClients + " clients!");
                 }
             } else {

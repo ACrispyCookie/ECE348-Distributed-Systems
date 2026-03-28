@@ -46,6 +46,8 @@ public class URMRequest {
             data = TRMRequest.deserialize(api, buffer);
         else if (type == Type.TRM_NUMBER_REQUEST)
             data = TRMNumberRequest.deserialize(buffer);
+        else if (type == Type.TRM_SYNC)
+            data = TRMSyncRequest.deserialize(buffer);
         else
             data = api.getDeserializer().apply(buffer);
         return new URMRequest(sender, sequenceNumber, data);
@@ -59,6 +61,8 @@ public class URMRequest {
             TRMRequest.serialize((TRMRequest) packet.getData(), buffer);
         else if (packet.type == Type.TRM_NUMBER_REQUEST)
             TRMNumberRequest.serialize((TRMNumberRequest) packet.getData(), buffer);
+        else if (packet.type == Type.TRM_SYNC)
+            TRMSyncRequest.serialize((TRMSyncRequest) packet.getData(), buffer);
         else
             ((SerializableObject) packet.getData()).serialize(buffer);
 
@@ -67,6 +71,7 @@ public class URMRequest {
     enum Type {
         TRM_REQUEST,
         TRM_NUMBER_REQUEST,
+        TRM_SYNC,
         OTHER
     }
 }

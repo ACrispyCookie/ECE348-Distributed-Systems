@@ -204,13 +204,6 @@ public class CatocManager {
 
         public void send(String myUser, Object data) {
             sequenceNumber++;
-            // TODO Figure out if we rely on UDP loopback or else add it to the messageBuffer
-//            String msgId = myUser + sequenceNumber;
-//
-//            receivedMessages.add(msgId);
-//            messageBuffer.put(msgId, data);
-//            receivedAcks.put(msgId, new HashSet<>());
-
             bm.send(myUser, new URMRequest(myUser, myUser + sequenceNumber, data));
         }
 
@@ -242,7 +235,6 @@ public class CatocManager {
 
             if (receivedAcks.get(msgId).containsAll(usernames) && messageBuffer.containsKey(msgId)) {
                 readyMsgs.add(messageBuffer.remove(msgId));
-//                receivedAcks.remove(msgId);
             }
 
             return readyMsgs;
@@ -355,15 +347,23 @@ public class CatocManager {
         }
 
         public List<SerializableObject> update(String myUser, ClientInfo user, GMSUpdateReply.Action action) {
+            boolean wasICoordinator = amICoordinator(myUser);
             updateGroup(user, action);
+            boolean shouldTakeover = !wasICoordinator && amICoordinator(myUser);
 
             List<SerializableObject> ready = new ArrayList<>();
             if (trmEnabled) {
-                if (action == GMSUpdateReply.Action.LEFT) {
+                if (action == GMSUpdateReply.Action.JOINED && amICoordinator(myUser) && !user.getUsername().equals(myUser)) {
+                    Printer.printDebug("[CatocManager] Sending Welcome Sequence #" + deliveryNumber + " to new member.");
+                    urm.send(myUser, new TRMNumberRequest("", deliveryNumber));
+                } else if (action == GMSUpdateReply.Action.LEFT) {
                     List<Object> received = urm.handleFailure(user.getUsername());
                     for (Object trmRequest : received) {
                         ready.addAll(handleFault(myUser, trmRequest));
                     }
+
+                    if (shouldTakeover)
+                        takeoverSequencing(myUser);
                 }
             } else {
                 ready.addAll(urm.handleFailure(user.getUsername()).stream().map(o -> (SerializableObject) o).toList());
@@ -406,9 +406,14 @@ public class CatocManager {
         private List<SerializableObject> receiveTRMNumber(TRMNumberRequest request) {
             Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] (Group " + groupId + ") Received TRM Number with ID " + request.getMessageId() + " with number " + request.getDeliveryNumber());
 
-            /* TODO Fix newly joined member not having up-to-date delivery numbers*/
-//            if (this.delivered == 0 && request.getDeliveryNumber() > 1)
-//                this.delivered = request.getDeliveryNumber() - 1;
+            /* Fix for newly joined member not having up-to-date delivery numbers*/
+            if (this.delivered == 0 && request.getMessageId().isEmpty()) {
+                this.delivered = request.getDeliveryNumber();
+                this.deliveryNumber = request.getDeliveryNumber();
+                return new ArrayList<>();
+            } else if (request.getMessageId().isEmpty()) {
+                return new ArrayList<>();
+            }
 
             deliveryOrder.put(request.getDeliveryNumber(), request.getMessageId());
             deliveryNumber = Math.max(deliveryNumber, request.getDeliveryNumber());
@@ -428,6 +433,16 @@ public class CatocManager {
             }
 
             return ready;
+        }
+
+        private void takeoverSequencing(String myUser) {
+            for (String msgId : messages.keySet()) {
+                if (!deliveryOrder.containsValue(msgId)) {
+                    deliveryNumber++;
+                    Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] Coordinator Takeover! Sequencing stranded message " + msgId + " as #" + deliveryNumber);
+                    urm.send(myUser, new TRMNumberRequest(msgId, deliveryNumber));
+                }
+            }
         }
 
         private boolean amICoordinator(String myUser) {

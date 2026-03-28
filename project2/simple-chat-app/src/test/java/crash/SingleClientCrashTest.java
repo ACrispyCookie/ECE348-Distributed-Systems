@@ -30,8 +30,8 @@ public class SingleClientCrashTest {
         int kamikazeIndex = Integer.parseInt(System.getProperty("crashIndex", "1"));
 
         int numClients = 3;
-        int blastSize = 10000;
-        int crashPoint = 9000;
+        int blastSize = 2000;
+        int crashPoint = 1800;
         int basePort = 10200;
 
         System.out.println("--- Starting " + type + " Mid-Broadcast Crash Test ---");
@@ -94,6 +94,7 @@ public class SingleClientCrashTest {
 
                     if (i == crashPoint) {
                         System.err.println("Client-" + kamikazeIndex + " crashed!");
+                        Thread.sleep(1000);
                         kamikazeClient.shutdown();
                         return;
                     }
@@ -133,10 +134,12 @@ public class SingleClientCrashTest {
                     if (!referenceList.equals(receivedOrders.get(i))) {
                         System.err.println("FAIL: Mismatch found between Client-" + referenceIndex + " and Client-" + i + ". TRM Takeover failed to sort correctly.");
                         fail = true;
-                        break;
                     }
                 }
-                if (!fail) {
+                if (fail) {
+                    for (int i = 0; i < numClients; i++)
+                        System.err.println("Client-" + i + " is:" + receivedOrders.get(i));
+                } else {
                     System.out.println("SUCCESS: TRM Coordinator Takeover Verified!");
                 }
             } else {

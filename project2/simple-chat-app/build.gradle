@@ -20,6 +20,9 @@ test {
     testLogging {
         showStandardStreams = true
     }
+    systemProperty 'total', System.getProperty('total', 'true')
+    systemProperty 'causal', System.getProperty('causal', 'true')
+    systemProperty 'crashIndex', System.getProperty('crashIndex', '1')
 }
 
 tasks.named('jar') {
