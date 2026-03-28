@@ -20,6 +20,8 @@ public class URMRequest {
             this.type = Type.TRM_REQUEST;
         else if (data instanceof TRMNumberRequest)
             this.type = Type.TRM_NUMBER_REQUEST;
+        else if (data instanceof TRMSyncRequest)
+            this.type = Type.TRM_SYNC;
         else
             this.type = Type.OTHER;
         this.data = data;
