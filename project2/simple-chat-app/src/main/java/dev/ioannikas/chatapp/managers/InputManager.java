@@ -139,8 +139,8 @@ public class InputManager {
     }
 
     private void handleSpam(Command command) {
-        if (command.getArgs().length != 1) {
-            Printer.printErr("[ChatApp] Invalid usage: /spam <amount of messages>");
+        if (command.getArgs().length > 2 || command.getArgs().length < 1) {
+            Printer.printErr("[ChatApp] Invalid usage: /spam <amount of messages> [s]");
             return;
         }
 
@@ -158,13 +158,15 @@ public class InputManager {
             return;
         }
 
+        boolean sequenced = command.getArgs().length == 2 && command.getArgs()[1].equals("s");
+
         if (selected == -1) {
             Printer.printErr("[ChatApp] You must select a chat to spam!");
             return;
         }
 
         for (int i = 0; i < amount; i++) {
-            ChatMessage chatMessage = new ChatMessage(ChatApp.getChatManager().getUsername(selected), LocalDateTime.now(), randomMessage());
+            ChatMessage chatMessage = new ChatMessage(ChatApp.getChatManager().getUsername(selected), LocalDateTime.now(), !sequenced ? randomMessage() : "Message-" + i);
             if (ChatApp.getApi().send(selected, chatMessage) == -1)
                 Printer.printErr("[ChatApp] You are not in this group! (How did we get here?)");
         }
