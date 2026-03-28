@@ -65,8 +65,9 @@ public class CatocManager {
         return count;
     }
 
-    public synchronized void shutdown() {
+    public void shutdown() throws InterruptedException {
         retransmitter.interrupt();
+        retransmitter.join();
         groups.clear();
     }
 
@@ -78,6 +79,8 @@ public class CatocManager {
                     if (count == 0) {
                         Printer.printDebug("[CatocManager] Buffer empty sleeping");
                         this.wait();
+                        if (api.isShuttingDown())
+                            return;
                     } else {
                         Printer.printDebug("[CatocManager] Buffer not empty sleeping for less");
                     }

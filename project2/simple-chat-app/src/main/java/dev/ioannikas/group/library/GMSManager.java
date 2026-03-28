@@ -102,8 +102,9 @@ public class GMSManager {
         }
     }
 
-    public void shutdown() {
+    public void shutdown() throws InterruptedException {
         heartbeatSender.interrupt();
+        heartbeatSender.join();
     }
 
 }

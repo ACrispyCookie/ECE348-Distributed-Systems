@@ -12,10 +12,7 @@ import dev.ioannikas.group.library.serializable.requests.NormalRequest;
 import java.io.IOException;
 import java.net.*;
 import java.nio.ByteBuffer;
-import java.nio.channels.DatagramChannel;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
-import java.nio.channels.SocketChannel;
+import java.nio.channels.*;
 import java.util.Iterator;
 import java.util.Set;
 
@@ -111,12 +108,20 @@ public class NetworkManager {
             gmsConnection.getChannel().write(buffer);
     }
 
-    public void shutdown() {
+    public void shutdown() throws InterruptedException {
         try {
-            gmsConnection.close();
-            normalConnection.close();
             selector.wakeup();
-        } catch (IOException e) {
+            for (SelectionKey key : selector.keys()) {
+                key.cancel();
+                try {
+                    key.channel().close();
+                } catch (IOException e) {
+
+                }
+            }
+            selector.close();
+            receiver.join();
+        } catch (IOException | ClosedSelectorException e) {
             Printer.printErr("[NetworkManager] Could not close sockets!");
         }
     }

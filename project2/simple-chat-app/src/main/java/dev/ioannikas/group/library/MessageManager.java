@@ -97,7 +97,7 @@ public class MessageManager {
         catocManager.removeGroup(groupId);
     }
 
-    public void shutdown() {
+    public void shutdown() throws InterruptedException {
         catocManager.shutdown();
     }
 

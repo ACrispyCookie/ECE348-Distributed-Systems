@@ -17,12 +17,14 @@ public class GMS {
 
     private static final int DEFAULT_PORT = 10100;
     private static final Map<SocketAddress, ClientHandler> clients = new HashMap<>();
-    private static boolean shuttingDown = false;
+    private static volatile boolean shuttingDown = false;
     private static GroupManager groupManager;
     private static Selector selector;
 
     public static void main(String[] args) {
         int port = DEFAULT_PORT;
+        shuttingDown = false;
+        clients.clear();
 
         if (args.length > 0) {
             try {
@@ -64,6 +66,8 @@ public class GMS {
         while (!shuttingDown) {
             try {
                 selector.select(ClientHandler.getTIMEOUT() * 1000L);
+                if (shuttingDown)
+                    break;
 
                 Set<SelectionKey> selectedKeys = selector.selectedKeys();
                 Iterator<SelectionKey> iterator = selectedKeys.iterator();
@@ -146,8 +150,18 @@ public class GMS {
     }
 
     public static void shutdown() {
+        if (shuttingDown) return;
         Printer.printInfo("GMS shutting down...");
         shuttingDown = true;
         selector.wakeup();
+        try {
+            for (SelectionKey key : selector.keys()) {
+                key.cancel();
+                key.channel().close();
+            }
+            selector.close();
+        } catch (IOException e) {
+            Printer.printErr("Error closing selector!");
+        }
     }
 }

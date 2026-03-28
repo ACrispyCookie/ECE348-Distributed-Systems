@@ -95,9 +95,13 @@ public class GroupAPI {
 
     public void shutdown() {
         shuttingDown = true;
-        messageManager.shutdown();
-        gmsManager.shutdown();
-        networkManager.shutdown();
+        try {
+            messageManager.shutdown();
+            gmsManager.shutdown();
+            networkManager.shutdown();
+        } catch (InterruptedException e) {
+
+        }
     }
 
     public boolean isShuttingDown() {
