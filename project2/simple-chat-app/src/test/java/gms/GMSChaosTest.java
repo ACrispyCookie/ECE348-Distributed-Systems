@@ -28,7 +28,7 @@ class GMSChaosTest {
     static void startGMS() throws InterruptedException {
         serverThread = new Thread(() -> GMS.main(new String[]{String.valueOf(GMS_PORT)}));
         serverThread.start();
-        Thread.sleep(300);
+        Thread.sleep(2000);
     }
 
     @AfterAll
@@ -120,8 +120,7 @@ class GMSChaosTest {
 
         System.out.println("Chaos complete. Failed ops: " + failedOperations.get());
 
-        assertTrue(failedOperations.get() < (totalOperations * 0.1),
-                "Too many operations failed! Thread-safety issues likely in GMS.");
+        assertEquals(0, failedOperations.get(), "Too many operations failed! Thread-safety issues likely in GMS.");
 
         // Verify the server isn't frozen.
         GroupAPI testClient = new GroupAPI("127.0.0.1", GMS_PORT, 7777, false, false, ChatMessage::deserialize);

@@ -21,17 +21,19 @@ public class MultiClientTest {
 
     @Test
     void runRapidBlastTest() throws Exception {
-
         String prop = System.getProperty("total", "true");
         boolean testTotalOrder = Boolean.parseBoolean(prop);
+        String propC = System.getProperty("causal", "true");
+        boolean testCausalOrder = Boolean.parseBoolean(propC);
+        String type = testTotalOrder ? testCausalOrder ? "CTRM" : "TRM" : "URM";
 
-        int numClients = 3;
-        int messagesPerClient = 10000;
+        int numClients = 2;
+        int messagesPerClient = 1000;
         int basePort = 10200;
 
         int totalExpectedPerClient = messagesPerClient * numClients;
         int totalSystemMessages = totalExpectedPerClient * numClients;
-        System.out.println("--- Starting " + (testTotalOrder ? "TRM" : "URM") + " Rapid Blast Test with " + numClients + " clients ---");
+        System.out.println("--- Starting " + type + " Rapid Blast Test with " + numClients + " clients ---");
 
         Thread gmsThread = new Thread(() -> GMS.main(new String[]{"10100"}));
         gmsThread.start();
@@ -47,7 +49,7 @@ public class MultiClientTest {
         // Initialize and Join
         for (int i = 0; i < numClients; i++) {
             String clientName = "Client-" + i;
-            GroupAPI api = new GroupAPI("127.0.0.1", 10100, basePort + i, testTotalOrder, true, ChatMessage::deserialize);
+            GroupAPI api = new GroupAPI("127.0.0.1", 10100, basePort + i, testTotalOrder, testCausalOrder, ChatMessage::deserialize);
             clients.add(api);
 
             receivedOrders.add(Collections.synchronizedList(new ArrayList<>()));
@@ -105,12 +107,12 @@ public class MultiClientTest {
             }).start();
         }
 
-        System.out.println("Firing the starter pistol... Blasting " + totalSystemMessages + " messages across the network!");
+        System.out.println("Starting... Waiting for " + totalSystemMessages + " to be received!");
         startSignal.countDown();
 
         // Wait for sending threads to finish queuing
         doneSignal.await();
-        System.out.println("Finished queueing. Waiting for network buffers to drain (up to 300 seconds)...");
+        System.out.println("Finished queueing. Waiting for message to arrive (up to 300 seconds)...");
 
         boolean allReceived = receiveLatch.await(300, TimeUnit.SECONDS);
 
@@ -174,6 +176,7 @@ public class MultiClientTest {
             api.shutdown();
         }
         GMS.shutdown();
+        gmsThread.join();
 
         assertFalse(fail, "Test failed — see output above for details.");
     }

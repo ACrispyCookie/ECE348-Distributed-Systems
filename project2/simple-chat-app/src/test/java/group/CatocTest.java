@@ -18,14 +18,14 @@ public class CatocTest {
 
     @Test
     void runCatocBlastTest() throws Exception {
-        int numClients = 3;
-        int messagesPerClient = 1000;
+        int numClients = 4;
+        int messagesPerClient = 10000;
         int basePort = 10200;
 
         int totalExpectedPerClient = messagesPerClient * numClients;
         int totalSystemMessages = totalExpectedPerClient * numClients;
 
-        System.out.println("--- Starting CATOC (Causal & Total Order) Rapid Blast Test with " + numClients + " clients ---");
+        System.out.println("--- Starting CATOC (Causal & Total Order) Rapid Spam Test with " + numClients + " clients ---");
 
         Thread gmsThread = new Thread(() -> GMS.main(new String[]{"10100"}));
         gmsThread.start();
@@ -96,12 +96,12 @@ public class CatocTest {
             }).start();
         }
 
-        System.out.println("Firing the starter pistol... Blasting " + totalSystemMessages + " messages across the network!");
+        System.out.println("Starting... Waiting for " + totalSystemMessages + " to be received!");
         startSignal.countDown();
 
         // Wait for sending threads to finish queuing
         doneSignal.await();
-        System.out.println("Finished queueing. Waiting for network buffers to drain (up to 300 seconds)...");
+        System.out.println("Finished queueing. Waiting for message to arrive (up to 300 seconds)...");
 
         boolean allReceived = receiveLatch.await(300, TimeUnit.SECONDS);
 
@@ -154,6 +154,7 @@ public class CatocTest {
             api.shutdown();
         }
         GMS.shutdown();
+        gmsThread.join();
 
         assertFalse(fail, "CATOC Test failed — see output above for details.");
     }
