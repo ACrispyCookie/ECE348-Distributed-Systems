@@ -28,7 +28,7 @@ public class MultiClientCrashTest {
 
         // --- CRASH CONFIGURATION ---
         // 0 = Coordinator crashes. 1 or 2 = Regular client crashes.
-        int kamikazeIndex = Integer.parseInt(System.getProperty("kamikazeIndex", "1"));
+        int kamikazeIndex = Integer.parseInt(System.getProperty("crashIndex", "1"));
 
         int numClients = 3;
         int blastSize = 4000;
