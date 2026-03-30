@@ -18,6 +18,7 @@ public class CatocManager {
 
     private final GroupAPI api;
     private final Map<Integer, TRMState> groups;
+    private final Map<Integer, TRMState> disabled;
     private final boolean trmEnabled;
     private final boolean crmEnabled;
 
@@ -27,6 +28,7 @@ public class CatocManager {
     public CatocManager(GroupAPI api, boolean trmEnabled, boolean crmEnabled) {
         this.api = api;
         groups = new HashMap<>();
+        disabled = new HashMap<>();
         this.trmEnabled = trmEnabled;
         this.crmEnabled = crmEnabled;
         retransmitter = new Thread(this::retransmitter, "retransmitter");
@@ -42,12 +44,15 @@ public class CatocManager {
                 .stream().map(o -> new GroupMessagePair(request.getGroupId(), o)).toList();
     }
 
-    public synchronized void addGroup(int groupId, List<ClientInfo> clients) {
-        groups.putIfAbsent(groupId, new TRMState(groupId, clients, this, trmEnabled, crmEnabled));
+    public synchronized void addGroup(int groupId, String username, List<ClientInfo> clients) {
+        if (disabled.containsKey(groupId) && disabled.get(groupId).getInitialUsername().equals(username))
+            groups.put(groupId, disabled.remove(groupId));
+        disabled.remove(groupId);
+        groups.putIfAbsent(groupId, new TRMState(groupId, username, clients, this, trmEnabled, crmEnabled));
     }
 
     public synchronized void removeGroup(int groupId) {
-        groups.remove(groupId);
+        disabled.put(groupId, groups.remove(groupId));
     }
 
     public synchronized List<GroupMessagePair> updateGroup(GMSUpdateReply reply) {
@@ -276,12 +281,13 @@ public class CatocManager {
         private CompletableFuture<Integer> sendRequest;
 
         private final int groupId;
+        private String initialUsername;
         private final List<ClientInfo> clients;
         private final URMState urm;
         private final boolean trmEnabled;
         private final boolean crmEnabled;
 
-        public TRMState(int groupId, List<ClientInfo> clients, Object condition, boolean trmEnabled, boolean crmEnabled) {
+        public TRMState(int groupId, String initialUsername, List<ClientInfo> clients, Object condition, boolean trmEnabled, boolean crmEnabled) {
             this.sequenceNumber = 0;
             this.deliveryNumber = 0;
             this.delivered = 0;
@@ -294,6 +300,7 @@ public class CatocManager {
             this.crmEnabled = crmEnabled;
             this.clients = new ArrayList<>(clients);
             this.groupId = groupId;
+            this.initialUsername = initialUsername;
             urm = new URMState(groupId, this.clients, condition);
         }
 
@@ -447,6 +454,10 @@ public class CatocManager {
 
         private boolean amICoordinator(String myUser) {
             return clients.get(0).getUsername().equals(myUser);
+        }
+
+        public String getInitialUsername() {
+            return initialUsername;
         }
     }
 }

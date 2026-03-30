@@ -172,6 +172,20 @@ public class InputManager {
         }
     }
 
+    public void triggerBenchmarkSpam(int groupId, int amount) {
+        // Run this in a new thread so it doesn't block the MessageReceiver!
+        new Thread(() -> {
+            for (int i = 0; i < amount; i++) {
+                ChatMessage chatMessage = new ChatMessage(
+                        ChatApp.getChatManager().getUsername(groupId),
+                        LocalDateTime.now(),
+                        "Benchmark-Msg-" + i
+                );
+                ChatApp.getApi().send(groupId, chatMessage);
+            }
+        }).start();
+    }
+
     private void handleExit() {
         ChatApp.getChatManager().cleanUp();
         ChatApp.shutdown();

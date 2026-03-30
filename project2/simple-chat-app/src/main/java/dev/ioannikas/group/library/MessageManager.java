@@ -89,8 +89,8 @@ public class MessageManager {
         }
     }
 
-    public void addGroup(int groupId, List<ClientInfo> clients) {
-        catocManager.addGroup(groupId, clients);
+    public void addGroup(int groupId, String username, List<ClientInfo> clients) {
+        catocManager.addGroup(groupId, username, clients);
     }
 
     public void removeGroup(int groupId) {

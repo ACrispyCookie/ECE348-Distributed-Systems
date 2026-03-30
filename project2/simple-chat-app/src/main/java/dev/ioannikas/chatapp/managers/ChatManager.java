@@ -60,6 +60,10 @@ public class ChatManager {
         return new HashSet<>(chats.keySet());
     }
 
+    public synchronized int getGroupSize(int groupId) {
+        return chats.get(groupId).members.size();
+    }
+
     public synchronized String getUsername(int groupId) {
         GroupChat chat = chats.get(groupId);
         if (chat == null)

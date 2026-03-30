@@ -20,7 +20,7 @@ public class GMSManager {
     private final int HEARTBEAT_INTERVAL = 2;
     private final Thread heartbeatSender;
     private final GroupAPI api;
-    private final Map<Integer, CompletableFuture<GMSReply>> pendingFutures;
+    private final Map<Integer, FutureUsernamePair> pendingFutures;
     private final AtomicInteger nextFutureId = new AtomicInteger(1);
 
     public GMSManager(GroupAPI api) {
@@ -36,7 +36,7 @@ public class GMSManager {
         try {
             Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] Sending join request for " + groupName + " with " + username + " and " + ipAddress);
             GMSJoinRequest packet = new GMSJoinRequest(username, nextFutureId.getAndIncrement(), groupName, ipAddress, port);
-            pendingFutures.put(packet.getFutureId(), future);
+            pendingFutures.put(packet.getFutureId(), new FutureUsernamePair(future, username));
             api.getNetworkManager().sendGms(packet);
 
             return (GMSJoinReply) future.get();
@@ -54,7 +54,7 @@ public class GMSManager {
         try {
             Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] Sending leave request for " + groupId + " with " + username);
             GMSLeaveRequest packet = new GMSLeaveRequest(username, nextFutureId.getAndIncrement(), groupId);
-            pendingFutures.put(packet.getFutureId(), future);
+            pendingFutures.put(packet.getFutureId(), new FutureUsernamePair(future, username));
             api.getNetworkManager().sendGms(packet);
 
             return (GMSLeaveReply) future.get();
@@ -67,25 +67,26 @@ public class GMSManager {
     }
 
     public void handleReceivedPacket(GMSReply reply) {
-        int futureId;
+        FutureUsernamePair future;
 
         if (reply instanceof GMSJoinReply join) {
             Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] Received join reply for " + join.getGroupId() + " with " + join.getClients() + " and " + join.getReason());
-            api.getMessageManager().addGroup(join.getGroupId(), join.getClients());
-            futureId = join.getFutureId();
+            future = pendingFutures.get(join.getFutureId());
+            if (join.getReason() == GMSJoinReply.FailReason.NONE)
+                api.getMessageManager().addGroup(join.getGroupId(), future.getUsername(), join.getClients());
         } else if (reply instanceof GMSLeaveReply leave) {
             Printer.printDebug(api.getNetworkManager().getPort() + " [CatocManager] Received leave reply for " + leave.getGroupId() + " with " + leave.getReason());
-            api.getMessageManager().removeGroup(leave.getGroupId());
-            futureId = leave.getFutureId();
+            future = pendingFutures.get(leave.getFutureId());
+            if (leave.getReason() == GMSLeaveReply.FailReason.NONE)
+                api.getMessageManager().removeGroup(leave.getGroupId());
         } else {
             return;
         }
 
-        CompletableFuture<GMSReply> future = pendingFutures.remove(futureId);
         // Should never happen
         if (future == null)
             return;
-        future.complete(reply);
+        future.getFuture().complete(reply);
     }
 
     private void sender() {
@@ -105,6 +106,24 @@ public class GMSManager {
     public void shutdown() throws InterruptedException {
         heartbeatSender.interrupt();
         heartbeatSender.join();
+    }
+
+    private static class FutureUsernamePair {
+        private final CompletableFuture<GMSReply> future;
+        private final String username;
+
+        public FutureUsernamePair(CompletableFuture<GMSReply> future, String username) {
+            this.future = future;
+            this.username = username;
+        }
+
+        public CompletableFuture<GMSReply> getFuture() {
+            return future;
+        }
+
+        public String getUsername() {
+            return username;
+        }
     }
 
 }

@@ -15,6 +15,7 @@ public class ChatApp {
 
     private static GroupAPI api;
     private static ChatManager chatManager;
+    private static InputManager inputManager;
     private static MessageReceiver receiver;
     private static boolean shuttingDown = false;
     
@@ -34,11 +35,16 @@ public class ChatApp {
         chatManager  = new ChatManager();
         receiver = new MessageReceiver();
         receiver.start();
-        new InputManager().runInputManager();
+        inputManager = new InputManager();
+        inputManager.runInputManager();
     }
 
     public static GroupAPI getApi() {
         return api;
+    }
+
+    public static InputManager getInputManager() {
+        return inputManager;
     }
 
     public static ChatManager getChatManager() {
