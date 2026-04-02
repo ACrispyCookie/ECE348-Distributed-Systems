@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 public class CatocManager {
@@ -21,12 +22,14 @@ public class CatocManager {
     private final Map<Integer, TRMState> disabled;
     private final boolean trmEnabled;
     private final boolean crmEnabled;
+    public AtomicInteger totalMessages;
 
     private final Thread retransmitter;
     private final long RESEND_TIMEOUT = 100;
 
     public CatocManager(GroupAPI api, boolean trmEnabled, boolean crmEnabled) {
         this.api = api;
+        this.totalMessages = new AtomicInteger(0);
         groups = new HashMap<>();
         disabled = new HashMap<>();
         this.trmEnabled = trmEnabled;
@@ -180,6 +183,7 @@ public class CatocManager {
             try {
                 NormalRequest request = new NormalRequest(groupId, payload);
                 api.getNetworkManager().sendNormal(request, new InetSocketAddress(target.getIpAddress(), target.getPort()));
+                totalMessages.incrementAndGet();
             } catch (IOException e) {
                 Printer.printErr("[BMState] Error sending UDP packet...");
             }

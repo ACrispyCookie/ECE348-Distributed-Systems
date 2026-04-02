@@ -93,6 +93,10 @@ public class GroupAPI {
         return deserializer;
     }
 
+    public int getTotal() {
+        return messageManager.getTotal();
+    }
+
     public void shutdown() {
         shuttingDown = true;
         try {

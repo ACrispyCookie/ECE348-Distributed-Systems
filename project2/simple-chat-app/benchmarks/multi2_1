@@ -1,0 +1,32 @@
+2026-03-30 03:28:08: [INFO] [ChatApp] GMS successfully initialized!
+2026-03-30 03:28:08: [INFO] [ChatApp] Client started! Start by typing a command!
+2026-03-30 03:28:36: [INFO] [ChatApp] You have joined group h (ID:4)!
+2026-03-30 03:28:36: [INFO] [ChatApp] --- Chat info ---
+2026-03-30 03:28:36: [INFO] [ChatApp] Group ID: 4
+2026-03-30 03:28:36: [INFO] [ChatApp] Group name: h
+2026-03-30 03:28:36: [INFO] [ChatApp] Your username: a
+2026-03-30 03:28:36: [INFO] [ChatApp] Members: 2
+2026-03-30 03:28:36: [INFO]             - b
+2026-03-30 03:28:36: [INFO]             - a
+2026-03-30 03:28:36: [INFO] [ChatApp] You have selected group h (ID:4)!
+2026-03-30 03:28:43: [INFO] Benchmark started! Disabled output. Expecting 40000 total messages...
+................................................................................
+2026-03-30 03:29:06: [INFO] Benchmark complete!
+2026-03-30 03:29:06: [INFO] Time: 22.808 seconds
+2026-03-30 03:29:06: [INFO] Throughput: 1753.77 msg/sec
+2026-03-30 03:29:20: [INFO] Benchmark started! Disabled output. Expecting 40000 total messages...
+................................................................................
+2026-03-30 03:29:31: [INFO] Benchmark complete!
+2026-03-30 03:29:31: [INFO] Time: 11.71 seconds
+2026-03-30 03:29:31: [INFO] Throughput: 3415.88 msg/sec
+2026-03-30 03:29:55: [INFO] Benchmark started! Disabled output. Expecting 40000 total messages...
+................................................................................
+2026-03-30 03:30:07: [INFO] Benchmark complete!
+2026-03-30 03:30:07: [INFO] Time: 12.493 seconds
+2026-03-30 03:30:07: [INFO] Throughput: 3201.79 msg/sec
+2026-03-30 03:30:44: [INFO] Benchmark started! Disabled output. Expecting 40000 total messages...
+................................................................................
+2026-03-30 03:30:55: [INFO] Benchmark complete!
+2026-03-30 03:30:55: [INFO] Time: 10.789 seconds
+2026-03-30 03:30:55: [INFO] Throughput: 3707.48 msg/sec
+2026-03-30 03:31:04: [INFO] [ChatApp] Shutting down...

@@ -1,0 +1,31 @@
+2026-03-30 03:24:44: [INFO] [ChatApp] GMS successfully initialized!
+2026-03-30 03:24:44: [INFO] [ChatApp] Client started! Start by typing a command!
+2026-03-30 03:24:48: [INFO] [ChatApp] You have joined group h (ID:4)!
+2026-03-30 03:24:48: [INFO] [ChatApp] --- Chat info ---
+2026-03-30 03:24:48: [INFO] [ChatApp] Group ID: 4
+2026-03-30 03:24:48: [INFO] [ChatApp] Group name: h
+2026-03-30 03:24:48: [INFO] [ChatApp] Your username: a
+2026-03-30 03:24:48: [INFO] [ChatApp] Members: 1
+2026-03-30 03:24:48: [INFO]             - a
+2026-03-30 03:24:48: [INFO] [ChatApp] You have selected group h (ID:4)!
+2026-03-30 03:24:52: [INFO] Benchmark started! Disabled output. Expecting 20000 total messages...
+........................................
+2026-03-30 03:24:53: [INFO] Benchmark complete!
+2026-03-30 03:24:53: [INFO] Time: 1.14 seconds
+2026-03-30 03:24:53: [INFO] Throughput: 17543.86 msg/sec
+2026-03-30 03:24:56: [INFO] Benchmark started! Disabled output. Expecting 20000 total messages...
+........................................
+2026-03-30 03:24:57: [INFO] Benchmark complete!
+2026-03-30 03:24:57: [INFO] Time: 0.644 seconds
+2026-03-30 03:24:57: [INFO] Throughput: 31055.90 msg/sec
+2026-03-30 03:25:00: [INFO] Benchmark started! Disabled output. Expecting 20000 total messages...
+........................................
+2026-03-30 03:25:01: [INFO] Benchmark complete!
+2026-03-30 03:25:01: [INFO] Time: 0.696 seconds
+2026-03-30 03:25:01: [INFO] Throughput: 28735.63 msg/sec
+2026-03-30 03:25:05: [INFO] Benchmark started! Disabled output. Expecting 20000 total messages...
+........................................
+2026-03-30 03:25:05: [INFO] Benchmark complete!
+2026-03-30 03:25:05: [INFO] Time: 0.652 seconds
+2026-03-30 03:25:05: [INFO] Throughput: 30674.85 msg/sec
+2026-03-30 03:25:07: [INFO] [ChatApp] Shutting down...

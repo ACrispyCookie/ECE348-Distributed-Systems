@@ -1,0 +1,33 @@
+2026-03-30 03:37:02: [INFO] [ChatApp] GMS successfully initialized!
+2026-03-30 03:37:02: [INFO] [ChatApp] Client started! Start by typing a command!
+2026-03-30 03:37:04: [INFO] [ChatApp] You have joined group h (ID:4)!
+2026-03-30 03:37:04: [INFO] [ChatApp] --- Chat info ---
+2026-03-30 03:37:04: [INFO] [ChatApp] Group ID: 4
+2026-03-30 03:37:04: [INFO] [ChatApp] Group name: h
+2026-03-30 03:37:04: [INFO] [ChatApp] Your username: a
+2026-03-30 03:37:04: [INFO] [ChatApp] Members: 1
+2026-03-30 03:37:04: [INFO]             - a
+2026-03-30 03:37:04: [INFO] [ChatApp] You have selected group h (ID:4)!
+2026-03-30 03:37:07: [GROUP h (4)] b has joined the chat!
+2026-03-30 03:37:20: [ERROR] Invalid benchmark command! Use: START_BENCHMARK_SINGLE_<amount> or START_BENCHMARK_ALL_<amount>
+2026-03-30 03:37:37: [INFO] Benchmark started! Mode: SINGLE. Disabled output. Expecting 20000 total messages...
+........................................
+2026-03-30 03:37:50: [INFO] Benchmark complete!
+2026-03-30 03:37:50: [INFO] Time: 12.994 seconds
+2026-03-30 03:37:50: [INFO] Throughput: 1539.17 msg/sec
+2026-03-30 03:37:51: [INFO] Benchmark started! Mode: SINGLE. Disabled output. Expecting 20000 total messages...
+........................................
+2026-03-30 03:37:56: [INFO] Benchmark complete!
+2026-03-30 03:37:56: [INFO] Time: 5.137 seconds
+2026-03-30 03:37:56: [INFO] Throughput: 3893.32 msg/sec
+2026-03-30 03:37:58: [INFO] Benchmark started! Mode: SINGLE. Disabled output. Expecting 20000 total messages...
+........................................
+2026-03-30 03:38:04: [INFO] Benchmark complete!
+2026-03-30 03:38:04: [INFO] Time: 5.833 seconds
+2026-03-30 03:38:04: [INFO] Throughput: 3428.77 msg/sec
+2026-03-30 03:38:08: [INFO] Benchmark started! Mode: SINGLE. Disabled output. Expecting 20000 total messages...
+........................................
+2026-03-30 03:38:14: [INFO] Benchmark complete!
+2026-03-30 03:38:14: [INFO] Time: 5.151 seconds
+2026-03-30 03:38:14: [INFO] Throughput: 3882.74 msg/sec
+2026-03-30 03:38:18: [INFO] [ChatApp] Shutting down...

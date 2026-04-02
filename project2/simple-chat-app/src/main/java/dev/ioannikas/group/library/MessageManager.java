@@ -101,6 +101,10 @@ public class MessageManager {
         catocManager.shutdown();
     }
 
+    public int getTotal() {
+        return catocManager.totalMessages.get();
+    }
+
     private CompletableFuture<GroupMessagePair> requestWaiting(int groupId) {
         Set<Integer> selected = null;
 

@@ -5,6 +5,7 @@ import dev.ioannikas.chatapp.model.ChatMessage;
 import dev.ioannikas.chatapp.utility.Printer;
 import dev.ioannikas.group.api.GroupMessagePair;
 import dev.ioannikas.group.api.ViewUpdateMessage;
+import dev.ioannikas.group.library.catoc.CatocManager;
 
 import java.util.concurrent.ExecutionException;
 
@@ -94,6 +95,9 @@ public class MessageReceiver extends Thread {
                 Printer.printInfo("Benchmark complete!");
                 Printer.printInfo("Time: " + durationSeconds + " seconds");
                 Printer.printInfo("Throughput: " + String.format("%.2f", throughput) + " msg/sec");
+
+                Printer.printInfo("Actual Protocol Messages Sent: " + ChatApp.getApi().getTotal());
+                Printer.printInfo("Actual Overhead Ratio: " + (ChatApp.getApi().getTotal() / (double)expectedTotalMessages) + " packets/msg");
 
                 isBenchmarking = false;
             }
