@@ -15,8 +15,8 @@ endif
 
 BUILD_DIR = build
 TARGET = $(BUILD_DIR)/server_app
-OBJS = $(BUILD_DIR)/utilities.o $(BUILD_DIR)/internal_server.o $(BUILD_DIR)/server_api.o $(BUILD_DIR)/server_app.o
-HEADERS = ./include/server_api.h ./include/internal_server.h ./include/utilities.h
+OBJS = $(BUILD_DIR)/server_app.o $(BUILD_DIR)/server.o
+HEADERS = ./include/server.h
 
 all: $(BUILD_DIR) $(TARGET)
 
