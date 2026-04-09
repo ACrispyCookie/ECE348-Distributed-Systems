@@ -1,6 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <signal.h>
+#include <unistd.h>
+#include <pthread.h>
 #include "server.h"
+
+volatile sig_atomic_t shuttingDown = 0;
+void handle_signal(int signo);
 
 int main(int argc, char *argv[]) {
     int port = 0;
@@ -29,5 +36,22 @@ int main(int argc, char *argv[]) {
     }
     printf("Using %s as mount point and running on %d\n", mountpoint, port);
 
+    /* install signal handlers to initiate clean shutdown */
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = handle_signal;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGTERM, &sa, NULL);
+
+    while (!shuttingDown)
+        server_handle_next();
+    server_shutdown();
+
     return 0;
+}
+
+void handle_signal(int signo) {
+    shuttingDown = 1;
 }
