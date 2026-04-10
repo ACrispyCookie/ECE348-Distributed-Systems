@@ -1,22 +1,30 @@
 #ifndef SERVER_H
 #define SERVER_H
 #include "uthash.h"
+#include <arpa/inet.h>
 
 typedef enum {
     OPEN,
     READ,
     WRITE,
-    NO_FILE_FOUND
-} RequestType;
+    NOT_FOUND,
+    ERROR
+} PacketType;
 
 typedef struct {
-    RequestType type;
+    PacketType type;
     unsigned int sequence_number;
+    unsigned int fid;
     unsigned int length;
     unsigned int offset;
-    unsigned int fid;
     unsigned int payload_length;
     void *payload;
+} PacketT;
+
+typedef struct {
+    PacketT packet;
+    struct sockaddr_in client_addr;
+    socklen_t client_addrlen;
 } RequestT;
 
 typedef struct {
