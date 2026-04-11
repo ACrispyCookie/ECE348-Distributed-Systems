@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -g -pthread -I./include
+CFLAGS = -Wall -g -pthread -I./include -I../common/include
 
 ifeq ($(DEBUG), 1)
     CFLAGS += -DDEBUG
@@ -14,14 +14,20 @@ ifdef REPLY_LOSS
 endif
 
 BUILD_DIR = build
+COMMON_DIR = ../common
+COMMON_OBJ = ../common/build/protocol.o
 TARGET = $(BUILD_DIR)/server_app
-OBJS = $(BUILD_DIR)/server_app.o $(BUILD_DIR)/server.o
-HEADERS = ./include/server.h
+OBJS = $(BUILD_DIR)/server_app.o $(BUILD_DIR)/server.o $(COMMON_OBJ)
+HEADERS = ./include/server.h ../common/include
 
-all: $(BUILD_DIR) $(TARGET)
+all: $(BUILD_DIR) common $(TARGET)
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
+
+.PHONY: common
+common:
+	$(MAKE) -C $(COMMON_DIR)
 
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $(TARGET) $(OBJS)
@@ -34,3 +40,4 @@ clean:
 
 clean-all: clean
 	rm -f $(BUILD_DIR)/*.txt
+	$(MAKE) -C $(COMMON_DIR) clean

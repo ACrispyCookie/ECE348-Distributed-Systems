@@ -9,6 +9,7 @@
 #include <arpa/inet.h>
 #include <stdint.h>
 #include <fcntl.h>
+#include <unistd.h>
 #include "server.h"
 
 static unsigned int last_fid;
@@ -18,12 +19,11 @@ static FileTableT *table = NULL;
 
 RequestT *req_receive();
 int req_send(RequestT *request);
-RequestT *req_deserialize(void *buf, unsigned int length);
-void *req_serialize(RequestT *request, unsigned int *length);
 
 int handle_open(RequestT *open_req);
 int handle_read(RequestT *read_req, FileTableT *file);
 int handle_write(RequestT *write_req, FileTableT *file);
+int handle_truncate(RequestT *truncate_req, FileTableT *file);
 void handle_not_found(RequestT *req);
 
 int get_next_id();
@@ -58,7 +58,7 @@ int server_init(char *mountpoint, unsigned int port) {
             port = ntohs(addr.sin_port);
     }
 
-    // Initialize lastFid from memory.txt in the working directory or 0 if absent.
+    // Initialize last_fid from memory.txt in the working directory or 0 if absent.
     memory_file = fopen("memory.txt", "r+");
     if (!memory_file) {
         memory_file = fopen("memory.txt", "w+");
@@ -86,14 +86,14 @@ void server_handle_next() {
     if (!received) return;
 
     FileTableT *found;
-    HASH_FIND_INT(table, &(received->packet.fid), found);
-    if (!found && received->packet.type != OPEN) {
+    HASH_FIND_INT(table, &(received->packet->fid), found);
+    if (!found && received->packet->type != OPEN) {
         handle_not_found(received);
         return;
     }
 
     int return_code = 0;
-    switch (received->packet.type) {
+    switch (received->packet->type) {
         case OPEN:
             return_code = handle_open(received);
             break;
@@ -103,29 +103,33 @@ void server_handle_next() {
         case WRITE:
             return_code = handle_write(received, found);
             break;
+        case TRUNCATE:
+            return_code = handle_truncate(received, found);
+            break;
         default:
             break;
     }
 
     if (return_code == -1) {
-        received->packet.type = ERROR;
-        free(received->packet.payload);
-        received->packet.payload = NULL;
-        received->packet.payload_length = 0;
+        received->packet->type = ERROR;
+        free(received->packet->payload);
+        received->packet->payload = NULL;
+        received->packet->payload_length = 0;
         req_send(received);
     }
+    free(received->packet);
     free(received);
 }
 
 int handle_open(RequestT *open_req) {
-    if (open_req->packet.payload_length == 0)
+    if (open_req->packet->payload_length == 0)
         return -1;
     
-    char *filename = malloc(open_req->packet.payload_length + 1);
+    char *filename = malloc(open_req->packet->payload_length + 1);
     if (!filename)
         return -1;
-    memcpy(filename, open_req->packet.payload, open_req->packet.payload_length);
-    filename[open_req->packet.payload_length] = '\0';
+    memcpy(filename, open_req->packet->payload, open_req->packet->payload_length);
+    filename[open_req->packet->payload_length] = '\0';
 
     int fid = open(filename, O_RDWR|O_CREAT, 0666);
     if (fid < 0) {
@@ -143,34 +147,34 @@ int handle_open(RequestT *open_req) {
     HASH_ADD_INT(table, global_fid, entry);
 
     free(filename);
-    free(open_req->packet.payload);
-    open_req->packet.payload_length = 0;
-    open_req->packet.payload = NULL;
-    open_req->packet.fid = entry->global_fid;
+    free(open_req->packet->payload);
+    open_req->packet->payload_length = 0;
+    open_req->packet->payload = NULL;
+    open_req->packet->fid = entry->global_fid;
     req_send(open_req);
     return 0;
 }
 
 int handle_read(RequestT *read_req, FileTableT *file) {
     int local_fid = file->local_fid;
-    if (read_req->packet.length == 0) {
-        read_req->packet.payload = NULL;
-        read_req->packet.payload_length = 0;
+    if (read_req->packet->length == 0) {
+        read_req->packet->payload = NULL;
+        read_req->packet->payload_length = 0;
         req_send(read_req);
         return 0;
     }
     
-    int return_code = lseek(local_fid, read_req->packet.offset, SEEK_SET);
+    int return_code = lseek(local_fid, read_req->packet->offset, SEEK_SET);
     if (return_code < 0)
         return -1;
-    void *buf = malloc(read_req->packet.length);
+    void *buf = malloc(read_req->packet->length);
     if (!buf)
         return -1;
 
     ssize_t bytes_read;
     size_t total_bytes = 0;
-    while (total_bytes < read_req->packet.length) { 
-        bytes_read = read(local_fid, (char*)buf + total_bytes, read_req->packet.length - total_bytes); 
+    while (total_bytes < read_req->packet->length) { 
+        bytes_read = read(local_fid, (char*)buf + total_bytes, read_req->packet->length - total_bytes); 
         if (bytes_read < 0) {
             free(buf);
             return -1;
@@ -180,8 +184,8 @@ int handle_read(RequestT *read_req, FileTableT *file) {
         total_bytes += bytes_read; 
     }
 
-    read_req->packet.payload_length = total_bytes;
-    read_req->packet.payload = buf;
+    read_req->packet->payload_length = total_bytes;
+    read_req->packet->payload = buf;
     req_send(read_req);
     free(buf);
     return 0;
@@ -191,8 +195,13 @@ int handle_write(RequestT *write_req, FileTableT *file) {
     return 0;
 }
 
+int handle_truncate(RequestT *truncate_req, FileTableT *file) {
+    int local_fid = file->local_fid;
+    return ftruncate(local_fid, truncate_req->packet->length);
+}
+
 void handle_not_found(RequestT *req) {
-    req->packet.type = NOT_FOUND;
+    req->packet->type = NOT_FOUND;
     req_send(req);
     free(req);
 }
@@ -212,9 +221,18 @@ RequestT *req_receive() {
         return NULL;
     }
 
-    RequestT *req = req_deserialize(buf, (unsigned int)n);
+    RequestT *req = malloc(sizeof(RequestT));
+    if (!req) {
+        free(buf);
+        return NULL;
+    }
+
+    req->packet = req_deserialize(buf, (unsigned int)n);
     free(buf);
-    if (!req) return NULL;
+    if (req->packet == NULL) {
+        free(req);
+        return NULL;
+    }
 
     /* store sender address for replies */
     req->client_addr = src_addr;
@@ -227,7 +245,7 @@ int req_send(RequestT *request) {
     if (!request) return -1;
 
     unsigned int buf_len = 0;
-    void *buf = req_serialize(request, &buf_len);
+    void *buf = req_serialize(request->packet, &buf_len);
     if (!buf || buf_len == 0) return -1;
 
     ssize_t sent = sendto(sockfd, buf, buf_len, 0,
@@ -236,80 +254,6 @@ int req_send(RequestT *request) {
     free(buf);
 
     return (sent == (ssize_t)buf_len) ? 0 : -1;
-}
-
-RequestT *req_deserialize(void *buf, unsigned int length) {
-    if (!buf || length < 4 + 6*4) return NULL;
-    unsigned char *p = (unsigned char *)buf;
-    uint32_t tmp;
-
-    memcpy(&tmp, p, 4); p += 4;
-    uint32_t total = ntohl(tmp);
-    if ((uint32_t)length < 4 + total) return NULL;
-
-    memcpy(&tmp, p, 4); p += 4;
-    PacketType type = (PacketType)ntohl(tmp);
-
-    memcpy(&tmp, p, 4); p += 4;
-    unsigned int sequence_number = ntohl(tmp);
-
-    memcpy(&tmp, p, 4); p += 4;
-    unsigned int fid = ntohl(tmp);
-
-    memcpy(&tmp, p, 4); p += 4;
-    unsigned int plen = ntohl(tmp);
-
-    memcpy(&tmp, p, 4); p += 4;
-    unsigned int offset = ntohl(tmp);
-
-    memcpy(&tmp, p, 4); p += 4;
-    unsigned int payload_length = ntohl(tmp);
-
-    if (payload_length > total) return NULL;
-
-    RequestT *req = malloc(sizeof(RequestT));
-    if (!req) return NULL;
-    memset(req, 0, sizeof(RequestT));
-    req->packet.type = type;
-    req->packet.sequence_number = sequence_number;
-    req->packet.length = plen;
-    req->packet.offset = offset;
-    req->packet.fid = fid;
-    req->packet.payload_length = payload_length;
-    if (payload_length > 0) {
-        req->packet.payload = malloc((size_t)payload_length);
-        if (!req->packet.payload) { free(req); return NULL; }
-        memcpy(req->packet.payload, p, payload_length);
-    } else {
-        req->packet.payload = NULL;
-    }
-
-    return req;
-}
-
-void *req_serialize(RequestT *request, unsigned int *length) {
-    if (!request || !length) return NULL;
-    uint32_t payload_len = request->packet.payload_length;
-    uint32_t total = 6*4 + payload_len; /* six 32-bit fields + payload */
-    uint32_t bufsize = 4 + total;
-    unsigned char *buf = malloc(bufsize);
-    if (!buf) return NULL;
-    unsigned char *p = buf;
-
-    uint32_t tmp_net = htonl(total);
-    memcpy(p, &tmp_net, 4); p += 4;
-
-    tmp_net = htonl((uint32_t)request->packet.type); memcpy(p, &tmp_net, 4); p += 4;
-    tmp_net = htonl((uint32_t)request->packet.sequence_number); memcpy(p, &tmp_net, 4); p += 4;
-    tmp_net = htonl((uint32_t)request->packet.fid); memcpy(p, &tmp_net, 4); p += 4;
-    tmp_net = htonl((uint32_t)request->packet.length); memcpy(p, &tmp_net, 4); p += 4;
-    tmp_net = htonl((uint32_t)request->packet.offset); memcpy(p, &tmp_net, 4); p += 4;
-    tmp_net = htonl((uint32_t)request->packet.payload_length); memcpy(p, &tmp_net, 4); p += 4;
-
-    if (payload_len > 0 && request->packet.payload) memcpy(p, request->packet.payload, payload_len);
-
-    *length = bufsize;
-    return buf;
 }
 
 int get_next_id() {
