@@ -3,6 +3,7 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -12,6 +13,7 @@
 #include <unistd.h>
 #include "server.h"
 
+static char mount[4096];
 static unsigned int last_fid;
 static int sockfd;
 static FILE *memory_file = NULL;
@@ -71,6 +73,7 @@ int server_init(char *mountpoint, unsigned int port) {
             last_fid = 0;
         }
     }
+    strcpy(mount, mountpoint);
 
     return port;
 }
@@ -86,24 +89,33 @@ void server_handle_next() {
     if (!received) return;
 
     FileTableT *found;
-    HASH_FIND_INT(table, &(received->packet->fid), found);
-    if (!found && received->packet->type != OPEN) {
-        handle_not_found(received);
-        return;
-    }
-
     int return_code = 0;
-    switch (received->packet->type) {
+    switch (received->packet->header.type) {
         case OPEN:
             return_code = handle_open(received);
             break;
         case READ:
+            HASH_FIND_INT(table, &(received->packet->body.read_req.fid), found);
+            if (!found) {
+                handle_not_found(received);
+                return;
+            }
             return_code = handle_read(received, found);
             break;
         case WRITE:
+            HASH_FIND_INT(table, &(received->packet->body.write_req.fid), found);
+            if (!found) {
+                handle_not_found(received);
+                return;
+            }
             return_code = handle_write(received, found);
             break;
         case TRUNCATE:
+            HASH_FIND_INT(table, &(received->packet->body.trunc_req.fid), found);
+            if (!found) {
+                handle_not_found(received);
+                return;
+            }
             return_code = handle_truncate(received, found);
             break;
         default:
@@ -111,7 +123,7 @@ void server_handle_next() {
     }
 
     if (return_code == -1) {
-        received->packet->type = ERROR;
+        received->packet->header.type = ERROR;
         free(received->packet->payload);
         received->packet->payload = NULL;
         received->packet->payload_length = 0;
@@ -122,59 +134,65 @@ void server_handle_next() {
 }
 
 int handle_open(RequestT *open_req) {
-    if (open_req->packet->payload_length == 0)
-        return -1;
-    
-    char *filename = malloc(open_req->packet->payload_length + 1);
-    if (!filename)
-        return -1;
-    memcpy(filename, open_req->packet->payload, open_req->packet->payload_length);
-    filename[open_req->packet->payload_length] = '\0';
+    char filename[256];
+    memcpy(filename, open_req->packet->body.open_req.fname, 256);
+    filename[255] = '\0';
 
-    int fid = open(filename, O_RDWR|O_CREAT, 0666);
-    if (fid < 0) {
-        free(filename);
+    char path[4096];
+    strcpy(path, mount);
+    strcat(path, filename);
+
+    int fid = open(path, O_RDWR|O_CREAT, 0666);
+    if (fid < 0)
         return -1;
-    }
 
     FileTableT *entry = malloc(sizeof(FileTableT));
-    if (!entry) {
-        free(filename);
+    if (!entry)
         return -1;
-    }
     entry->local_fid = fid;
     entry->global_fid = get_next_id();
     HASH_ADD_INT(table, global_fid, entry);
 
-    free(filename);
-    free(open_req->packet->payload);
-    open_req->packet->payload_length = 0;
-    open_req->packet->payload = NULL;
-    open_req->packet->fid = entry->global_fid;
+    struct stat attr;
+    if (fstat(fid, &attr) < 0)
+        return -1;
+    open_req->packet->body.open_resp.fid = entry->global_fid;
+    open_req->packet->body.open_resp.size = attr.st_size;
+    open_req->packet->body.open_resp.mtime = attr.st_mtime;
     req_send(open_req);
     return 0;
 }
 
 int handle_read(RequestT *read_req, FileTableT *file) {
     int local_fid = file->local_fid;
-    if (read_req->packet->length == 0) {
+    struct stat attr;
+    if (fstat(local_fid, &attr) < 0)
+        return -1;
+
+    ReadReq *req = &read_req->packet->body.read_req;
+    ReadResp *resp = &read_req->packet->body.read_resp;
+    if (req->length == 0 || req->cached_mtime == attr.st_mtime) {
+        resp->fid = req->fid;
+        resp->length = 0;
+        resp->offset = req->offset;
+        resp->mtime = attr.st_mtime;
         read_req->packet->payload = NULL;
         read_req->packet->payload_length = 0;
         req_send(read_req);
         return 0;
     }
-    
-    int return_code = lseek(local_fid, read_req->packet->offset, SEEK_SET);
+
+    int return_code = lseek(local_fid, req->offset, SEEK_SET);
     if (return_code < 0)
         return -1;
-    void *buf = malloc(read_req->packet->length);
+    void *buf = malloc(req->length);
     if (!buf)
         return -1;
 
     ssize_t bytes_read;
     size_t total_bytes = 0;
-    while (total_bytes < read_req->packet->length) { 
-        bytes_read = read(local_fid, (char*)buf + total_bytes, read_req->packet->length - total_bytes); 
+    while (total_bytes < req->length) { 
+        bytes_read = read(local_fid, (char*)buf + total_bytes, req->length - total_bytes); 
         if (bytes_read < 0) {
             free(buf);
             return -1;
@@ -186,22 +204,73 @@ int handle_read(RequestT *read_req, FileTableT *file) {
 
     read_req->packet->payload_length = total_bytes;
     read_req->packet->payload = buf;
+    resp->fid = req->fid;
+    resp->length = total_bytes;
+    resp->offset = req->offset;
+    resp->mtime = attr.st_mtime;
     req_send(read_req);
     free(buf);
     return 0;
 }
 
 int handle_write(RequestT *write_req, FileTableT *file) {
+    int local_fid = file->local_fid;
+    struct stat attr;
+    if (fstat(local_fid, &attr) < 0)
+        return -1;
+
+    WriteReq *req = &write_req->packet->body.write_req;
+    OpenResp *resp = &write_req->packet->body.open_resp;
+    if (req->length == 0) {
+        resp->fid = req->fid;
+        resp->size = attr.st_size;
+        resp->mtime = attr.st_mtime;
+        req_send(write_req);
+        return 0;
+    }
+
+    int return_code = lseek(local_fid, req->offset, SEEK_SET);
+    if (return_code < 0)
+        return -1;
+
+    ssize_t bytes_written;
+    size_t total_bytes = 0;
+    while (total_bytes < req->length) { 
+        bytes_written = write(local_fid, (char*)write_req->packet->payload + total_bytes, req->length - total_bytes); 
+        if (bytes_written < 0) {
+            return -1;
+        } else if (bytes_written == 0)
+            break;
+
+        total_bytes += bytes_written;
+    }
+    if (fstat(local_fid, &attr) < 0)
+        return -1;
+
+    free(write_req->packet->payload);
+    write_req->packet->payload = NULL;
+    write_req->packet->payload_length = 0;
+    resp->fid = req->fid;
+    resp->mtime = attr.st_mtime;
+    resp->size = attr.st_size;
+    req_send(write_req);
     return 0;
 }
 
 int handle_truncate(RequestT *truncate_req, FileTableT *file) {
     int local_fid = file->local_fid;
-    return ftruncate(local_fid, truncate_req->packet->length);
+    struct stat attr;
+    if (fstat(local_fid, &attr) < 0)
+        return -1;
+
+    truncate_req->packet->body.open_resp.fid = truncate_req->packet->body.trunc_req.fid;
+    truncate_req->packet->body.open_resp.mtime = attr.st_mtime;
+    truncate_req->packet->body.open_resp.size = attr.st_size;
+    return ftruncate(local_fid, truncate_req->packet->body.trunc_req.length);
 }
 
 void handle_not_found(RequestT *req) {
-    req->packet->type = NOT_FOUND;
+    req->packet->header.type = NOT_FOUND;
     req_send(req);
     free(req);
 }
@@ -243,6 +312,7 @@ RequestT *req_receive() {
 
 int req_send(RequestT *request) {
     if (!request) return -1;
+    request->packet->header.is_response = 1;
 
     unsigned int buf_len = 0;
     void *buf = req_serialize(request->packet, &buf_len);

@@ -1,5 +1,6 @@
 #ifndef PROTOCOL_H
 #define PROTOCOL_H
+#include <stdint.h>
 
 typedef enum {
     OPEN,
@@ -12,15 +13,54 @@ typedef enum {
 
 typedef struct {
     PacketType type;
-    unsigned int sequence_number;
-    unsigned int fid;
-    unsigned int length;
-    unsigned int offset;
-    unsigned int payload_length;
+    uint32_t id;
+    uint8_t is_response;
+} PacketHeader;
+
+// Requests
+typedef struct { 
+    char fname[256];
+} OpenReq;
+
+typedef struct {
+    uint32_t fid, offset, length;
+    uint64_t cached_mtime; 
+} ReadReq;  // cached_mtime=0 if not cached
+
+typedef struct {
+    uint32_t fid, offset, length;
+} WriteReq;
+
+typedef struct {
+    uint32_t fid, length;
+} TruncReq;
+
+// Responses
+typedef struct {
+    uint32_t fid; 
+    uint64_t mtime, size;
+} OpenResp;  // also for WRITE/TRUNC
+
+typedef struct {
+    uint32_t fid, offset, length; 
+    uint64_t mtime;
+} ReadResp;
+
+typedef struct {
+    PacketHeader header;
+    union {
+        OpenReq   open_req;
+        ReadReq   read_req;
+        WriteReq  write_req;
+        TruncReq  trunc_req;
+        OpenResp  open_resp;   // reuse for WRITE/TRUNC responses too
+        ReadResp  read_resp;
+    } body;
+    uint32_t payload_length;
     void *payload;
 } PacketT;
 
-PacketT *req_deserialize(void *buf, unsigned int length);
-void *req_serialize(PacketT *request, unsigned int *length);
+PacketT *req_deserialize(void *buf, uint32_t length);
+void *req_serialize(PacketT *request, uint32_t *length);
 
 #endif
