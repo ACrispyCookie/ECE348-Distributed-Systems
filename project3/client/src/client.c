@@ -2,6 +2,7 @@
 #include <pthread.h>
 #include <time.h>
 #include <errno.h>
+#include <unistd.h>
 
 static char *address;
 static int port;
@@ -50,6 +51,15 @@ int mynfs_init(char *server_address, int server_port, int block_s, int max_block
 
     ret_code = pthread_create(&receiver, NULL, run_receiver, NULL);
     return ret_code;
+}
+
+void mynfs_shutdown() {
+    // stop receiver
+    // close socket
+    // clear waiting map
+    // clear clientmap
+    // clear servermap
+    // clear namemap
 }
 
 int mynfs_open(char *fname) {
