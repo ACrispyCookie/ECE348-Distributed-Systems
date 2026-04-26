@@ -19,7 +19,7 @@ typedef struct {
 
 // Requests
 typedef struct { 
-    char fname[256];
+    char fname[4096];
 } OpenReq;
 
 typedef struct {

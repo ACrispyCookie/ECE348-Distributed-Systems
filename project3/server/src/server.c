@@ -141,14 +141,17 @@ void server_handle_next() {
 }
 
 int handle_open(RequestT *open_req) {
-    char filename[256];
-    memcpy(filename, open_req->packet->body.open_req.fname, 256);
-    filename[255] = '\0';
+    char filename[4096];
+    memcpy(filename, open_req->packet->body.open_req.fname, 4096);
+    filename[4095] = '\0';
+    if (strstr(filename, "..") != NULL)
+        return -1;
 
     char path[4096];
     strcpy(path, mount);
     strcat(path, "/");
     strcat(path, filename);
+    
 
     int fid = open(path, O_RDWR|O_CREAT, 0666);
     if (fid < 0)
@@ -162,8 +165,12 @@ int handle_open(RequestT *open_req) {
     HASH_ADD_INT(table, global_fid, entry);
 
     struct stat attr;
-    if (fstat(fid, &attr) < 0)
+    if (fstat(fid, &attr) < 0) {
+        HASH_DEL(table, entry);
+        free(entry);
+        close(fid);
         return -1;
+    }
     open_req->packet->body.open_resp.fid = entry->global_fid;
     open_req->packet->body.open_resp.size = attr.st_size;
     open_req->packet->body.open_resp.mtime = attr.st_mtime;
@@ -180,9 +187,11 @@ int handle_read(RequestT *read_req, FileTableT *file) {
     ReadReq *req = &read_req->packet->body.read_req;
     ReadResp *resp = &read_req->packet->body.read_resp;
     if (req->length == 0 || req->cached_mtime == attr.st_mtime) {
-        resp->fid = req->fid;
+        uint32_t fid = req->fid;
+        uint32_t offset = req->offset;
+        resp->fid = fid;
         resp->length = 0;
-        resp->offset = req->offset;
+        resp->offset = offset;
         resp->mtime = attr.st_mtime;
         read_req->packet->payload = NULL;
         read_req->packet->payload_length = 0;
@@ -212,9 +221,11 @@ int handle_read(RequestT *read_req, FileTableT *file) {
 
     read_req->packet->payload_length = total_bytes;
     read_req->packet->payload = buf;
-    resp->fid = req->fid;
+    uint32_t fid = req->fid;
+    uint32_t offset = req->offset;
+    resp->fid = fid;
     resp->length = total_bytes;
-    resp->offset = req->offset;
+    resp->offset = offset;
     resp->mtime = attr.st_mtime;
     resp->size = attr.st_size;
     req_send(read_req);
@@ -231,7 +242,8 @@ int handle_write(RequestT *write_req, FileTableT *file) {
     WriteReq *req = &write_req->packet->body.write_req;
     OpenResp *resp = &write_req->packet->body.open_resp;
     if (req->length == 0) {
-        resp->fid = req->fid;
+        uint32_t fid = req->fid;
+        resp->fid = fid;
         resp->size = attr.st_size;
         resp->mtime = attr.st_mtime;
         req_send(write_req);
@@ -259,7 +271,8 @@ int handle_write(RequestT *write_req, FileTableT *file) {
     free(write_req->packet->payload);
     write_req->packet->payload = NULL;
     write_req->packet->payload_length = 0;
-    resp->fid = req->fid;
+    uint32_t fid = req->fid;
+    resp->fid = fid;
     resp->mtime = attr.st_mtime;
     resp->size = attr.st_size;
     req_send(write_req);
@@ -288,6 +301,7 @@ int handle_truncate(RequestT *truncate_req, FileTableT *file) {
 void handle_not_found(RequestT *req) {
     req->packet->header.type = NOT_FOUND;
     req_send(req);
+    free(req->packet);
     free(req);
 }
 
