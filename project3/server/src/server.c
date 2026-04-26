@@ -329,7 +329,6 @@ RequestT *req_receive() {
 int req_send(RequestT *request) {
     if (!request) return -1;
     request->packet->header.is_response = 1;
-    print_request(request);
 
     unsigned int buf_len = 0;
     void *buf = req_serialize(request->packet, &buf_len);

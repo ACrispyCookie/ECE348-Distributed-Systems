@@ -92,7 +92,11 @@ int main(int argc, char *argv[]) {
                 fprintf(stderr, "read failed\n");
             } else {
                 buf[bytes] = '\0';
-                printf("read %ld bytes: %s\n", bytes, buf);
+                printf("read %ld bytes: ", bytes);
+                for (int i = 0; i < bytes; i++) {
+                    putchar(buf[i]);
+                }
+                printf("\n");
             }
             free(buf);
 
