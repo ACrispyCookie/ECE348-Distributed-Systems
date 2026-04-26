@@ -311,8 +311,13 @@ PacketT *req_send_with_reopen(PacketT *packet, ServerFileT *server_file) {
         reopen.body.open_req.fname[255] = '\0';
         PacketT *reopen_resp = req_send(&reopen);
 
-        if (reopen_resp == NULL || reopen_resp->header.type != OPEN)
+        if (reopen_resp == NULL || reopen_resp->header.type != OPEN) {
+            if (reopen_resp) {
+                free(reopen_resp->payload);
+                free(reopen_resp);
+            }
             return NULL;
+        }
 
         server_file->fid   = reopen_resp->body.open_resp.fid;
         server_file->mtime = reopen_resp->body.open_resp.mtime;
@@ -371,8 +376,12 @@ PacketT *req_send(PacketT *packet) {
         clock_gettime(CLOCK_REALTIME, &ts);
         ts.tv_sec += TIMEOUT_SEC;
 
-        int rc = pthread_cond_timedwait(&req.cond, &lock, &ts);
-        if (rc == 0) break;
+        int rc = 0;
+        while (req.resp == NULL && rc != ETIMEDOUT) {
+            rc = pthread_cond_timedwait(&req.cond, &lock, &ts);
+        }
+
+        if (req.resp != NULL) break;
         if (rc == ETIMEDOUT) { retries++; continue; }
     }
     HASH_DEL(waiting, &req);
