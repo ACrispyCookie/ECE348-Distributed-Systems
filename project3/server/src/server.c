@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <ctype.h>
 #include "server.h"
 
 static char mount[4096];
@@ -27,6 +28,7 @@ int handle_read(RequestT *read_req, FileTableT *file);
 int handle_write(RequestT *write_req, FileTableT *file);
 int handle_truncate(RequestT *truncate_req, FileTableT *file);
 void handle_not_found(RequestT *req);
+void print_request(RequestT *req);
 
 int get_next_id();
 
@@ -87,6 +89,11 @@ void server_shutdown() {
 void server_handle_next() {
     RequestT *received = req_receive();
     if (!received) return;
+
+#ifdef DEBUG
+    printf("Received new packet:\n");
+    print_request(received);
+#endif
 
     FileTableT *found;
     int return_code = 0;
@@ -209,6 +216,7 @@ int handle_read(RequestT *read_req, FileTableT *file) {
     resp->length = total_bytes;
     resp->offset = req->offset;
     resp->mtime = attr.st_mtime;
+    resp->size = attr.st_size;
     req_send(read_req);
     free(buf);
     return 0;
@@ -260,14 +268,21 @@ int handle_write(RequestT *write_req, FileTableT *file) {
 
 int handle_truncate(RequestT *truncate_req, FileTableT *file) {
     int local_fid = file->local_fid;
+    if (ftruncate(local_fid, truncate_req->packet->body.trunc_req.length) < 0)
+        return -1;
+    
     struct stat attr;
     if (fstat(local_fid, &attr) < 0)
         return -1;
-
-    truncate_req->packet->body.open_resp.fid = truncate_req->packet->body.trunc_req.fid;
+    
+    uint32_t fid = truncate_req->packet->body.trunc_req.fid;
+    truncate_req->packet->body.open_resp.fid = fid;
     truncate_req->packet->body.open_resp.mtime = attr.st_mtime;
     truncate_req->packet->body.open_resp.size = attr.st_size;
-    return ftruncate(local_fid, truncate_req->packet->body.trunc_req.length);
+    truncate_req->packet->payload_length = 0;
+    truncate_req->packet->payload = NULL;
+    req_send(truncate_req);
+    return 0;
 }
 
 void handle_not_found(RequestT *req) {
@@ -314,6 +329,7 @@ RequestT *req_receive() {
 int req_send(RequestT *request) {
     if (!request) return -1;
     request->packet->header.is_response = 1;
+    print_request(request);
 
     unsigned int buf_len = 0;
     void *buf = req_serialize(request->packet, &buf_len);
@@ -340,4 +356,101 @@ int get_next_id() {
 
     last_fid = next;
     return next;
+}
+
+void print_request(RequestT *req) {
+    if (!req) {
+        printf("[RequestT] NULL\n");
+        return;
+    }
+
+    printf("[RequestT]\n");
+    printf("  client_addr: %s:%d\n",
+           inet_ntoa(req->client_addr.sin_addr),
+           ntohs(req->client_addr.sin_port));
+
+    if (!req->packet) {
+        printf("  packet: NULL\n");
+        return;
+    }
+
+    PacketT *p = req->packet;
+    const char *type_str;
+    switch (p->header.type) {
+        case OPEN:     type_str = "OPEN";     break;
+        case READ:     type_str = "READ";     break;
+        case WRITE:    type_str = "WRITE";    break;
+        case TRUNCATE: type_str = "TRUNCATE"; break;
+        case NOT_FOUND:type_str = "NOT_FOUND";break;
+        case ERROR:    type_str = "ERROR";    break;
+        default:       type_str = "UNKNOWN";  break;
+    }
+    printf("  header.type:        %s\n", type_str);
+    printf("  header.id:          %u\n", p->header.id);
+    printf("  header.is_response: %d\n", p->header.is_response);
+    printf("  payload_length:     %u\n", p->payload_length);
+
+    printf("  body:\n");
+    if (!p->header.is_response) {
+        switch (p->header.type) {
+            case OPEN:
+                printf("    fname: %.*s\n", 255, p->body.open_req.fname);
+                break;
+            case READ:
+                printf("    fid:          %u\n", p->body.read_req.fid);
+                printf("    offset:       %u\n", p->body.read_req.offset);
+                printf("    length:       %u\n", p->body.read_req.length);
+                printf("    cached_mtime: %lu\n", p->body.read_req.cached_mtime);
+                break;
+            case WRITE:
+                printf("    fid:    %u\n", p->body.write_req.fid);
+                printf("    offset: %u\n", p->body.write_req.offset);
+                printf("    length: %u\n", p->body.write_req.length);
+                break;
+            case TRUNCATE:
+                printf("    fid:    %u\n", p->body.trunc_req.fid);
+                printf("    length: %u\n", p->body.trunc_req.length);
+                break;
+            default:
+                break;
+        }
+    } else {
+        switch (p->header.type) {
+            case OPEN:
+            case WRITE:
+            case TRUNCATE:
+                printf("    fid:   %u\n",  p->body.open_resp.fid);
+                printf("    mtime: %lu\n", p->body.open_resp.mtime);
+                printf("    size:  %lu\n", p->body.open_resp.size);
+                break;
+            case READ:
+                printf("    fid:    %u\n",  p->body.read_resp.fid);
+                printf("    offset: %u\n",  p->body.read_resp.offset);
+                printf("    length: %u\n",  p->body.read_resp.length);
+                printf("    mtime:  %lu\n", p->body.read_resp.mtime);
+                printf("    size:  %lu\n", p->body.read_resp.size);
+                break;
+            default:
+                break;
+        }
+    }
+
+    if (p->payload_length > 0 && p->payload) {
+        printf("  payload (%u bytes): ", p->payload_length);
+        /* print as text if printable, otherwise hex */
+        int printable = 1;
+        for (unsigned int i = 0; i < p->payload_length; i++) {
+            if (!isprint(((unsigned char *)p->payload)[i])) {
+                printable = 0;
+                break;
+            }
+        }
+        if (printable) {
+            printf("%.*s\n", p->payload_length, (char *)p->payload);
+        } else {
+            for (unsigned int i = 0; i < p->payload_length; i++)
+                printf("%02x ", ((unsigned char *)p->payload)[i]);
+            printf("\n");
+        }
+    }
 }

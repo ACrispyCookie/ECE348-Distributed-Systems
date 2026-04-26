@@ -7,7 +7,7 @@
 void test_write_roundtrip() {
     PacketT pkt = {0};
     pkt.header.type        = WRITE;
-    pkt.header.seq         = 42;
+    pkt.header.id         = 42;
     pkt.header.is_response = 0;
 
     pkt.body.write_req.fid    = 7;
@@ -26,7 +26,7 @@ void test_write_roundtrip() {
     assert(out != NULL);
 
     assert(out->header.type           == WRITE);
-    assert(out->header.seq            == 42);
+    assert(out->header.id            == 42);
     assert(out->header.is_response    == 0);
     assert(out->body.write_req.fid    == 7);
     assert(out->body.write_req.offset == 100);
@@ -41,7 +41,7 @@ void test_write_roundtrip() {
 void test_read_req_roundtrip() {
     PacketT pkt = {0};
     pkt.header.type        = READ;
-    pkt.header.seq         = 10;
+    pkt.header.id         = 10;
     pkt.header.is_response = 0;
 
     pkt.body.read_req.fid          = 3;
@@ -59,7 +59,7 @@ void test_read_req_roundtrip() {
     assert(out != NULL);
 
     assert(out->header.type                == READ);
-    assert(out->header.seq                 == 10);
+    assert(out->header.id                 == 10);
     assert(out->header.is_response         == 0);
     assert(out->body.read_req.fid          == 3);
     assert(out->body.read_req.offset       == 512);
@@ -75,7 +75,7 @@ void test_read_req_roundtrip() {
 void test_open_req_roundtrip() {
     PacketT pkt = {0};
     pkt.header.type        = OPEN;
-    pkt.header.seq         = 1;
+    pkt.header.id         = 1;
     pkt.header.is_response = 0;
 
     strncpy(pkt.body.open_req.fname, "/home/user/test.txt", sizeof(pkt.body.open_req.fname));
@@ -90,7 +90,7 @@ void test_open_req_roundtrip() {
     assert(out != NULL);
 
     assert(out->header.type        == OPEN);
-    assert(out->header.seq         == 1);
+    assert(out->header.id         == 1);
     assert(out->header.is_response == 0);
     assert(strncmp(out->body.open_req.fname, "/home/user/test.txt",
                    sizeof(out->body.open_req.fname)) == 0);
@@ -104,7 +104,7 @@ void test_open_req_roundtrip() {
 void test_truncate_req_roundtrip() {
     PacketT pkt = {0};
     pkt.header.type        = TRUNCATE;
-    pkt.header.seq         = 7;
+    pkt.header.id         = 7;
     pkt.header.is_response = 0;
 
     pkt.body.trunc_req.fid    = 2;
@@ -120,7 +120,7 @@ void test_truncate_req_roundtrip() {
     assert(out != NULL);
 
     assert(out->header.type           == TRUNCATE);
-    assert(out->header.seq            == 7);
+    assert(out->header.id            == 7);
     assert(out->header.is_response    == 0);
     assert(out->body.trunc_req.fid    == 2);
     assert(out->body.trunc_req.length == 4096);
@@ -134,7 +134,7 @@ void test_truncate_req_roundtrip() {
 void test_open_resp_roundtrip() {
     PacketT pkt = {0};
     pkt.header.type        = OPEN;
-    pkt.header.seq         = 1;
+    pkt.header.id         = 1;
     pkt.header.is_response = 1;
 
     pkt.body.open_resp.fid   = 5;
@@ -151,7 +151,7 @@ void test_open_resp_roundtrip() {
     assert(out != NULL);
 
     assert(out->header.type          == OPEN);
-    assert(out->header.seq           == 1);
+    assert(out->header.id           == 1);
     assert(out->header.is_response   == 1);
     assert(out->body.open_resp.fid   == 5);
     assert(out->body.open_resp.mtime == 1700000000ULL);
@@ -166,13 +166,14 @@ void test_open_resp_roundtrip() {
 void test_read_resp_roundtrip() {
     PacketT pkt = {0};
     pkt.header.type        = READ;
-    pkt.header.seq         = 10;
+    pkt.header.id         = 10;
     pkt.header.is_response = 1;
 
     pkt.body.read_resp.fid    = 3;
     pkt.body.read_resp.offset = 512;
     pkt.body.read_resp.length = 5;
     pkt.body.read_resp.mtime  = 1700000000ULL;
+    pkt.body.read_resp.size = 28;
 
     char data[] = "world";
     pkt.payload        = data;
@@ -186,12 +187,13 @@ void test_read_resp_roundtrip() {
     assert(out != NULL);
 
     assert(out->header.type           == READ);
-    assert(out->header.seq            == 10);
+    assert(out->header.id            == 10);
     assert(out->header.is_response    == 1);
     assert(out->body.read_resp.fid    == 3);
     assert(out->body.read_resp.offset == 512);
     assert(out->body.read_resp.length == 5);
     assert(out->body.read_resp.mtime  == 1700000000ULL);
+    assert(out->body.read_resp.size  == 28);
     assert(out->payload_length        == 5);
     assert(memcmp(out->payload, "world", 5) == 0);
 
@@ -202,7 +204,7 @@ void test_read_resp_roundtrip() {
 void test_write_resp_roundtrip() {
     PacketT pkt = {0};
     pkt.header.type        = WRITE;
-    pkt.header.seq         = 42;
+    pkt.header.id         = 42;
     pkt.header.is_response = 1;
 
     pkt.body.open_resp.fid   = 7;
@@ -219,7 +221,7 @@ void test_write_resp_roundtrip() {
     assert(out != NULL);
 
     assert(out->header.type          == WRITE);
-    assert(out->header.seq           == 42);
+    assert(out->header.id           == 42);
     assert(out->header.is_response   == 1);
     assert(out->body.open_resp.fid   == 7);
     assert(out->body.open_resp.mtime == 1700000001ULL);
@@ -234,7 +236,7 @@ void test_write_resp_roundtrip() {
 void test_error_roundtrip() {
     PacketT pkt = {0};
     pkt.header.type        = ERROR;
-    pkt.header.seq         = 99;
+    pkt.header.id         = 99;
     pkt.header.is_response = 1;
     pkt.payload        = NULL;
     pkt.payload_length = 0;
@@ -247,7 +249,7 @@ void test_error_roundtrip() {
     assert(out != NULL);
 
     assert(out->header.type        == ERROR);
-    assert(out->header.seq         == 99);
+    assert(out->header.id         == 99);
     assert(out->header.is_response == 1);
     assert(out->payload_length     == 0);
     assert(out->payload            == NULL);
@@ -259,7 +261,7 @@ void test_error_roundtrip() {
 void test_not_found_roundtrip() {
     PacketT pkt = {0};
     pkt.header.type        = NOT_FOUND;
-    pkt.header.seq         = 3;
+    pkt.header.id         = 3;
     pkt.header.is_response = 1;
     pkt.payload        = NULL;
     pkt.payload_length = 0;
@@ -272,7 +274,7 @@ void test_not_found_roundtrip() {
     assert(out != NULL);
 
     assert(out->header.type        == NOT_FOUND);
-    assert(out->header.seq         == 3);
+    assert(out->header.id         == 3);
     assert(out->header.is_response == 1);
     assert(out->payload_length     == 0);
     assert(out->payload            == NULL);

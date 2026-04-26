@@ -68,6 +68,7 @@ PacketT *req_deserialize(const void *buf, uint32_t length) {
                 memcpy(&tmp, p+4,  4); r->offset = ntohl(tmp);
                 memcpy(&tmp, p+8,  4); r->length = ntohl(tmp);
                 uint64_t mtime; memcpy(&mtime, p+12, 8); r->mtime = be64toh(mtime);
+                uint64_t size; memcpy(&size, p+20, 8); r->size = be64toh(size);
                 packet->payload_length = r->length;
                 break;
             }
@@ -160,6 +161,8 @@ void *req_serialize(const PacketT *packet, uint32_t *out_len) {
                 tmp = htonl(r->length); memcpy(p+8,  &tmp, 4);
                 uint64_t mtime = htobe64(r->mtime);
                 memcpy(p+12, &mtime, 8);
+                uint64_t size = htobe64(r->size);
+                memcpy(p+20, &size, 8);
                 break;
             }
             default: break;

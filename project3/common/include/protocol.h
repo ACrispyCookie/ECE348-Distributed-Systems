@@ -43,7 +43,7 @@ typedef struct {
 
 typedef struct {
     uint32_t fid, offset, length; 
-    uint64_t mtime;
+    uint64_t mtime, size;
 } ReadResp;
 
 typedef struct {

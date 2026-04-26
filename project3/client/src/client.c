@@ -21,11 +21,13 @@ static socklen_t server_addrlen;
 static ClientFileT *client_files = NULL;
 static ServerFileT *server_files = NULL;
 static RequestT *waiting = NULL;
-
 static pthread_mutex_t lock;
 static pthread_t receiver;
 
+// Caller must hold lock
 PacketT *req_send(PacketT *packet);
+// Caller must hold lock
+PacketT *req_send_with_reopen(PacketT *packet, ServerFileT *server_file);
 void *run_receiver(void *args);
 PacketT create_packet(PacketType type);
 int get_next_req_id();
@@ -93,16 +95,16 @@ int mynfs_open(char *fname) {
     ServerFileT *found;
     HASH_FIND_STR(server_files, fname, found);
     if (found == NULL) {
-        pthread_mutex_unlock(&lock);
 
         PacketT packet = create_packet(OPEN);
         strncpy(packet.body.open_req.fname, fname, 255);
         packet.body.open_req.fname[255] = '\0';
         PacketT *response = req_send(&packet);
-        if (response == NULL || response->header.type != OPEN)
+        if (response == NULL || response->header.type != OPEN) {
+            pthread_mutex_unlock(&lock);
             return -1;
+        }
 
-        pthread_mutex_lock(&lock);
         HASH_FIND_STR(server_files, fname, found);
         if (found == NULL) {
             found = (ServerFileT *) malloc(sizeof(ServerFileT));
@@ -138,22 +140,136 @@ int mynfs_open(char *fname) {
 
 long mynfs_read(int fd, void *buf, long n) {
     pthread_mutex_lock(&lock);
+    ClientFileT *client_file;
+    HASH_FIND_INT(client_files, &fd, client_file);
+    if (client_file == NULL) {
+        pthread_mutex_unlock(&lock);
+        return -1;
+    }
+
+    PacketT packet = create_packet(READ);
+    packet.body.read_req.fid = client_file->server_file->fid;
+    packet.body.read_req.cached_mtime = 0;
+    packet.body.read_req.length = n;
+    packet.body.read_req.offset = client_file->pos;
+    PacketT *resp = req_send_with_reopen(&packet, client_file->server_file);
+    if (resp == NULL || resp->header.type == ERROR) {
+        if (resp)
+            free(resp);
+        pthread_mutex_unlock(&lock);
+        return -1;
+    }
+
+    long bytes_read = resp->body.read_resp.length;
+    if (bytes_read > 0)
+        memcpy(buf, resp->payload, bytes_read);
+    client_file->pos += bytes_read;
+    client_file->server_file->mtime = resp->body.read_resp.mtime;
+    client_file->server_file->size  = resp->body.read_resp.size;
+    free(resp->payload);
+    free(resp);
     pthread_mutex_unlock(&lock);
+    return bytes_read;
 }
 
 long mynfs_write(int fd, void *buf, long n) {
     pthread_mutex_lock(&lock);
+    ClientFileT *client_file;
+    HASH_FIND_INT(client_files, &fd, client_file);
+    if (client_file == NULL) {
+        pthread_mutex_unlock(&lock);
+        return -1;
+    }
+
+    PacketT packet = create_packet(WRITE);
+    packet.body.write_req.fid = client_file->server_file->fid;
+    packet.body.write_req.length = n;
+    packet.body.write_req.offset = client_file->pos;
+    packet.payload_length = n;
+    packet.payload = malloc(n);
+    if (packet.payload == NULL) {
+        pthread_mutex_unlock(&lock);
+        return -1;
+    }
+
+    memcpy(packet.payload, buf, n);
+    PacketT *resp = req_send_with_reopen(&packet, client_file->server_file);
+    free(packet.payload);
+    if (resp == NULL || resp->header.type == ERROR) {
+        if (resp)
+            free(resp);
+        pthread_mutex_unlock(&lock);
+        return -1;
+    }
+
+    client_file->pos += n;
+    client_file->server_file->mtime = resp->body.open_resp.mtime;
+    client_file->server_file->size  = resp->body.open_resp.size;
+    free(resp);
     pthread_mutex_unlock(&lock);
+    return n;
 }
 
 long mynfs_lseek(int fd, long pos, int whence) {
     pthread_mutex_lock(&lock);
+    ClientFileT *client_file;
+    HASH_FIND_INT(client_files, &fd, client_file);
+    if (client_file == NULL) {
+        pthread_mutex_unlock(&lock);
+        return -1;
+    }
+
+    long before_pos = client_file->pos;
+    switch (whence) {
+    case SEEK_SET:
+        client_file->pos = pos;
+        break;
+    case SEEK_CUR:
+        client_file->pos += pos;
+        break;
+    case SEEK_END:
+        client_file->pos = client_file->server_file->size + pos;
+        break;
+    default:
+        pthread_mutex_unlock(&lock);
+        return -1;
+    }
+
+    long return_value = client_file->pos < 0 ? -1 : client_file->pos;
+    client_file->pos = client_file->pos < 0 ? before_pos : client_file->pos;
     pthread_mutex_unlock(&lock);
+
+    return return_value;
 }
 
 int mynfs_truncate(int fd, long length) {
+    if (length < 0) 
+        return -1;
+    
     pthread_mutex_lock(&lock);
+    ClientFileT *client_file;
+    HASH_FIND_INT(client_files, &fd, client_file);
+    if (client_file == NULL) {
+        pthread_mutex_unlock(&lock);
+        return -1;
+    }
+
+    PacketT packet = create_packet(TRUNCATE);
+    packet.body.trunc_req.fid = client_file->server_file->fid;
+    packet.body.trunc_req.length = length;
+    PacketT *response = req_send_with_reopen(&packet, client_file->server_file);
+    if (response == NULL || response->header.type == ERROR) {
+        if (response)
+            free(response);
+        pthread_mutex_unlock(&lock);
+        return -1;
+    }
+
+    client_file->server_file->mtime = response->body.open_resp.mtime;
+    client_file->server_file->size = response->body.open_resp.size;
+    free(response);
     pthread_mutex_unlock(&lock);
+    return 0;
 }
 
 int mynfs_close(int fd) {
@@ -181,6 +297,46 @@ int mynfs_close(int fd) {
     return 0;
 }
 
+PacketT *req_send_with_reopen(PacketT *packet, ServerFileT *server_file) {
+    PacketT *response = req_send(packet);
+
+    int reopen_attempts = 0;
+    while (response != NULL && response->header.type == NOT_FOUND && reopen_attempts < MAX_REOPEN_RETRIES) {
+        reopen_attempts++;
+        free(response->payload);
+        free(response);
+
+        PacketT reopen = create_packet(OPEN);
+        strncpy(reopen.body.open_req.fname, server_file->filename, 255);
+        reopen.body.open_req.fname[255] = '\0';
+        PacketT *reopen_resp = req_send(&reopen);
+
+        if (reopen_resp == NULL || reopen_resp->header.type != OPEN)
+            return NULL;
+
+        server_file->fid   = reopen_resp->body.open_resp.fid;
+        server_file->mtime = reopen_resp->body.open_resp.mtime;
+        server_file->size  = reopen_resp->body.open_resp.size;
+        free(reopen_resp->payload);
+        free(reopen_resp);
+
+        switch (packet->header.type) {
+            case READ:     packet->body.read_req.fid   = server_file->fid; break;
+            case WRITE:    packet->body.write_req.fid  = server_file->fid; break;
+            case TRUNCATE: packet->body.trunc_req.fid  = server_file->fid; break;
+            default: break;
+        }
+        response = req_send(packet);
+    }
+
+    if (response != NULL && response->header.type == NOT_FOUND) {
+        free(response->payload);
+        free(response);
+        return NULL;
+    }
+    return response;
+}
+
 PacketT *req_send(PacketT *packet) {
     if (!packet) return NULL;
     RequestT req;
@@ -192,10 +348,12 @@ PacketT *req_send(PacketT *packet) {
     
     unsigned int buf_len = 0;
     void *buf = req_serialize(req.packet, &buf_len);
-    if (!buf || buf_len == 0) return NULL;
+    if (!buf || buf_len == 0) {
+        pthread_cond_destroy(&req.cond);
+        return NULL;
+    }
 
     struct timespec ts;
-    pthread_mutex_lock(&lock);
     HASH_ADD(hh, waiting, id, sizeof(uint32_t), &req);
 
     int retries = 0;
@@ -205,7 +363,6 @@ PacketT *req_send(PacketT *packet) {
                              server_addrlen);
         if (sent != (ssize_t)buf_len) {
             HASH_DEL(waiting, &req);
-            pthread_mutex_unlock(&lock);
             free(buf);
             pthread_cond_destroy(&req.cond);
             return NULL;
@@ -218,9 +375,7 @@ PacketT *req_send(PacketT *packet) {
         if (rc == 0) break;
         if (rc == ETIMEDOUT) { retries++; continue; }
     }
-    
     HASH_DEL(waiting, &req);
-    pthread_mutex_unlock(&lock);
 
     free(buf);
     pthread_cond_destroy(&req.cond);
@@ -272,5 +427,5 @@ int get_next_req_id() {
 }
 
 int get_next_fid() {
-    return ++last_fid;
+    return __atomic_fetch_add(&last_fid, 1, __ATOMIC_SEQ_CST) + 1;
 }
