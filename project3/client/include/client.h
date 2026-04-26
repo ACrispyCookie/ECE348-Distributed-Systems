@@ -5,6 +5,9 @@
 #include <pthread.h>
 #include <arpa/inet.h>
 
+#define MAX_RETRIES 5
+#define TIMEOUT_SEC 5
+
 typedef struct {
     unsigned int fid;
     char *filename;
@@ -23,7 +26,9 @@ typedef struct {
 } ClientFileT;
 
 typedef struct {
+    uint32_t id;
     PacketT *packet;
+    PacketT *resp;
     pthread_cond_t cond;
     UT_hash_handle hh;
 } RequestT;
