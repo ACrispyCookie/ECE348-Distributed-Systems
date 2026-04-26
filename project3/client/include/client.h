@@ -33,8 +33,8 @@ typedef struct {
     UT_hash_handle hh;
 } RequestT;
 
-
 int mynfs_init(char *server_addr, int server_port, int block_size, int max_cached_blocks, int freshT);
+void mynfs_shutdown();
 int mynfs_open(char *fname);
 long mynfs_read(int fd, void *buf, long n);
 long mynfs_write(int fd, void *buf, long n);

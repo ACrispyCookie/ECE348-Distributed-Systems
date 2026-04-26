@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <unistd.h>
 
+static volatile int shutting_down = 0;
 static char *address;
 static int port;
 static int block_size;
@@ -54,12 +55,33 @@ int mynfs_init(char *server_address, int server_port, int block_s, int max_block
 }
 
 void mynfs_shutdown() {
-    // stop receiver
-    // close socket
-    // clear waiting map
-    // clear clientmap
-    // clear servermap
-    // clear namemap
+    shutting_down = 1;
+    shutdown(sockfd, SHUT_RDWR);
+    close(sockfd);
+    pthread_join(receiver, NULL);
+
+    RequestT *current, *tmp;
+    HASH_ITER(hh, waiting, current, tmp) {
+        HASH_DEL(waiting, current);
+        pthread_cond_signal(&current->cond);
+        free(current);
+    }
+
+    ClientFileT *current_c, *tmp_c;
+    HASH_ITER(hh, client_files, current_c, tmp_c) {
+        HASH_DEL(client_files, current_c);
+        free(current_c);
+    }
+
+    ServerFileT *current_s, *tmp_s;
+    HASH_ITER(hh_id, server_files, current_s, tmp_s) {
+        HASH_DELETE(hh_id, server_files, current_s);
+        HASH_DELETE(hh_name, name_map, current_s);
+        free(current_s->filename);
+        free(current_s);
+    }
+
+    pthread_mutex_destroy(&lock);
 }
 
 int mynfs_open(char *fname) {
@@ -165,7 +187,8 @@ void *run_receiver(void *args) {
 
     while (1) {
         ssize_t n = recvfrom(sockfd, buf, sizeof(buf), 0, NULL, NULL);
-        if (n <= 0) continue;
+        if (n <= 0 && shutting_down) break;
+        else if (n <= 0) continue;
 
         PacketT *resp = req_deserialize(buf, (unsigned int)n);
         if (!resp) continue;

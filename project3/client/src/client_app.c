@@ -150,5 +150,6 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    mynfs_shutdown();
     return 0;
 }
