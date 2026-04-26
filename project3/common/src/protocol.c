@@ -4,13 +4,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-PacketT *req_deserialize(void *buf, uint32_t length) {
+PacketT *req_deserialize(const void *buf, uint32_t length) {
     if (!buf || length < sizeof(PacketHeader)) return NULL;
 
     PacketT *packet = malloc(sizeof(PacketT));
     if (!packet) return NULL;
 
-    unsigned char *p = buf;
+    const unsigned char *p = buf;
 
     /* Header */
     uint32_t tmp;
@@ -90,7 +90,7 @@ PacketT *req_deserialize(void *buf, uint32_t length) {
     return packet;
 }
 
-void *req_serialize(PacketT *packet, uint32_t *out_len) {
+void *req_serialize(const PacketT *packet, uint32_t *out_len) {
     if (!packet || !out_len) return NULL;
 
     uint32_t body_size = sizeof(packet->body);
@@ -98,6 +98,7 @@ void *req_serialize(PacketT *packet, uint32_t *out_len) {
 
     unsigned char *buf = malloc(total_len);
     if (!buf) return NULL;
+    memset(buf, 0, total_len);
     unsigned char *p = buf;
 
     /* Header */
@@ -115,7 +116,7 @@ void *req_serialize(PacketT *packet, uint32_t *out_len) {
                 break;
             }
             case READ: {
-                ReadReq *r = &packet->body.read_req;
+                const ReadReq *r = &packet->body.read_req;
                 tmp = htonl(r->fid);    memcpy(p,    &tmp, 4);
                 tmp = htonl(r->offset); memcpy(p+4,  &tmp, 4);
                 tmp = htonl(r->length); memcpy(p+8,  &tmp, 4);
@@ -124,14 +125,14 @@ void *req_serialize(PacketT *packet, uint32_t *out_len) {
                 break;
             }
             case WRITE: {
-                WriteReq *w = &packet->body.write_req;
+                const WriteReq *w = &packet->body.write_req;
                 tmp = htonl(w->fid);    memcpy(p,   &tmp, 4);
                 tmp = htonl(w->offset); memcpy(p+4, &tmp, 4);
                 tmp = htonl(w->length); memcpy(p+8, &tmp, 4);
                 break;
             }
             case TRUNCATE: {
-                TruncReq *t = &packet->body.trunc_req;
+                const TruncReq *t = &packet->body.trunc_req;
                 tmp = htonl(t->fid);    memcpy(p,   &tmp, 4);
                 tmp = htonl(t->length); memcpy(p+4, &tmp, 4);
                 break;
@@ -144,7 +145,7 @@ void *req_serialize(PacketT *packet, uint32_t *out_len) {
             case WRITE:
             case TRUNCATE: {
                 /* OpenResp is reused for WRITE and TRUNCATE responses */
-                OpenResp *r = &packet->body.open_resp;
+                const OpenResp *r = &packet->body.open_resp;
                 tmp = htonl(r->fid); memcpy(p, &tmp, 4);
                 uint64_t mtime = htobe64(r->mtime);
                 memcpy(p+4, &mtime, 8);
@@ -153,7 +154,7 @@ void *req_serialize(PacketT *packet, uint32_t *out_len) {
                 break;
             }
             case READ: {
-                ReadResp *r = &packet->body.read_resp;
+                const ReadResp *r = &packet->body.read_resp;
                 tmp = htonl(r->fid);    memcpy(p,    &tmp, 4);
                 tmp = htonl(r->offset); memcpy(p+4,  &tmp, 4);
                 tmp = htonl(r->length); memcpy(p+8,  &tmp, 4);

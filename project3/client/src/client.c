@@ -5,6 +5,9 @@
 #include <unistd.h>
 
 static volatile int shutting_down = 0;
+static int last_fid = 0;
+static int last_request_id = 0;
+
 static char *address;
 static int port;
 static int block_size;
@@ -17,14 +20,16 @@ static socklen_t server_addrlen;
 
 static ClientFileT *client_files = NULL;
 static ServerFileT *server_files = NULL;
-static ServerFileT *name_map = NULL;
 static RequestT *waiting = NULL;
 
 static pthread_mutex_t lock;
 static pthread_t receiver;
 
-PacketT *req_send(RequestT *req);
+PacketT *req_send(PacketT *packet);
 void *run_receiver(void *args);
+PacketT create_packet(PacketType type);
+int get_next_req_id();
+int get_next_fid();
 
 int mynfs_init(char *server_address, int server_port, int block_s, int max_blocks, int fresh_time) {
     address = server_address;
@@ -64,7 +69,6 @@ void mynfs_shutdown() {
     HASH_ITER(hh, waiting, current, tmp) {
         HASH_DEL(waiting, current);
         pthread_cond_signal(&current->cond);
-        free(current);
     }
 
     ClientFileT *current_c, *tmp_c;
@@ -74,9 +78,8 @@ void mynfs_shutdown() {
     }
 
     ServerFileT *current_s, *tmp_s;
-    HASH_ITER(hh_id, server_files, current_s, tmp_s) {
-        HASH_DELETE(hh_id, server_files, current_s);
-        HASH_DELETE(hh_name, name_map, current_s);
+    HASH_ITER(hh, server_files, current_s, tmp_s) {
+        HASH_DEL(server_files, current_s);
         free(current_s->filename);
         free(current_s);
     }
@@ -86,7 +89,51 @@ void mynfs_shutdown() {
 
 int mynfs_open(char *fname) {
     pthread_mutex_lock(&lock);
+
+    ServerFileT *found;
+    HASH_FIND_STR(server_files, fname, found);
+    if (found == NULL) {
+        pthread_mutex_unlock(&lock);
+
+        PacketT packet = create_packet(OPEN);
+        strncpy(packet.body.open_req.fname, fname, 255);
+        packet.body.open_req.fname[255] = '\0';
+        PacketT *response = req_send(&packet);
+        if (response == NULL || response->header.type != OPEN)
+            return -1;
+
+        pthread_mutex_lock(&lock);
+        HASH_FIND_STR(server_files, fname, found);
+        if (found == NULL) {
+            found = (ServerFileT *) malloc(sizeof(ServerFileT));
+            if (found == NULL) {
+                pthread_mutex_unlock(&lock);
+                return -1;
+            }
+            found->filename = strdup(fname);
+            found->fid = response->body.open_resp.fid;
+            found->mtime = response->body.open_resp.mtime;
+            found->size = response->body.open_resp.size;
+            found->ref_count = 0;
+            HASH_ADD_KEYPTR(hh, server_files, found->filename, strlen(found->filename), found);
+        }
+        free(response);
+    }
+
+    int fid = get_next_fid();
+    ClientFileT *new_file = (ClientFileT *) malloc(sizeof(ClientFileT));
+    if (new_file == NULL) {
+        pthread_mutex_unlock(&lock);
+        return -1;
+    }
+
+    found->ref_count++;
+    new_file->server_file = found;
+    new_file->fid = fid;
+    new_file->pos = 0;
+    HASH_ADD_INT(client_files, fid, new_file);
     pthread_mutex_unlock(&lock);
+    return fid;
 }
 
 long mynfs_read(int fd, void *buf, long n) {
@@ -119,13 +166,11 @@ int mynfs_close(int fd) {
         return -1;
     }
 
-    ServerFileT *server_file;
-    HASH_FIND(hh_id, server_files, &found->server_fid, sizeof(int), server_file);
+    ServerFileT *server_file = found->server_file;
     server_file->ref_count--;
 
     if (server_file->ref_count == 0) {
-        HASH_DELETE(hh_id, server_files, server_file);
-        HASH_DELETE(hh_name, name_map, server_file);
+        HASH_DEL(server_files, server_file);
         free(server_file->filename);
         free(server_file);
     }
@@ -136,50 +181,50 @@ int mynfs_close(int fd) {
     return 0;
 }
 
-PacketT *req_send(RequestT *req) {
-    if (!req) return NULL;
-    req->resp = NULL;
-    req->id = req->packet->header.id;
-    req->packet->header.is_response = 0;
-    if (pthread_cond_init(&req->cond, NULL) != 0)
+PacketT *req_send(PacketT *packet) {
+    if (!packet) return NULL;
+    RequestT req;
+    req.packet = packet;
+    req.resp = NULL;
+    req.id = req.packet->header.id = get_next_req_id();
+    if (pthread_cond_init(&req.cond, NULL) != 0)
         return NULL;
     
     unsigned int buf_len = 0;
-    void *buf = req_serialize(req->packet, &buf_len);
+    void *buf = req_serialize(req.packet, &buf_len);
     if (!buf || buf_len == 0) return NULL;
 
     struct timespec ts;
     pthread_mutex_lock(&lock);
-    HASH_ADD(hh, waiting, id, sizeof(uint32_t), req);
+    HASH_ADD(hh, waiting, id, sizeof(uint32_t), &req);
 
     int retries = 0;
-    while (req->resp == NULL && retries < MAX_RETRIES) {
+    while (req.resp == NULL && retries < MAX_RETRIES && !shutting_down) {
         ssize_t sent = sendto(sockfd, buf, buf_len, 0,
                              (struct sockaddr *)&server_addr,
                              server_addrlen);
         if (sent != (ssize_t)buf_len) {
-            HASH_DEL(waiting, req);
+            HASH_DEL(waiting, &req);
             pthread_mutex_unlock(&lock);
             free(buf);
-            pthread_cond_destroy(&req->cond);
+            pthread_cond_destroy(&req.cond);
             return NULL;
         }
 
         clock_gettime(CLOCK_REALTIME, &ts);
         ts.tv_sec += TIMEOUT_SEC;
 
-        int rc = pthread_cond_timedwait(&req->cond, &lock, &ts);
+        int rc = pthread_cond_timedwait(&req.cond, &lock, &ts);
         if (rc == 0) break;
         if (rc == ETIMEDOUT) { retries++; continue; }
-        break;
     }
     
-    HASH_DEL(waiting, req);
+    HASH_DEL(waiting, &req);
     pthread_mutex_unlock(&lock);
 
     free(buf);
-    pthread_cond_destroy(&req->cond);
-    return req->resp;
+    pthread_cond_destroy(&req.cond);
+    return req.resp;
 }
 
 void *run_receiver(void *args) {
@@ -211,4 +256,21 @@ void *run_receiver(void *args) {
     }
 
     return NULL;
+}
+
+PacketT create_packet(PacketType type) {
+    PacketT packet = {0};
+    packet.header.type = type;
+    packet.header.is_response = 0;
+    packet.payload = NULL;
+    packet.payload_length = 0;
+    return packet;
+}
+
+int get_next_req_id() {
+    return __atomic_fetch_add(&last_request_id, 1, __ATOMIC_SEQ_CST) + 1;
+}
+
+int get_next_fid() {
+    return ++last_fid;
 }

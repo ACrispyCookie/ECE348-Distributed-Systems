@@ -140,6 +140,7 @@ int handle_open(RequestT *open_req) {
 
     char path[4096];
     strcpy(path, mount);
+    strcat(path, "/");
     strcat(path, filename);
 
     int fid = open(path, O_RDWR|O_CREAT, 0666);

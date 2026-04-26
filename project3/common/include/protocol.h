@@ -60,7 +60,7 @@ typedef struct {
     void *payload;
 } PacketT;
 
-PacketT *req_deserialize(void *buf, uint32_t length);
-void *req_serialize(PacketT *request, uint32_t *length);
+PacketT *req_deserialize(const void *buf, uint32_t length);
+void *req_serialize(const PacketT *request, uint32_t *length);
 
 #endif

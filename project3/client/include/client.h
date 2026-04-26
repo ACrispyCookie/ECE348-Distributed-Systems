@@ -14,14 +14,13 @@ typedef struct {
     uint64_t size;
     uint64_t mtime;
     unsigned int ref_count;
-    UT_hash_handle hh_id;
-    UT_hash_handle hh_name;
+    UT_hash_handle hh;
 } ServerFileT;
 
 typedef struct {
     unsigned int fid;
-    unsigned int server_fid;
     long pos;
+    ServerFileT *server_file;
     UT_hash_handle hh;
 } ClientFileT;
 
