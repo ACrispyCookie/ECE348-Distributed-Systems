@@ -13,7 +13,10 @@
 #include <unistd.h>
 #include <ctype.h>
 #include "server.h"
+#include <signal.h>
+#include <time.h>
 
+static volatile sig_atomic_t alarm_fired = 0;
 static char mount[4096];
 static unsigned int last_fid;
 static int sockfd;
@@ -28,14 +31,26 @@ int handle_read(RequestT *read_req, FileTableT *file);
 int handle_write(RequestT *write_req, FileTableT *file);
 int handle_truncate(RequestT *truncate_req, FileTableT *file);
 void handle_not_found(RequestT *req);
-void print_request(RequestT *req);
 
 int get_next_id();
+void print_request(RequestT *req);
+void cleanup_stale_files();
+void reschedule_alarm();
+
+static void sigalrm_handler(int sig) {
+    alarm_fired = 1;
+}
 
 int server_init(char *mountpoint, unsigned int port) {
     sockfd = -1;
     struct sockaddr_in addr;
     socklen_t addrlen = sizeof(addr);
+
+    struct sigaction sa;
+    sa.sa_handler = sigalrm_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGALRM, &sa, NULL);
 
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (sockfd < 0) {
@@ -81,12 +96,20 @@ int server_init(char *mountpoint, unsigned int port) {
 }
 
 void server_shutdown() {
+    FileTableT *entry, *tmp;
+    HASH_ITER(hh, table, entry, tmp) {
+        HASH_DEL(table, entry);
+        close(entry->local_fid);
+        free(entry);
+    }
+    
     if (memory_file)
         fclose(memory_file);
     close(sockfd);
 }
 
 void server_handle_next() {
+    cleanup_stale_files();
     RequestT *received = req_receive();
     if (!received) return;
 
@@ -107,7 +130,9 @@ void server_handle_next() {
                 handle_not_found(received);
                 return;
             }
+            found->last_access = time(NULL);
             return_code = handle_read(received, found);
+            reschedule_alarm();
             break;
         case WRITE:
             HASH_FIND_INT(table, &(received->packet->body.write_req.fid), found);
@@ -115,7 +140,9 @@ void server_handle_next() {
                 handle_not_found(received);
                 return;
             }
+            found->last_access = time(NULL);
             return_code = handle_write(received, found);
+            reschedule_alarm();
             break;
         case TRUNCATE:
             HASH_FIND_INT(table, &(received->packet->body.trunc_req.fid), found);
@@ -123,7 +150,9 @@ void server_handle_next() {
                 handle_not_found(received);
                 return;
             }
+            found->last_access = time(NULL);
             return_code = handle_truncate(received, found);
+            reschedule_alarm();
             break;
         default:
             break;
@@ -162,6 +191,7 @@ int handle_open(RequestT *open_req) {
         return -1;
     entry->local_fid = fid;
     entry->global_fid = get_next_id();
+    entry->last_access = time(NULL);
     HASH_ADD_INT(table, global_fid, entry);
 
     struct stat attr;
@@ -175,6 +205,7 @@ int handle_open(RequestT *open_req) {
     open_req->packet->body.open_resp.size = attr.st_size;
     open_req->packet->body.open_resp.mtime = attr.st_mtime;
     req_send(open_req);
+    reschedule_alarm();
     return 0;
 }
 
@@ -465,5 +496,45 @@ void print_request(RequestT *req) {
                 printf("%02x ", ((unsigned char *)p->payload)[i]);
             printf("\n");
         }
+    }
+}
+
+void cleanup_stale_files() {
+    if (!alarm_fired) return;
+    alarm_fired = 0;
+
+    time_t now = time(NULL);
+    FileTableT *entry, *tmp;
+    HASH_ITER(hh, table, entry, tmp) {
+        if (now - entry->last_access >= FILE_TIMEOUT_SEC) {
+#ifdef DEBUG
+            printf("Cleaning up file %u\n", entry->global_fid);
+#endif
+            close(entry->local_fid);
+            HASH_DEL(table, entry);
+            free(entry);
+        }
+    }
+
+    reschedule_alarm();
+}
+
+void reschedule_alarm() {
+    time_t now = time(NULL);
+    time_t earliest = 0;
+
+    FileTableT *entry, *tmp;
+    HASH_ITER(hh, table, entry, tmp) {
+        time_t expiry = entry->last_access + FILE_TIMEOUT_SEC;
+        if (earliest == 0 || expiry < earliest)
+            earliest = expiry;
+    }
+
+    if (earliest > 0) {
+        unsigned int secs = earliest > now ? (unsigned int)(earliest - now) : 1;
+#ifdef DEBUG
+        printf("Running cleanup in %u seconds...\n", secs);
+#endif
+        alarm(secs);
     }
 }
