@@ -177,6 +177,119 @@ class TestNFS(unittest.TestCase):
         
         self.assertTrue(any("failed" in l for l in out))
 
+    def test_14_cache_update_on_partial_write(self):
+        fd = get_fd(self.client.cmd("open /test_cache_update.txt"))
+        
+        # Write 20 bytes and read them back to force the block into the cache
+        self.client.cmd(f"write {fd} AAAAAAAAAAAAAAAAAAAA")
+        self.client.cmd(f"lseek {fd} 0 0")
+        self.client.cmd(f"read {fd} 20") 
+        
+        # Seek to the middle and do a partial write
+        self.client.cmd(f"lseek {fd} 5 0")
+        self.client.cmd(f"write {fd} BBBBB")
+        
+        # Read back across the boundary. 
+        # If cache_put logic is broken, this will return the old 'A's.
+        self.client.cmd(f"lseek {fd} 0 0")
+        out = self.client.cmd(f"read {fd} 20")
+        self.assertEqual(get_value(out, "read 20 bytes: "), "AAAAABBBBBAAAAAAAAAA")
+
+    def test_15_truncate_invalidates_cache(self):
+        fd = get_fd(self.client.cmd("open /test_trunc_cache.txt"))
+        
+        # Write 20 bytes and read them to cache the block
+        self.client.cmd(f"write {fd} " + "X" * 20)
+        self.client.cmd(f"lseek {fd} 0 0")
+        self.client.cmd(f"read {fd} 20") 
+        
+        # Truncate to 5 bytes
+        self.client.cmd(f"truncate {fd} 5")
+        
+        # Attempt to read 20 bytes again
+        self.client.cmd(f"lseek {fd} 0 0")
+        out = self.client.cmd(f"read {fd} 20")
+        
+        # If the cache wasn't invalidated, it will serve 20 'X's.
+        # If correct, it should only return the 5 remaining bytes.
+        self.assertEqual(get_value(out, "read 5 bytes: "), "XXXXX")
+
+    def test_16_cross_block_boundary(self):
+        fd = get_fd(self.client.cmd("open /test_boundary.txt"))
+        
+        # Seek to 6 bytes before the end of the first block (4096 - 6 = 4090)
+        self.client.cmd(f"lseek {fd} 4090 0")
+        
+        # Write 12 bytes. mynfs_write loops internally, so all 12 bytes are written.
+        self.client.cmd(f"write {fd} HELLOWORLD12") 
+        
+        # Seek back to read across the boundary
+        self.client.cmd(f"lseek {fd} 4090 0")
+        
+        # First read asks for 12, but hits the block boundary after 6 bytes.
+        out1 = self.client.cmd(f"read {fd} 12") 
+        self.assertEqual(get_value(out1, "read 6 bytes: "), "HELLOW")
+        
+        # The file pointer is now at 4096. Issue a second read for the remaining data.
+        out2 = self.client.cmd(f"read {fd} 6") 
+        self.assertEqual(get_value(out2, "read 6 bytes: "), "ORLD12")
+
+    def test_17_cache_eviction_lru(self):
+        fd = get_fd(self.client.cmd("open /test_evict.txt"))
+        
+        # Write data into 20 different blocks (forcing 4 LRU evictions)
+        for i in range(20):
+            # Block 0 is at 0, Block 1 is at 4096, Block 2 is at 8192, etc.
+            self.client.cmd(f"lseek {fd} {i * 4096} 0")
+            
+            # Write exactly 6 bytes (e.g., DATA00, DATA01... DATA19)
+            self.client.cmd(f"write {fd} DATA{i:02d}") 
+            
+        # Read them all back to verify data integrity
+        for i in range(20):
+            self.client.cmd(f"lseek {fd} {i * 4096} 0")
+            out = self.client.cmd(f"read {fd} 6")
+            self.assertEqual(get_value(out, "read 6 bytes: "), f"DATA{i:02d}")
+
+    def test_18_multi_block_large_payload(self):
+        fd = get_fd(self.client.cmd("open /test_large.txt"))
+        
+        # 10,000 bytes spans across Block 0, Block 1, and Block 2 (since block_size is 4096)
+        large_data = "A" * 4000 + "B" * 4000 + "C" * 2000
+        self.client.cmd(f"write {fd} {large_data}")
+        
+        self.client.cmd(f"lseek {fd} 0 0")
+
+        read_data = ""
+        while len(read_data) < 10000:
+            out = self.client.cmd(f"read {fd} {10000 - len(read_data)}")
+            # Extract just the string payload from "read X bytes: YYYY"
+            chunk = get_value(out, f"read {get_value(out, 'read ').split(' ')[0]} bytes: ")
+            if not chunk: 
+                break
+            read_data += chunk
+            
+        self.assertEqual(read_data, large_data)
+
+    def test_19_mid_file_overwrite(self):
+        fd = get_fd(self.client.cmd("open /test_overwrite.txt"))
+        
+        # Write 20 bytes
+        self.client.cmd(f"write {fd} AAAAAAAAAAAAAAAAAAAA")
+        
+        # Seek to middle and overwrite 5 bytes
+        self.client.cmd(f"lseek {fd} 5 0")
+        self.client.cmd(f"write {fd} BBBBB")
+        
+        # Seek to end to check file size (Should still be 20, not 10!)
+        out = self.client.cmd(f"lseek {fd} 0 2")
+        self.assertEqual(get_value(out, "position = "), "20")
+        
+        # Read the whole thing to verify contents
+        self.client.cmd(f"lseek {fd} 0 0")
+        out = self.client.cmd(f"read {fd} 20")
+        self.assertEqual(get_value(out, "read 20 bytes: "), "AAAAABBBBBAAAAAAAAAA")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

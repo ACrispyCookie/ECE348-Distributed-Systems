@@ -9,7 +9,7 @@ BUILD_DIR = build
 COMMON_DIR = ../common
 COMMON_OBJ = ../common/build/protocol.o
 TARGET = $(BUILD_DIR)/client_app
-OBJS = $(BUILD_DIR)/client_app.o $(BUILD_DIR)/client.o $(COMMON_OBJ)
+OBJS = $(BUILD_DIR)/client_app.o $(BUILD_DIR)/client.o $(BUILD_DIR)/cache.o $(COMMON_OBJ)
 HEADERS = ./include/client.h ../common/include
 
 all: $(BUILD_DIR) common $(TARGET)

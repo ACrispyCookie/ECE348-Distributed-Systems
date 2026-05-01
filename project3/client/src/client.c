@@ -1,4 +1,6 @@
 #include "client.h"
+#include "cache.h"
+#include <stdio.h>
 #include <pthread.h>
 #include <time.h>
 #include <errno.h>
@@ -7,12 +9,10 @@
 static volatile int shutting_down = 0;
 static int last_fid = 0;
 static int last_request_id = 0;
+static int block_size;
 
 static char *address;
 static int port;
-static int block_size;
-static int max_cached_blocks;
-static int freshT;
 
 static int sockfd;
 static struct sockaddr_in server_addr;
@@ -37,8 +37,7 @@ int mynfs_init(char *server_address, int server_port, int block_s, int max_block
     address = server_address;
     port = server_port;
     block_size = block_s;
-    max_cached_blocks = max_blocks;
-    freshT = fresh_time;
+    cache_init(max_blocks, block_s, fresh_time);
 
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (sockfd < 0)
@@ -85,6 +84,8 @@ void mynfs_shutdown() {
         free(current_s->filename);
         free(current_s);
     }
+
+    cache_destroy();
 
     pthread_mutex_destroy(&lock);
 }
@@ -146,12 +147,40 @@ long mynfs_read(int fd, void *buf, long n) {
         pthread_mutex_unlock(&lock);
         return -1;
     }
+    
+    unsigned int server_fid = client_file->server_file->fid;
+    unsigned int block_index = client_file->pos / block_size;
+    unsigned int block_offset = client_file->pos % block_size;
+    long bytes_to_copy = (n > block_size - (long)block_offset)
+                         ? block_size - block_offset
+                         : n;
+#ifdef DEBUG
+    printf("[DEBUG] Read requested for file %d at block %d for %ld bytes\n", fd, block_index, bytes_to_copy);
+#endif
+
+    CacheBlockT *cached = cache_get(server_fid, block_index);
+    if (cached && cache_is_fresh(cached)) {
+#ifdef DEBUG
+        printf("[DEBUG] Block is cached and fresh returning cached...\n");
+#endif
+        long available = (long)cached->data_len - block_offset;
+        if (available <= 0) { 
+            pthread_mutex_unlock(&lock); 
+            return 0; 
+        }
+        if (bytes_to_copy > available) 
+            bytes_to_copy = available;
+        memcpy(buf, cached->data + block_offset, bytes_to_copy);
+        client_file->pos += bytes_to_copy;
+        pthread_mutex_unlock(&lock);
+        return bytes_to_copy;
+    }
 
     PacketT packet = create_packet(READ);
     packet.body.read_req.fid = client_file->server_file->fid;
-    packet.body.read_req.cached_mtime = 0;
-    packet.body.read_req.length = n;
-    packet.body.read_req.offset = client_file->pos;
+    packet.body.read_req.cached_mtime = cached ? cached->mtime : 0;
+    packet.body.read_req.length = block_size;
+    packet.body.read_req.offset = block_index * block_size;
     PacketT *resp = req_send_with_reopen(&packet, client_file->server_file);
     if (resp == NULL || resp->header.type == ERROR) {
         if (resp)
@@ -160,14 +189,50 @@ long mynfs_read(int fd, void *buf, long n) {
         return -1;
     }
 
-    long bytes_read = resp->body.read_resp.length;
-    if (bytes_read > 0)
-        memcpy(buf, resp->payload, bytes_read);
-    client_file->pos += bytes_read;
-    client_file->server_file->mtime = resp->body.read_resp.mtime;
-    client_file->server_file->size  = resp->body.read_resp.size;
-    free(resp->payload);
+    long bytes_read;
+    if (cached && resp->body.read_resp.mtime == cached->mtime) { // Block still valid, refresh and serve
+#ifdef DEBUG
+        printf("[DEBUG] Block is cached, not fresh but still valid...\n");
+#endif
+        cache_revalidate(cached);
+
+        long available = cached->data_len - block_offset;
+        if (available <= 0) {
+            free(resp);
+            pthread_mutex_unlock(&lock);
+            return 0;
+        }
+        if (bytes_to_copy > available)
+            bytes_to_copy = available;
+
+        memcpy(buf, cached->data + block_offset, bytes_to_copy);
+        bytes_read = bytes_to_copy;
+    } else { // Block was invalid, replace
+#ifdef DEBUG
+        printf("[DEBUG] Block invalid, caching it...\n");
+#endif
+        cache_put(server_fid, block_index,
+                  resp->payload, resp->body.read_resp.length,
+                  resp->body.read_resp.mtime);
+        client_file->server_file->mtime = resp->body.read_resp.mtime;
+        client_file->server_file->size = resp->body.read_resp.size;
+
+        long available = (long)resp->body.read_resp.length - block_offset;
+        if (available <= 0) {
+            free(resp);
+            pthread_mutex_unlock(&lock);
+            return 0;
+        }
+        if (bytes_to_copy > available)
+            bytes_to_copy = available;
+
+        memcpy(buf, (unsigned char *)resp->payload + block_offset, bytes_to_copy);
+        bytes_read = bytes_to_copy;
+        free(resp->payload);
+    }
+
     free(resp);
+    client_file->pos += bytes_read;
     pthread_mutex_unlock(&lock);
     return bytes_read;
 }
@@ -180,6 +245,10 @@ long mynfs_write(int fd, void *buf, long n) {
         pthread_mutex_unlock(&lock);
         return -1;
     }
+
+#ifdef DEBUG
+    printf("[DEBUG] Write requested for file %d at %ld for %ld bytes\n", fd, client_file->pos, n);
+#endif
 
     PacketT packet = create_packet(WRITE);
     packet.body.write_req.fid = client_file->server_file->fid;
@@ -201,10 +270,42 @@ long mynfs_write(int fd, void *buf, long n) {
         pthread_mutex_unlock(&lock);
         return -1;
     }
-
-    client_file->pos += n;
     client_file->server_file->mtime = resp->body.open_resp.mtime;
-    client_file->server_file->size  = resp->body.open_resp.size;
+    client_file->server_file->size = resp->body.open_resp.size;
+
+    unsigned int server_fid = client_file->server_file->fid;
+    long current_pos = client_file->pos;
+    long remaining = n;
+    long buf_offset = 0;
+
+    while (remaining > 0) {
+        unsigned int block_index = current_pos / block_size;
+        unsigned int block_offset = current_pos % block_size;
+        
+        long bytes_in_block = block_size - block_offset;
+        if (bytes_in_block > remaining)
+            bytes_in_block = remaining;
+
+        CacheBlockT *cached = cache_get(server_fid, block_index);
+        if (cached) {
+            memcpy(cached->data + block_offset, (unsigned char*)buf + buf_offset, bytes_in_block);
+            if (block_offset + bytes_in_block > cached->data_len)
+                cached->data_len = block_offset + bytes_in_block;
+            
+            cached->mtime = resp->body.open_resp.mtime;
+            cache_revalidate(cached);
+
+        } else if (block_offset == 0 && bytes_in_block == block_size) {
+            cache_put(server_fid, block_index, 
+                      (unsigned char*)buf + buf_offset, bytes_in_block, 
+                      resp->body.open_resp.mtime);
+        }
+        current_pos += bytes_in_block;
+        buf_offset += bytes_in_block;
+        remaining -= bytes_in_block;
+    }
+    
+    client_file->pos += n;
     free(resp);
     pthread_mutex_unlock(&lock);
     return n;
@@ -264,6 +365,7 @@ int mynfs_truncate(int fd, long length) {
         pthread_mutex_unlock(&lock);
         return -1;
     }
+    cache_invalidate_past_offset(client_file->server_file->fid, length);
 
     client_file->server_file->mtime = response->body.open_resp.mtime;
     client_file->server_file->size = response->body.open_resp.size;
@@ -302,6 +404,9 @@ PacketT *req_send_with_reopen(PacketT *packet, ServerFileT *server_file) {
 
     int reopen_attempts = 0;
     while (response != NULL && response->header.type == NOT_FOUND && reopen_attempts < MAX_REOPEN_RETRIES) {
+#ifdef DEBUG
+        printf("[DEBUG] File %d not found, reopening...\n", server_file->fid);
+#endif
         reopen_attempts++;
         free(response->payload);
         free(response);
@@ -318,16 +423,21 @@ PacketT *req_send_with_reopen(PacketT *packet, ServerFileT *server_file) {
             }
             return NULL;
         }
+#ifdef DEBUG
+        printf("[DEBUG] Reopen success new ID: %d\n", reopen_resp->body.open_resp.fid);
+#endif
 
-        server_file->fid   = reopen_resp->body.open_resp.fid;
+        if (server_file->fid != reopen_resp->body.open_resp.fid)
+            cache_remap(server_file->fid, reopen_resp->body.open_resp.fid);
+        server_file->fid = reopen_resp->body.open_resp.fid;
         server_file->mtime = reopen_resp->body.open_resp.mtime;
-        server_file->size  = reopen_resp->body.open_resp.size;
+        server_file->size = reopen_resp->body.open_resp.size;
         free(reopen_resp->payload);
         free(reopen_resp);
 
         switch (packet->header.type) {
-            case READ:     packet->body.read_req.fid   = server_file->fid; break;
-            case WRITE:    packet->body.write_req.fid  = server_file->fid; break;
+            case READ: packet->body.read_req.fid = server_file->fid; break;
+            case WRITE: packet->body.write_req.fid = server_file->fid; break;
             case TRUNCATE: packet->body.trunc_req.fid  = server_file->fid; break;
             default: break;
         }
@@ -382,7 +492,12 @@ PacketT *req_send(PacketT *packet) {
         }
 
         if (req.resp != NULL) break;
-        if (rc == ETIMEDOUT) { retries++; continue; }
+        if (rc == ETIMEDOUT) { 
+            retries++;      
+#ifdef DEBUG
+            printf("[DEBUG] Request timeout retrying...\n");
+#endif
+        }
     }
     HASH_DEL(waiting, &req);
 

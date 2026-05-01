@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_BUF 4096
+#define MAX_BUF 10240
 
 static void print_usage(char *prog) {
     fprintf(stderr, "Usage: %s <server_addr> <port> <block_size> <max_cached_blocks> <freshT>\n", prog);
@@ -27,11 +27,11 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    char *server_addr      = argv[1];
-    int   server_port      = atoi(argv[2]);
-    int   block_size       = atoi(argv[3]);
-    int   max_cached       = atoi(argv[4]);
-    int   fresh_time       = atoi(argv[5]);
+    char *server_addr = argv[1];
+    int server_port = atoi(argv[2]);
+    int block_size = atoi(argv[3]);
+    int max_cached = atoi(argv[4]);
+    int fresh_time = atoi(argv[5]);
 
     if (mynfs_init(server_addr, server_port, block_size, max_cached, fresh_time) != 0) {
         fprintf(stderr, "mynfs_init failed\n");
@@ -103,7 +103,7 @@ int main(int argc, char *argv[]) {
         } else if (strcmp(cmd, "write") == 0) {
             int fd;
             char data[MAX_BUF];
-            if (sscanf(line, "%*s %d %4095[^\n]", &fd, data) != 2) {
+            if (sscanf(line, "%*s %d %10239[^\n]", &fd, data) != 2) {
                 fprintf(stderr, "Usage: write <fd> <data>\n");
                 continue;
             }
