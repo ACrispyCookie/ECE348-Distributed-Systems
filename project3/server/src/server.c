@@ -203,7 +203,8 @@ int handle_open(RequestT *open_req) {
     }
     open_req->packet->body.open_resp.fid = entry->global_fid;
     open_req->packet->body.open_resp.size = attr.st_size;
-    open_req->packet->body.open_resp.mtime = attr.st_mtime;
+    open_req->packet->body.open_resp.mtime = attr.st_mtim.tv_sec;
+    open_req->packet->body.open_resp.mtimensec = attr.st_mtim.tv_nsec;
     req_send(open_req);
     reschedule_alarm();
     return 0;
@@ -217,13 +218,14 @@ int handle_read(RequestT *read_req, FileTableT *file) {
 
     ReadReq *req = &read_req->packet->body.read_req;
     ReadResp *resp = &read_req->packet->body.read_resp;
-    if (req->length == 0 || req->cached_mtime == attr.st_mtime) {
+    if (req->length == 0 || (req->cached_mtime == attr.st_mtim.tv_sec && req->cached_mtimensec == attr.st_mtim.tv_nsec)) {
         uint32_t fid = req->fid;
         uint32_t offset = req->offset;
         resp->fid = fid;
         resp->length = 0;
         resp->offset = offset;
-        resp->mtime = attr.st_mtime;
+        resp->mtime = attr.st_mtim.tv_sec;
+        resp->mtimensec = attr.st_mtim.tv_nsec;
         read_req->packet->payload = NULL;
         read_req->packet->payload_length = 0;
         req_send(read_req);
@@ -257,7 +259,8 @@ int handle_read(RequestT *read_req, FileTableT *file) {
     resp->fid = fid;
     resp->length = total_bytes;
     resp->offset = offset;
-    resp->mtime = attr.st_mtime;
+    resp->mtime = attr.st_mtim.tv_sec;
+    resp->mtimensec = attr.st_mtim.tv_nsec;
     resp->size = attr.st_size;
     req_send(read_req);
     free(buf);
@@ -276,7 +279,8 @@ int handle_write(RequestT *write_req, FileTableT *file) {
         uint32_t fid = req->fid;
         resp->fid = fid;
         resp->size = attr.st_size;
-        resp->mtime = attr.st_mtime;
+        resp->mtime = attr.st_mtim.tv_sec;
+        resp->mtimensec = attr.st_mtim.tv_nsec;
         req_send(write_req);
         return 0;
     }
@@ -304,7 +308,8 @@ int handle_write(RequestT *write_req, FileTableT *file) {
     write_req->packet->payload_length = 0;
     uint32_t fid = req->fid;
     resp->fid = fid;
-    resp->mtime = attr.st_mtime;
+    resp->mtime = attr.st_mtim.tv_sec;
+    resp->mtimensec = attr.st_mtim.tv_nsec;
     resp->size = attr.st_size;
     req_send(write_req);
     return 0;
@@ -321,7 +326,8 @@ int handle_truncate(RequestT *truncate_req, FileTableT *file) {
     
     uint32_t fid = truncate_req->packet->body.trunc_req.fid;
     truncate_req->packet->body.open_resp.fid = fid;
-    truncate_req->packet->body.open_resp.mtime = attr.st_mtime;
+    truncate_req->packet->body.open_resp.mtime = attr.st_mtim.tv_sec;
+    truncate_req->packet->body.open_resp.mtimensec = attr.st_mtim.tv_nsec;
     truncate_req->packet->body.open_resp.size = attr.st_size;
     truncate_req->packet->payload_length = 0;
     truncate_req->packet->payload = NULL;
@@ -445,6 +451,7 @@ void print_request(RequestT *req) {
                 printf("    offset:       %u\n", p->body.read_req.offset);
                 printf("    length:       %u\n", p->body.read_req.length);
                 printf("    cached_mtime: %lu\n", p->body.read_req.cached_mtime);
+                printf("    cached_mtimensec: %lu\n", p->body.read_req.cached_mtimensec);
                 break;
             case WRITE:
                 printf("    fid:    %u\n", p->body.write_req.fid);
@@ -465,6 +472,7 @@ void print_request(RequestT *req) {
             case TRUNCATE:
                 printf("    fid:   %u\n",  p->body.open_resp.fid);
                 printf("    mtime: %lu\n", p->body.open_resp.mtime);
+                printf("    mtimensec: %lu\n", p->body.open_resp.mtimensec);
                 printf("    size:  %lu\n", p->body.open_resp.size);
                 break;
             case READ:
@@ -472,6 +480,7 @@ void print_request(RequestT *req) {
                 printf("    offset: %u\n",  p->body.read_resp.offset);
                 printf("    length: %u\n",  p->body.read_resp.length);
                 printf("    mtime:  %lu\n", p->body.read_resp.mtime);
+                printf("    mtimensec:  %lu\n", p->body.read_resp.mtimensec);
                 printf("    size:  %lu\n", p->body.read_resp.size);
                 break;
             default:

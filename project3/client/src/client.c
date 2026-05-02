@@ -116,6 +116,7 @@ int mynfs_open(char *fname) {
             found->filename = strdup(fname);
             found->fid = response->body.open_resp.fid;
             found->mtime = response->body.open_resp.mtime;
+            found->mtimensec = response->body.open_resp.mtimensec;
             found->size = response->body.open_resp.size;
             found->ref_count = 0;
             HASH_ADD_KEYPTR(hh, server_files, found->filename, strlen(found->filename), found);
@@ -179,6 +180,7 @@ long mynfs_read(int fd, void *buf, long n) {
     PacketT packet = create_packet(READ);
     packet.body.read_req.fid = client_file->server_file->fid;
     packet.body.read_req.cached_mtime = cached ? cached->mtime : 0;
+    packet.body.read_req.cached_mtimensec = cached ? cached->mtimensec : 0;
     packet.body.read_req.length = block_size;
     packet.body.read_req.offset = block_index * block_size;
     PacketT *resp = req_send_with_reopen(&packet, client_file->server_file);
@@ -190,7 +192,7 @@ long mynfs_read(int fd, void *buf, long n) {
     }
 
     long bytes_read;
-    if (cached && resp->body.read_resp.mtime == cached->mtime) { // Block still valid, refresh and serve
+    if (cached && (resp->body.read_resp.mtime == cached->mtime && resp->body.read_resp.mtimensec == cached->mtimensec)) { // Block still valid, refresh and serve
 #ifdef DEBUG
         printf("[DEBUG] Block is cached, not fresh but still valid...\n");
 #endif
@@ -213,8 +215,9 @@ long mynfs_read(int fd, void *buf, long n) {
 #endif
         cache_put(server_fid, block_index,
                   resp->payload, resp->body.read_resp.length,
-                  resp->body.read_resp.mtime);
+                  resp->body.read_resp.mtime, resp->body.read_resp.mtimensec);
         client_file->server_file->mtime = resp->body.read_resp.mtime;
+        client_file->server_file->mtimensec = resp->body.read_resp.mtimensec;
         client_file->server_file->size = resp->body.read_resp.size;
 
         long available = (long)resp->body.read_resp.length - block_offset;
@@ -271,6 +274,7 @@ long mynfs_write(int fd, void *buf, long n) {
         return -1;
     }
     client_file->server_file->mtime = resp->body.open_resp.mtime;
+    client_file->server_file->mtimensec = resp->body.open_resp.mtimensec;
     client_file->server_file->size = resp->body.open_resp.size;
 
     unsigned int server_fid = client_file->server_file->fid;
@@ -293,12 +297,13 @@ long mynfs_write(int fd, void *buf, long n) {
                 cached->data_len = block_offset + bytes_in_block;
             
             cached->mtime = resp->body.open_resp.mtime;
+            cached->mtimensec = resp->body.open_resp.mtimensec;
             cache_revalidate(cached);
 
         } else if (block_offset == 0 && bytes_in_block == block_size) {
             cache_put(server_fid, block_index, 
                       (unsigned char*)buf + buf_offset, bytes_in_block, 
-                      resp->body.open_resp.mtime);
+                      resp->body.open_resp.mtime, resp->body.open_resp.mtimensec);
         }
         current_pos += bytes_in_block;
         buf_offset += bytes_in_block;
@@ -368,6 +373,7 @@ int mynfs_truncate(int fd, long length) {
     cache_invalidate_past_offset(client_file->server_file->fid, length);
 
     client_file->server_file->mtime = response->body.open_resp.mtime;
+    client_file->server_file->mtimensec = response->body.open_resp.mtimensec;
     client_file->server_file->size = response->body.open_resp.size;
     free(response);
     pthread_mutex_unlock(&lock);
@@ -431,6 +437,7 @@ PacketT *req_send_with_reopen(PacketT *packet, ServerFileT *server_file) {
             cache_remap(server_file->fid, reopen_resp->body.open_resp.fid);
         server_file->fid = reopen_resp->body.open_resp.fid;
         server_file->mtime = reopen_resp->body.open_resp.mtime;
+        server_file->mtimensec = reopen_resp->body.open_resp.mtimensec;
         server_file->size = reopen_resp->body.open_resp.size;
         free(reopen_resp->payload);
         free(reopen_resp);

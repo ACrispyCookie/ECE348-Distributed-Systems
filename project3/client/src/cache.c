@@ -63,14 +63,15 @@ CacheBlockT *cache_get(unsigned int server_fid, unsigned int block_index) {
 }
 
 void cache_put(unsigned int server_fid, unsigned int block_index,
-               unsigned char *data, unsigned int data_len, uint64_t mtime) {
+               unsigned char *data, unsigned int data_len, uint64_t mtime, uint64_t mtimensec) {
     CacheKey key = { server_fid, block_index };
     CacheBlockT *b;
     HASH_FIND(hh, cache, &key, sizeof(CacheKey), b);
     if (b) {
         memcpy(b->data, data, data_len);
-        b->data_len   = data_len;
-        b->mtime      = mtime;
+        b->data_len = data_len;
+        b->mtime = mtime;
+        b->mtimensec = mtimensec;
         b->fetch_time = time(NULL);
         lru_remove(b);
         lru_push_front(b);
@@ -83,6 +84,7 @@ void cache_put(unsigned int server_fid, unsigned int block_index,
     b = malloc(sizeof(CacheBlockT));
     b->key = key;
     b->mtime = mtime;
+    b->mtimensec = mtimensec;
     b->fetch_time = time(NULL);
     b->data_len = data_len;
     b->data = malloc(block_size);

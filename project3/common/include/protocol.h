@@ -24,7 +24,7 @@ typedef struct {
 
 typedef struct {
     uint32_t fid, offset, length;
-    uint64_t cached_mtime; 
+    uint64_t cached_mtime, cached_mtimensec;
 } ReadReq;  // cached_mtime=0 if not cached
 
 typedef struct {
@@ -38,12 +38,12 @@ typedef struct {
 // Responses
 typedef struct {
     uint32_t fid; 
-    uint64_t mtime, size;
+    uint64_t mtime, mtimensec, size;
 } OpenResp;  // also for WRITE/TRUNC
 
 typedef struct {
     uint32_t fid, offset, length; 
-    uint64_t mtime, size;
+    uint64_t mtime, mtimensec, size;
 } ReadResp;
 
 typedef struct {

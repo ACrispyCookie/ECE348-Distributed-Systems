@@ -2,7 +2,7 @@ import unittest
 import subprocess
 
 SERVER = "127.0.0.1"
-PORT = "5000"
+PORT = "10100"
 CLIENT = ["./build/client_app", SERVER, PORT, "4096", "16", "5"]
 
 class ClientApp:

@@ -32,7 +32,7 @@ typedef struct {
     unsigned int fid;
     char *filename;
     uint64_t size;
-    uint64_t mtime;
+    uint64_t mtime, mtimensec;
     unsigned int ref_count;
     UT_hash_handle hh;
 } ServerFileT;

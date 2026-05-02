@@ -3,7 +3,7 @@ import subprocess
 import time
 
 SERVER = "127.0.0.1"
-PORT = "5000"
+PORT = "10100"
 # Using a 5-second freshT for our expiration tests
 CLIENT_ARGS = ["./build/client_app", SERVER, PORT, "4096", "16", "5"]
 
@@ -137,8 +137,6 @@ class TestMultiClientNFS(unittest.TestCase):
         self.c1.cmd(f"write {fd1} OLD_DATA")
         self.c1.cmd(f"lseek {fd1} 0 0")
         self.c1.cmd(f"read {fd1} 8") 
-
-        time.sleep(1.5)
         
         # C2 overwrites the data on the server
         self.c2.cmd(f"lseek {fd2} 0 0")
@@ -162,8 +160,6 @@ class TestMultiClientNFS(unittest.TestCase):
         self.c1.cmd(f"write {fd1} THIS_WILL_BE_DELETED")
         self.c1.cmd(f"lseek {fd1} 0 0")
         self.c1.cmd(f"read {fd1} 20") # C1 caches it
-
-        time.sleep(1.5)
         
         # C2 deletes the file contents on the server
         self.c2.cmd(f"truncate {fd2} 0")

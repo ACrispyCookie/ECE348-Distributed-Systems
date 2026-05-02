@@ -32,6 +32,7 @@ PacketT *req_deserialize(const void *buf, uint32_t length) {
                 memcpy(&tmp, p+4,  4); r->offset = ntohl(tmp);
                 memcpy(&tmp, p+8,  4); r->length = ntohl(tmp);
                 uint64_t mtime; memcpy(&mtime, p+12, 8); r->cached_mtime = be64toh(mtime);
+                uint64_t mtimensec; memcpy(&mtimensec, p+20, 8); r->cached_mtimensec = be64toh(mtimensec);
                 break;
             }
             case WRITE: {
@@ -57,9 +58,10 @@ PacketT *req_deserialize(const void *buf, uint32_t length) {
             case TRUNCATE: {
                 OpenResp *r = &packet->body.open_resp;
                 memcpy(&tmp, p, 4); r->fid = ntohl(tmp);
-                uint64_t mtime, size;
-                memcpy(&mtime, p+4,  8); r->mtime = be64toh(mtime);
-                memcpy(&size,  p+12, 8); r->size  = be64toh(size);
+                uint64_t mtime, mtimensec, size;
+                memcpy(&mtime, p+4, 8); r->mtime = be64toh(mtime);
+                memcpy(&mtimensec, p+12, 8); r->mtimensec = be64toh(mtimensec);
+                memcpy(&size,  p+20, 8); r->size  = be64toh(size);
                 break;
             }
             case READ: {
@@ -68,7 +70,8 @@ PacketT *req_deserialize(const void *buf, uint32_t length) {
                 memcpy(&tmp, p+4,  4); r->offset = ntohl(tmp);
                 memcpy(&tmp, p+8,  4); r->length = ntohl(tmp);
                 uint64_t mtime; memcpy(&mtime, p+12, 8); r->mtime = be64toh(mtime);
-                uint64_t size; memcpy(&size, p+20, 8); r->size = be64toh(size);
+                uint64_t mtimensec; memcpy(&mtimensec, p+20, 8); r->mtimensec = be64toh(mtimensec);
+                uint64_t size; memcpy(&size, p+28, 8); r->size = be64toh(size);
                 packet->payload_length = r->length;
                 break;
             }
@@ -123,6 +126,8 @@ void *req_serialize(const PacketT *packet, uint32_t *out_len) {
                 tmp = htonl(r->length); memcpy(p+8,  &tmp, 4);
                 uint64_t mtime = htobe64(r->cached_mtime);
                 memcpy(p+12, &mtime, 8);
+                uint64_t mtimensec = htobe64(r->cached_mtimensec);
+                memcpy(p+20, &mtimensec, 8);
                 break;
             }
             case WRITE: {
@@ -150,8 +155,10 @@ void *req_serialize(const PacketT *packet, uint32_t *out_len) {
                 tmp = htonl(r->fid); memcpy(p, &tmp, 4);
                 uint64_t mtime = htobe64(r->mtime);
                 memcpy(p+4, &mtime, 8);
+                uint64_t mtimensec = htobe64(r->mtimensec);
+                memcpy(p+12, &mtimensec, 8);
                 uint64_t size = htobe64(r->size);
-                memcpy(p+12, &size, 8);
+                memcpy(p+20, &size, 8);
                 break;
             }
             case READ: {
@@ -161,8 +168,10 @@ void *req_serialize(const PacketT *packet, uint32_t *out_len) {
                 tmp = htonl(r->length); memcpy(p+8,  &tmp, 4);
                 uint64_t mtime = htobe64(r->mtime);
                 memcpy(p+12, &mtime, 8);
+                uint64_t mtimensec = htobe64(r->mtimensec);
+                memcpy(p+20, &mtimensec, 8);
                 uint64_t size = htobe64(r->size);
-                memcpy(p+20, &size, 8);
+                memcpy(p+28, &size, 8);
                 break;
             }
             default: break;
