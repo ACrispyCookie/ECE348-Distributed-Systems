@@ -2,7 +2,7 @@ import socket
 import struct
 
 HOST = '127.0.0.1'
-PORT = 5000
+PORT = 10100
 BODY_SIZE = 256  # sizeof(union body) — largest member is OpenReq.fname[256]
 
 def send_recv(sock, data):
