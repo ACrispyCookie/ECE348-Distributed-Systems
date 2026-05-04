@@ -78,7 +78,7 @@ void cache_put(unsigned int server_fid, unsigned int block_index,
         return;
     }
 
-    while (cache_count >= max_cached_blocks)
+    while (cache_count > max_cached_blocks)
         cache_evict_lru();
 
     b = malloc(sizeof(CacheBlockT));

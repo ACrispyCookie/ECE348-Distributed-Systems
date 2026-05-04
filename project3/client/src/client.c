@@ -33,6 +33,25 @@ PacketT create_packet(PacketType type);
 int get_next_req_id();
 int get_next_fid();
 
+// At the top of client.c
+unsigned long net_packets_sent = 0;
+unsigned long net_packets_recv = 0;
+unsigned long net_bytes_sent = 0;
+unsigned long net_bytes_recv = 0;
+
+// Expose a function to retrieve them
+void mynfs_get_stats(unsigned long *p_sent, unsigned long *p_recv, 
+                     unsigned long *b_sent, unsigned long *b_recv) {
+    *p_sent = net_packets_sent;
+    *p_recv = net_packets_recv;
+    *b_sent = net_bytes_sent;
+    *b_recv = net_bytes_recv;
+}
+
+void mynfs_reset_stats() {
+    net_packets_sent = net_packets_recv = net_bytes_sent = net_bytes_recv = 0;
+}
+
 int mynfs_init(char *server_address, int server_port, int block_s, int max_blocks, int fresh_time) {
     address = server_address;
     port = server_port;
@@ -483,6 +502,8 @@ PacketT *req_send(PacketT *packet) {
         ssize_t sent = sendto(sockfd, buf, buf_len, 0,
                              (struct sockaddr *)&server_addr,
                              server_addrlen);
+        __atomic_fetch_add(&net_packets_sent, 1, __ATOMIC_RELAXED);
+        __atomic_fetch_add(&net_bytes_sent, buf_len, __ATOMIC_RELAXED);
         if (sent != (ssize_t)buf_len) {
             HASH_DEL(waiting, &req);
             free(buf);
@@ -521,6 +542,8 @@ void *run_receiver(void *args) {
         if (n <= 0 && shutting_down) break;
         else if (n <= 0) continue;
 
+        __atomic_fetch_add(&net_packets_recv, 1, __ATOMIC_RELAXED);
+        __atomic_fetch_add(&net_bytes_recv, n, __ATOMIC_RELAXED);
         PacketT *resp = req_deserialize(buf, (unsigned int)n);
         if (!resp) continue;
 
