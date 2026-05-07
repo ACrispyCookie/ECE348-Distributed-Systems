@@ -1,9 +1,9 @@
 from parser import *
 from state import *
 from scheduler import *
-import uuid
 import os
 import threading
+import time
 
 class RuntimeEnvironment:
     def __init__(self):
@@ -11,6 +11,7 @@ class RuntimeEnvironment:
         self.lock = threading.Lock()
         self.running = True
         self.load_balancing = False
+        self.shutdown_warning = 0
         self.scheduler_thread = threading.Thread(target=scheduler, daemon=True, name="simplescript-scheduler", args=[self])
 
     def start(self):
@@ -46,10 +47,9 @@ class RuntimeEnvironment:
 
             except KeyboardInterrupt:
                 self.cmd_shutdown()
-                break
 
     def cmd_run(self, args):
-        """Command: run <progname> <arg1> ... <argN>"""
+        """Command: run <progname> <arg1> ... <argN> (Starts new thread)"""
         if not args:
             print("Usage: run <progname> [args...]")
             return
@@ -88,7 +88,7 @@ class RuntimeEnvironment:
                 print(f"{tid:<40} | {prog_name}")
 
     def cmd_kill(self, args):
-        """Command: kill <thread id>"""
+        """Command: kill <thread id> (Kills a running thread)"""
         if not args:
             print("Usage: kill <thread id>")
             return
@@ -100,6 +100,39 @@ class RuntimeEnvironment:
                 print(f"Thread {tid_to_kill} terminated.")
             else:
                 print(f"Error: Thread {tid_to_kill} not found.")
+
+    def cmd_migrate(self, args):
+        """Command: migrate <thread id> <IP address> <port number> (Migrates a thread to another environment)"""
+        if not args or len(args) != 3:
+            print("Usage: migrate <thread id> <IP address> <port number>")
+            return
+            
+        tid = args[0]
+        with self.lock:
+            if tid not in self.threads:
+                print(f"Error: Thread {tid} not found.")
+            else:
+                print("Not implemented yet.") #TODO
+
+    def cmd_shutdown(self):
+        """Command: shutdown (Shuts down the environment peacefully or not)"""
+        
+        shutdown = False
+        force = time.time() - self.shutdown_warning < 10
+        self.shutdown_warning = time.time()
+        if len(self.threads) == 0:
+            shutdown = True
+        else: # TODO check if last instance
+            if force:
+                shutdown = True
+                print("Warning: You have forced a shutdown...")
+            else:
+                print("Warning: This is the last environment running. Retry to force shutdown.")
+
+        if shutdown:
+            print("Shutting down...")
+            self.running = False
+            self.scheduler_thread.join()
 
 if __name__ == "__main__":
     env = RuntimeEnvironment()

@@ -1,12 +1,10 @@
 from state import ThreadState
-from state import InstructionType
 import time
 
 class Interpreter:
     def step(self, state: ThreadState) -> bool:
         """
         Executes a single instruction for the given ThreadState.
-        Advances the program counter.
         """
 
         instruction = state.get_current_instruction()
