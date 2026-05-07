@@ -59,7 +59,7 @@ class ThreadState:
         self.program_counter: int = 0
         self.variables: Dict[str, str | int] = {}
         
-        self.sleep_timestamp: int = 0
+        self.wakeup_timestamp: float = 0
         self.is_terminated: bool = False
         self.is_blocked: bool = False
 

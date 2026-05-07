@@ -1,5 +1,6 @@
 from typing import List, Optional
 from state import Instruction, InstructionType, Program
+import shlex
 
 def parse_simplescript(source_code: str, program_name: str) -> Optional[Program]:
     """
@@ -26,7 +27,11 @@ def parse_simplescript(source_code: str, program_name: str) -> Optional[Program]
         if not clean_line:
             continue
             
-        tokens = clean_line.split()
+        try:
+            tokens = shlex.split(clean_line, posix=False)
+        except ValueError as e:
+            print(f"Syntax error in {program_name} on line {line_number}: {e}")
+            return None
         label = None
         tag_index = 0
 
