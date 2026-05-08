@@ -8,7 +8,7 @@ import time
 class RuntimeEnvironment:
     def __init__(self):
         self.threads: dict[str, ThreadState] = {}
-        self.lock = threading.Lock()
+        self.lock = threading.Condition()
         self.running = True
         self.load_balancing = False
         self.shutdown_warning = 0
@@ -73,6 +73,7 @@ class RuntimeEnvironment:
         print(f"Starting thread {new_thread.thread_id} for program '{progname}'")
         with self.lock:
             self.threads[new_thread.thread_id] = new_thread
+            self.lock.notify_all()
 
     def cmd_list(self):
         """Command: list (prints id and program name of each thread)"""
@@ -132,6 +133,8 @@ class RuntimeEnvironment:
         if shutdown:
             print("Shutting down...")
             self.running = False
+            with self.lock:
+                self.lock.notify_all()
             self.scheduler_thread.join()
 
 if __name__ == "__main__":

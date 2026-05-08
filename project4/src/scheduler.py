@@ -6,8 +6,13 @@ def scheduler(env: RuntimeEnvironment):
     interpreter = Interpreter()
     while env.running:
         with env.lock:
-            thread_ids = list(env.threads.keys())
+            while not env.threads and env.running:
+                env.lock.wait()
+            
+            if not env.running:
+                break
 
+            thread_ids = list(env.threads.keys())
             for tid in thread_ids:
                 state = env.threads[tid]
 
