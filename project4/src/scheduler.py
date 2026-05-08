@@ -73,20 +73,21 @@ class Scheduler:
                 return self.waiting_threads
 
     def check_tuple_and_wake(self, new_tuple: tuple) -> bool:
-        for tid in list(self.waiting_threads.keys()):
-            state = self.waiting_threads[tid]
-            
-            if self.tuple_space.match(new_tuple, state.tuple_pattern):
-                self.interpreter.bind_tuple_variables(state, state.tuple_pattern, new_tuple)
+        with self.lock:
+            for tid in list(self.waiting_threads.keys()):
+                state = self.waiting_threads[tid]
                 
-                self.waiting_threads.pop(tid)
-                state.tuple_pattern = []
-                self.active_threads[tid] = state
-                self.lock.notify_all()
-                
-                if state.tuple_in:
-                    return True
-        return False
+                if self.tuple_space.match(new_tuple, state.tuple_pattern):
+                    self.interpreter.bind_tuple_variables(state, state.tuple_pattern, new_tuple)
+                    
+                    self.waiting_threads.pop(tid)
+                    state.tuple_pattern = []
+                    self.active_threads[tid] = state
+                    self.lock.notify_all()
+                    
+                    if state.tuple_in:
+                        return True
+            return False
 
     def _scheduler(self):
         while self.env.running:

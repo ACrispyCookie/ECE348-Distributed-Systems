@@ -161,14 +161,15 @@ class Interpreter:
             if arg.startswith('$'):
                 pattern.append(Wildcard(arg))
                 
-            if arg.startswith('"'):
+            elif arg.startswith('"'):
                 if not arg.endswith('"'):
                     raise NameError(f'Expected " after {arg}.')
                 pattern.append(arg[1:-1])
-                
-            try:
-                pattern.append(int(arg))
-            except ValueError:
-                pass
+
+            else:  
+                try:
+                    pattern.append(int(arg))
+                except ValueError:
+                    pass
                     
         return pattern
