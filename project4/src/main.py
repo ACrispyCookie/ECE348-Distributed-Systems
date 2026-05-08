@@ -2,23 +2,19 @@ from parser import *
 from state import *
 from scheduler import *
 import os
-import threading
 import time
 
 class RuntimeEnvironment:
     def __init__(self):
-        self.active_threads: dict[str, ThreadState] = {}
-        self.blocked_threads: dict[str, ThreadState] = {}
-        self.lock = threading.Condition()
         self.running = True
         self.load_balancing = False
         self.shutdown_warning = 0
-        self.scheduler_thread = threading.Thread(target=scheduler, daemon=True, name="simplescript-scheduler", args=[self])
+        self.scheduler = Scheduler(self)
 
     def start(self):
         """Starts the environment: CLI listener and thread scheduler"""
         print("Starting SimpleScript runtime environment...")
-        self.scheduler_thread.start()
+        self.scheduler.start()
         self.command_loop()
 
     def command_loop(self):
@@ -72,43 +68,42 @@ class RuntimeEnvironment:
 
         new_thread = ThreadState(program=program, args=script_args)
         print(f"Starting thread {new_thread.thread_id} for program '{progname}'")
-        with self.lock:
-            self.active_threads[new_thread.thread_id] = new_thread
-            self.lock.notify_all()
+        self.scheduler.add_thread(new_thread)
 
     def cmd_list(self):
         """Command: list (prints id and program name of each thread)"""
-        with self.lock:
-            all_threads = []
-            for tid, state in self.active_threads.items():
-                all_threads.append((tid, state, "Running"))
-        
-            for tid, state in self.blocked_threads.items():
-                all_threads.append((tid, state, "Sleeping" if state.wakeup_timestamp > 0 else "Blocked"))
+        all_threads = []
+        for tid, state in self.scheduler.get_threads(ThreadStatus.ACTIVE).items():
+            all_threads.append((tid, state, "Running"))
+            
+        for tid, state in self.scheduler.get_threads(ThreadStatus.SLEEPING).items():
+            all_threads.append((tid, state, "Sleeping"))
+            
+        for tid, state in self.scheduler.get_threads(ThreadStatus.WAITING).items():
+            all_threads.append((tid, state, "Waiting"))
 
-            if not all_threads:
-                print("No threads.")
-                return
+        if not all_threads:
+            print("No threads started.")
+            return
 
-            print(f"{'THREAD ID':<38} | {'PROGRAM NAME':<20} | {'STATUS'}")
-            print("-" * 75)
-            for tid, state, status in all_threads:
-                prog_name = getattr(state.program, 'name', 'Unknown')
-                print(f"{tid:<38} | {prog_name:<20} | {status}")
+        print(f"{'THREAD ID':<38} | {'PROGRAM NAME':<20} | {'STATUS'}")
+        print("-" * 75)
+        for tid, state, status in all_threads:
+            prog_name = getattr(state.program, 'name', 'Unknown')
+            print(f"{tid:<38} | {prog_name:<20} | {status}")
 
     def cmd_kill(self, args):
         """Command: kill <thread id> (Kills a running thread)"""
         if not args:
             print("Usage: kill <thread id>")
             return
-            
-        tid_to_kill = args[0]
-        with self.lock:
-            if tid_to_kill in self.active_threads:
-                self.active_threads[tid_to_kill].is_terminated = True
-                print(f"Thread {tid_to_kill} terminated.")
-            else:
-                print(f"Error: Thread {tid_to_kill} not found.")
+        
+        tid = args[0]
+        killed = self.scheduler.kill_thread(tid)
+        if killed:
+            print(f"Thread {tid} killed.")
+        else:
+            print(f"Error: Thread {tid} not found.")
 
     def cmd_migrate(self, args):
         """Command: migrate <thread id> <IP address> <port number> (Migrates a thread to another environment)"""
@@ -117,11 +112,11 @@ class RuntimeEnvironment:
             return
             
         tid = args[0]
-        with self.lock:
-            if tid not in self.active_threads:
-                print(f"Error: Thread {tid} not found.")
-            else:
-                print("Not implemented yet.") #TODO
+        migrated = self.scheduler.migrate_thread(tid)
+        if migrated:
+            print("Not implemented yet.")
+        else:
+            print(f"Error: Thread {tid} not found.")
 
     def cmd_shutdown(self):
         """Command: shutdown (Shuts down the environment peacefully or not)"""
@@ -129,7 +124,7 @@ class RuntimeEnvironment:
         shutdown = False
         force = time.time() - self.shutdown_warning < 10
         self.shutdown_warning = time.time()
-        if len(self.active_threads) == 0:
+        if len(self.scheduler.get_threads()) == 0:
             shutdown = True
         else: # TODO check if last instance
             if force:
@@ -141,9 +136,7 @@ class RuntimeEnvironment:
         if shutdown:
             print("Shutting down...")
             self.running = False
-            with self.lock:
-                self.lock.notify_all()
-            self.scheduler_thread.join()
+            self.scheduler.shutdown()
 
 if __name__ == "__main__":
     env = RuntimeEnvironment()

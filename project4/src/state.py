@@ -48,6 +48,10 @@ class Program:
     instructions: List[Instruction]
     labels: Dict[str, int]
 
+@dataclass
+class Wildcard:
+    name: str
+
 
 class ThreadState:
     """Holds the execution state of a specific thread."""
@@ -60,8 +64,9 @@ class ThreadState:
         self.variables: Dict[str, str | int] = {}
         
         self.wakeup_timestamp: float = 0
+        self.tuple_pattern: list = []
+        self.tuple_in: bool = False
         self.is_terminated: bool = False
-        self.is_blocked: bool = False
 
         self._initialize_arguments(args)
 
@@ -82,4 +87,6 @@ class ThreadState:
 
     def get_current_instruction(self) -> Optional[Instruction]:
         """Returns the instruction at the current PC"""
+        if self.program_counter >= len(self.program.instructions):
+            return None
         return self.program.instructions[self.program_counter]

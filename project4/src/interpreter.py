@@ -1,8 +1,9 @@
-from state import ThreadState
+from state import *
+from tuple_space import *
 import time
 
 class Interpreter:
-    def step(self, state: ThreadState) -> bool:
+    def step(self, state: ThreadState, tuple_space: TupleSpace) -> bool:
         """
         Executes a single instruction for the given ThreadState.
         """
@@ -13,7 +14,7 @@ class Interpreter:
             return False
         
         try:
-            self._execute_instruction(instruction, state)
+            self._execute_instruction(instruction, state, tuple_space)
 
             if not self._is_branch_instruction(instruction.tag):
                 state.program_counter += 1
@@ -22,8 +23,13 @@ class Interpreter:
             print(f"\n[Runtime Error - Thread {state.thread_id}] Line {state.program_counter + 1}: {e}")
             state.is_terminated = True
             return False
+        
+    def bind_tuple_variables(self, state: ThreadState, pattern: list, matched_tuple: tuple):
+        for p_arg, t_val in zip(pattern, matched_tuple):
+            if isinstance(p_arg, Wildcard):
+                state.variables[p_arg.name] = t_val
 
-    def _execute_instruction(self, instr, state) -> None:
+    def _execute_instruction(self, instr: Instruction, state: ThreadState, tuple_space: TupleSpace) -> None:
         tag = instr.tag
         args = instr.args
         
@@ -85,20 +91,37 @@ class Interpreter:
         elif tag == "SLP":
             seconds = self._get_value(args[0], state)
             state.wakeup_timestamp = time.time() + seconds
-            state.is_blocked = True
             
         elif tag == "RET":
             state.is_terminated = True
             
         # --- TUPLE SPACE ---
-        elif tag in ("OUT", "RD", "IN"):
-            # Stage 1: treated as no-ops per assignment instructions
-            pass
-            
+        elif tag == "OUT":
+            out_tuple = tuple(self._get_value(arg, state) for arg in instr.args)
+            tuple_space.out_tuple(out_tuple)
+
+        elif tag == "RD":
+            pattern = self._parse_pattern_tuple(instr)
+            read = tuple_space.rd_tuple(pattern)
+            if not read:
+                state.tuple_pattern = pattern
+                state.tuple_in = False
+            else:
+                self.bind_tuple_variables(state, pattern, read)
+        
+        elif tag == "IN":
+            pattern = self._parse_pattern_tuple(instr)
+            read = tuple_space.in_tuple(pattern)
+            if not read:
+                state.tuple_pattern = pattern
+                state.tuple_in = True
+            else:
+                self.bind_tuple_variables(state, pattern, read)
+
         else:
             raise ValueError(f"Unsupported instruction tag: {tag}")
 
-    def _get_value(self, arg: str, state):
+    def _get_value(self, arg: str, state: ThreadState):
         """
         Parses an argument. It can be an integer, a string literal, or a variable name.
         """
@@ -117,7 +140,7 @@ class Interpreter:
         except ValueError:
             pass
         
-    def _jump_to_label(self, label: str, state) -> None:
+    def _jump_to_label(self, label: str, state: ThreadState) -> None:
         """Sets the program counter to the index of the requested label."""
         if label not in state.program.labels:
             raise ValueError(f"Cannot branch to unknown label '{label}'")
@@ -126,3 +149,26 @@ class Interpreter:
     def _is_branch_instruction(self, tag: str) -> bool:
         """Helper to determine if an instruction manipulates the PC itself."""
         return tag in ("BGT", "BGE", "BLT", "BLE", "BEQ", "BRA", "RET")
+    
+    def _parse_pattern_tuple(self, instruction: Instruction) -> List:
+        """
+        Parses an IN or RD instruction. 
+        Leaves variable names as strings so they can act as wildcards.
+        """
+        pattern = []
+        
+        for arg in instruction.args:
+            if arg.startswith('$'):
+                pattern.append(Wildcard(arg))
+                
+            if arg.startswith('"'):
+                if not arg.endswith('"'):
+                    raise NameError(f'Expected " after {arg}.')
+                pattern.append(arg[1:-1])
+                
+            try:
+                pattern.append(int(arg))
+            except ValueError:
+                pass
+                    
+        return pattern
