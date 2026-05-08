@@ -7,7 +7,8 @@ import time
 
 class RuntimeEnvironment:
     def __init__(self):
-        self.threads: dict[str, ThreadState] = {}
+        self.active_threads: dict[str, ThreadState] = {}
+        self.blocked_threads: dict[str, ThreadState] = {}
         self.lock = threading.Condition()
         self.running = True
         self.load_balancing = False
@@ -72,21 +73,28 @@ class RuntimeEnvironment:
         new_thread = ThreadState(program=program, args=script_args)
         print(f"Starting thread {new_thread.thread_id} for program '{progname}'")
         with self.lock:
-            self.threads[new_thread.thread_id] = new_thread
+            self.active_threads[new_thread.thread_id] = new_thread
             self.lock.notify_all()
 
     def cmd_list(self):
         """Command: list (prints id and program name of each thread)"""
         with self.lock:
-            if not self.threads:
+            all_threads = []
+            for tid, state in self.active_threads.items():
+                all_threads.append((tid, state, "Running"))
+        
+            for tid, state in self.blocked_threads.items():
+                all_threads.append((tid, state, "Sleeping" if state.wakeup_timestamp > 0 else "Blocked"))
+
+            if not all_threads:
                 print("No threads.")
                 return
-                
-            print(f"{'THREAD ID':<40} | {'PROGRAM NAME'}")
-            print("-" * 60)
-            for tid, state in self.threads.items():
+
+            print(f"{'THREAD ID':<38} | {'PROGRAM NAME':<20} | {'STATUS'}")
+            print("-" * 75)
+            for tid, state, status in all_threads:
                 prog_name = getattr(state.program, 'name', 'Unknown')
-                print(f"{tid:<40} | {prog_name}")
+                print(f"{tid:<38} | {prog_name:<20} | {status}")
 
     def cmd_kill(self, args):
         """Command: kill <thread id> (Kills a running thread)"""
@@ -96,8 +104,8 @@ class RuntimeEnvironment:
             
         tid_to_kill = args[0]
         with self.lock:
-            if tid_to_kill in self.threads:
-                self.threads[tid_to_kill].is_terminated = True
+            if tid_to_kill in self.active_threads:
+                self.active_threads[tid_to_kill].is_terminated = True
                 print(f"Thread {tid_to_kill} terminated.")
             else:
                 print(f"Error: Thread {tid_to_kill} not found.")
@@ -110,7 +118,7 @@ class RuntimeEnvironment:
             
         tid = args[0]
         with self.lock:
-            if tid not in self.threads:
+            if tid not in self.active_threads:
                 print(f"Error: Thread {tid} not found.")
             else:
                 print("Not implemented yet.") #TODO
@@ -121,7 +129,7 @@ class RuntimeEnvironment:
         shutdown = False
         force = time.time() - self.shutdown_warning < 10
         self.shutdown_warning = time.time()
-        if len(self.threads) == 0:
+        if len(self.active_threads) == 0:
             shutdown = True
         else: # TODO check if last instance
             if force:

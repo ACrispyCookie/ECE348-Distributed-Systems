@@ -24,7 +24,7 @@ def parse_simplescript(source_code: str, program_name: str) -> Optional[Program]
     for line_number, line in enumerate(lines[1:], start=2):
         clean_line = line.strip()
     
-        if not clean_line:
+        if not clean_line or clean_line.startswith('%'):
             continue
             
         try:
