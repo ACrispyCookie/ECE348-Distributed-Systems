@@ -1,7 +1,7 @@
 from parser import *
 from state import *
 from scheduler import *
-from network import *
+from discovery import *
 import os
 import time
 
@@ -11,8 +11,8 @@ class RuntimeEnvironment:
         self.load_balancing = False
         self.shutdown_warning = 0
         self.node_id = uuid.uuid4()
-        self.discovery = DiscoveryThread(self.node_id)
         self.scheduler = Scheduler(self)
+        self.discovery = DiscoveryThread(self.node_id, self.scheduler)
 
     def start(self):
         """Starts the environment: CLI listener and thread scheduler"""
@@ -36,6 +36,8 @@ class RuntimeEnvironment:
                     self.cmd_run(args)
                 elif command == "list":
                     self.cmd_list()
+                elif command == "tuples":
+                    self.cmd_tuples()
                 elif command == "kill":
                     self.cmd_kill(args)
                 elif command == "migrate":
@@ -43,7 +45,7 @@ class RuntimeEnvironment:
                 elif command == "shutdown":
                     self.cmd_shutdown()
                 else:
-                    print(f"Unknown command: '{command}'. Available commands: run, list, kill, migrate, shutdown")
+                    print(f"Unknown command: '{command}'. Available commands: run, list, tuples, kill, migrate, shutdown")
 
             except KeyboardInterrupt:
                 self.cmd_shutdown()
@@ -94,6 +96,33 @@ class RuntimeEnvironment:
         for tid, state, status in all_threads:
             prog_name = getattr(state.program, 'name', 'Unknown')
             print(f"{tid:<38} | {prog_name:<20} | {status}")
+
+    def cmd_tuples(self):
+        """Command: tuples (prints all tuple requests)"""
+        requests = self.scheduler.tuple_space.local.get_requests()
+        if not requests:
+            print("No requests available.")
+            return
+
+        all_requests = []
+        for req in requests:
+            status = (
+                req.owner
+                if req.owner is not None
+                else "Local"
+            )
+
+            all_requests.append((
+                req.thread_id,
+                req.pattern,
+                "True" if req.is_destructive else "False",
+                status
+            ))
+
+        print(f"{'THREAD ID':<38} | {'IN':<5} | {'OWNER':<30} | {'PATTERN'}")
+        print("-" * 85)
+        for thread_id, pattern, destr, status in all_requests:
+            print(f"{thread_id:<38} | {destr:<5} | {status:<30} | {pattern}")
 
     def cmd_kill(self, args):
         """Command: kill <thread id> (Kills a running thread)"""

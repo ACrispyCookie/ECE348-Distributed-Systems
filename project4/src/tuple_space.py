@@ -1,14 +1,7 @@
 import threading
+import copy
 from state import *
 from typing import List, Tuple, Optional, Any, Callable
-
-@dataclass
-class TupleRequest:
-    thread_id: str
-    owner: tuple[str, int]
-    completer: tuple[str, int]
-    pattern: list
-    is_destructive: bool
 
 class TupleSpace:
     def __init__(self):
@@ -76,6 +69,25 @@ class TupleSpaceManager:
                 return req
             else:
                 return tup
+            
+    def add_requests(self, reqs: List[TupleRequest]):
+        with self.lock:
+            self.requests.extend(reqs)
+
+    def get_requests(self):
+        with self.lock:
+            return list(self.requests)
+
+    def get_local_requests(self, node_id) -> List[TupleRequest]:
+        claimed = []
+
+        with self.lock:
+            for req in self.requests:
+                if req.owner is None:
+                    req_copy = copy.deepcopy(req)
+                    req_copy.owner = node_id
+                    claimed.append(req_copy)
+        return claimed
 
 class DistributedTupleManager:
     def __init__(self, scheduler_receive: Callable):
@@ -99,5 +111,5 @@ class DistributedTupleManager:
         ret = self.local.read(tid, pattern, destructive, owner)
         if isinstance(ret, tuple) and owner:
             print("Complete network request")
-        elif not owner:
-            self.scheduler_receive()
+        elif isinstance(ret, tuple):
+            self.scheduler_receive(tid, ret)

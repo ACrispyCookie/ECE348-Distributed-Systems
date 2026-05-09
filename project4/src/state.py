@@ -1,5 +1,5 @@
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from typing import List, Dict, Optional
 from enum import Enum
 
@@ -52,6 +52,16 @@ class Program:
 class Wildcard:
     name: str
 
+    def to_dict(self):
+        return {
+            "__type__": "wildcard",
+            "name": self.name
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls(name=data["name"])
+
 
 class ThreadState:
     """Holds the execution state of a specific thread."""
@@ -90,3 +100,40 @@ class ThreadState:
         if self.program_counter >= len(self.program.instructions):
             return None
         return self.program.instructions[self.program_counter]
+
+@dataclass
+class TupleRequest:
+    thread_id: str
+    owner: str
+    completer: str
+    pattern: list[str|int|Wildcard]
+    is_destructive: bool
+
+    def to_dict(self) -> dict:
+        def encode_item(x):
+            if isinstance(x, Wildcard):
+                return x.to_dict()
+            return x
+
+        return {
+            "thread_id": self.thread_id,
+            "owner": self.owner,
+            "completer": self.completer,
+            "pattern": [encode_item(x) for x in self.pattern],
+            "is_destructive": self.is_destructive,
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        def decode_item(x):
+            if isinstance(x, dict) and x.get("__type__") == "wildcard":
+                return Wildcard.from_dict(x)
+            return x
+
+        return cls(
+            thread_id=data["thread_id"],
+            owner=data["owner"],
+            completer=data["completer"],
+            pattern=[decode_item(x) for x in data["pattern"]],
+            is_destructive=data["is_destructive"],
+        )
