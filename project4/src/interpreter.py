@@ -29,7 +29,7 @@ class Interpreter:
             if isinstance(p_arg, Wildcard):
                 state.variables[p_arg.name] = t_val
 
-    def _execute_instruction(self, instr: Instruction, state: ThreadState, tuple_space: TupleSpace) -> None:
+    def _execute_instruction(self, instr: Instruction, state: ThreadState, tuple_space: DistributedTupleManager) -> None:
         tag = instr.tag
         args = instr.args
         
@@ -98,25 +98,13 @@ class Interpreter:
         # --- TUPLE SPACE ---
         elif tag == "OUT":
             out_tuple = tuple(self._get_value(arg, state) for arg in instr.args)
-            tuple_space.out_tuple(out_tuple)
+            tuple_space.out(out_tuple)
 
-        elif tag == "RD":
+        elif tag in ("RD", "IN"):
             pattern = self._parse_pattern_tuple(instr)
-            read = tuple_space.rd_tuple(pattern)
-            if not read:
-                state.tuple_pattern = pattern
-                state.tuple_in = False
-            else:
-                self.bind_tuple_variables(state, pattern, read)
-        
-        elif tag == "IN":
-            pattern = self._parse_pattern_tuple(instr)
-            read = tuple_space.in_tuple(pattern)
-            if not read:
-                state.tuple_pattern = pattern
-                state.tuple_in = True
-            else:
-                self.bind_tuple_variables(state, pattern, read)
+            state.tuple_pattern = pattern
+            state.tuple_in = tag == "IN"
+            tuple_space.read(state.thread_id, pattern, tag == "IN")
 
         else:
             raise ValueError(f"Unsupported instruction tag: {tag}")
@@ -139,6 +127,7 @@ class Interpreter:
             return int(arg)
         except ValueError:
             pass
+        raise ValueError(f"Cannot resolve value: '{arg}'")
         
     def _jump_to_label(self, label: str, state: ThreadState) -> None:
         """Sets the program counter to the index of the requested label."""

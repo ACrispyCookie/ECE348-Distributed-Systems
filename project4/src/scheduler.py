@@ -1,6 +1,6 @@
 from interpreter import Interpreter
 from state import ThreadState
-from tuple_space import TupleSpace
+from tuple_space import DistributedTupleManager, TupleRequest
 from enum import Enum
 from typing import Dict
 import threading
@@ -15,10 +15,10 @@ class Scheduler:
     def __init__(self, env):
         self.env = env
         self.interpreter = Interpreter()
-        self.tuple_space = TupleSpace(self)
+        self.tuple_space = DistributedTupleManager(self._on_tuple_received)
 
         self.thread = threading.Thread(target=self._scheduler, daemon=True, name="simplescript-scheduler")
-        self.lock = threading.Condition()
+        self.lock = threading.Condition(threading.RLock())
         self.active_threads: dict[str, ThreadState] = {}
         self.sleeping_threads: dict[str, ThreadState] = {}
         self.waiting_threads: dict[str, ThreadState] = {}
@@ -64,30 +64,31 @@ class Scheduler:
     def get_threads(self, status: ThreadStatus | None = None) -> Dict[str, ThreadState]:
         with self.lock:
             if not status:
-                return self.active_threads | self.sleeping_threads | self.waiting_threads
+                return dict(self.active_threads | self.sleeping_threads | self.waiting_threads)
             elif status == ThreadStatus.ACTIVE:
-                return self.active_threads
+                return dict(self.active_threads)
             elif status == ThreadStatus.SLEEPING:
-                return self.sleeping_threads
+                return dict(self.sleeping_threads)
             elif status == ThreadStatus.WAITING:
-                return self.waiting_threads
+                return dict(self.waiting_threads)
 
-    def check_tuple_and_wake(self, new_tuple: tuple) -> bool:
+    def _on_tuple_received(self, tid: str, new_tuple: tuple):
         with self.lock:
-            for tid in list(self.waiting_threads.keys()):
-                state = self.waiting_threads[tid]
-                
-                if self.tuple_space.match(new_tuple, state.tuple_pattern):
-                    self.interpreter.bind_tuple_variables(state, state.tuple_pattern, new_tuple)
-                    
-                    self.waiting_threads.pop(tid)
-                    state.tuple_pattern = []
-                    self.active_threads[tid] = state
-                    self.lock.notify_all()
-                    
-                    if state.tuple_in:
-                        return True
-            return False
+            if tid not in self.waiting_threads.keys() and tid not in self.active_threads.keys():
+                raise NameError("Something went terribly wrong!")
+            
+            if tid in self.active_threads:
+                state = self.active_threads[tid]
+                self.interpreter.bind_tuple_variables(state, state.tuple_pattern, new_tuple)
+                state.tuple_pattern = []
+                return
+            
+            state = self.waiting_threads[tid]
+            self.interpreter.bind_tuple_variables(state, state.tuple_pattern, new_tuple)
+            state.tuple_pattern = []
+            self.waiting_threads.pop(tid)
+            self.active_threads[tid] = state
+            self.lock.notify_all()
 
     def _scheduler(self):
         while self.env.running:

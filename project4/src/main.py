@@ -1,6 +1,7 @@
 from parser import *
 from state import *
 from scheduler import *
+from network import *
 import os
 import time
 
@@ -9,6 +10,8 @@ class RuntimeEnvironment:
         self.running = True
         self.load_balancing = False
         self.shutdown_warning = 0
+        self.node_id = uuid.uuid4()
+        self.discovery = DiscoveryThread(self.node_id)
         self.scheduler = Scheduler(self)
 
     def start(self):
@@ -137,6 +140,8 @@ class RuntimeEnvironment:
             print("Shutting down...")
             self.running = False
             self.scheduler.shutdown()
+            self.discovery.stop()
+            self.discovery.join()
 
 if __name__ == "__main__":
     env = RuntimeEnvironment()
