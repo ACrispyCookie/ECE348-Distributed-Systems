@@ -178,12 +178,12 @@ class RuntimeEnvironment:
         self.shutdown_warning = time.time()
         if len(self.scheduler.get_threads()) == 0:
             shutdown = True
-        else: # TODO check if last instance
+        elif self.network.send_shutdown():
+            shutdown = True
             if force:
-                shutdown = True
                 print(("\n" if interrupt else "") + "[RUNTIME] Warning: You have forced a shutdown...")
-            else:
-                print(("\n" if interrupt else "") + "[RUNTIME] Warning: This is the last environment running. Retry to force shutdown.")
+        else:
+            print(("\n" if interrupt else "") + "[RUNTIME] Warning: This is the last environment running. Retry to force shutdown.")
 
         if shutdown:
             print("[RUNTIME] Shutting down...")

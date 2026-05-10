@@ -259,9 +259,27 @@ class NetworkReceiver(threading.Thread):
         self.remove_node(message.node_id)
 
     def send_shutdown(self):
+        if not self.nodes:
+            return False
+        
         msg = ShutdownMessage(MessageType.SHUTDOWN, self.node_id)
         for node in self.nodes.keys():
             self._send_message(node, msg)
+
+        threads = list(self.scheduler.get_threads().values())
+        node_ids = list(self.nodes.keys())
+        for i, thread_state in enumerate(threads):
+            target_node = node_ids[i % len(node_ids)]
+            if thread_state.tuple_pattern:
+                self.scheduler.tuple_space.local.remove_request(thread_state.thread_id)
+                self.send_cancel(thread_state.thread_id, thread_state.tuple_in, self.node_id)
+                thread_state.tuple_pattern = []
+                thread_state.program_counter -= 1
+            self.send_migrate(thread_state, target_node)
+
+        return True
+
+        
 
     def _send_message(self, node_id: str, message: Message):
         data = message.to_json()
@@ -321,7 +339,6 @@ class NetworkReceiver(threading.Thread):
                 raise ValueError(f"Unknown message type: {msg_type}")
 
     def stop(self):
-        self.send_shutdown()
         self.running = False
         try:
             self.server_socket.shutdown(socket.SHUT_RDWR)
