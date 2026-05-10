@@ -34,7 +34,7 @@ def test_kill_active_thread(sched, dummy_state):
     
     success = sched.kill_thread(dummy_state.thread_id)
     
-    assert success is True
+    assert success is dummy_state.thread_id
     assert dummy_state.thread_id not in sched.active_threads
     assert dummy_state.is_terminated is True
 
@@ -43,7 +43,7 @@ def test_kill_sleeping_thread(sched, dummy_state):
     
     success = sched.kill_thread(dummy_state.thread_id)
     
-    assert success is True
+    assert success is dummy_state.thread_id
     assert dummy_state.thread_id not in sched.sleeping_threads
     assert dummy_state.is_terminated is True
 
@@ -52,7 +52,7 @@ def test_kill_waiting_thread(sched, dummy_state):
     
     success = sched.kill_thread(dummy_state.thread_id)
     
-    assert success is True
+    assert success is dummy_state.thread_id
     assert dummy_state.thread_id not in sched.waiting_threads
     assert dummy_state.is_terminated is True
 

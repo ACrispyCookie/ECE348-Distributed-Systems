@@ -1,13 +1,22 @@
 import pytest
 from interpreter import Interpreter, Instruction
+from scheduler import Scheduler
 from state import ThreadState, Program, Wildcard
-from tuple_space import TupleSpace
+from tuple_space import DistributedTupleManager
 
 @pytest.fixture
 def blank_state():
-    """Provides a fresh, empty thread state for each test."""
+    """Provides an empty thread state for each test."""
     dummy_program = Program(name="Test", instructions=[], labels={})
     return ThreadState(program=dummy_program, args=[])
+
+@pytest.fixture
+def sched():
+    """Provides a dummy scheduler for each test."""
+    sched = Scheduler(None)
+    sched.tuple_space.send_in = lambda *args, **kwargs: None
+    sched.tuple_space.send_cancel = lambda *args, **kwargs: None
+    return sched
 
 # --- ARITHMETIC TESTS ---
 
@@ -16,7 +25,7 @@ def test_math_add(blank_state):
     blank_state.variables["$y"] = 5
     instr = Instruction(tag="ADD", args=["$sum", "$x", "$y"])
     
-    Interpreter()._execute_instruction(instr, blank_state, TupleSpace())
+    Interpreter()._execute_instruction(instr, blank_state, DistributedTupleManager(None))
     
     assert blank_state.variables["$sum"] == 15
 
@@ -25,7 +34,7 @@ def test_math_sub(blank_state):
     blank_state.variables["$y"] = 5
     instr = Instruction(tag="SUB", args=["$sum", "$x", "$y"])
     
-    Interpreter()._execute_instruction(instr, blank_state, TupleSpace())
+    Interpreter()._execute_instruction(instr, blank_state, DistributedTupleManager(None))
     
     assert blank_state.variables["$sum"] == 5
 
@@ -34,7 +43,7 @@ def test_math_mul(blank_state):
     blank_state.variables["$y"] = 5
     instr = Instruction(tag="MUL", args=["$sum", "$x", "$y"])
     
-    Interpreter()._execute_instruction(instr, blank_state, TupleSpace())
+    Interpreter()._execute_instruction(instr, blank_state, DistributedTupleManager(None))
     
     assert blank_state.variables["$sum"] == 50
 
@@ -43,7 +52,7 @@ def test_math_div(blank_state):
     blank_state.variables["$y"] = 5
     instr = Instruction(tag="DIV", args=["$sum", "$x", "$y"])
     
-    Interpreter()._execute_instruction(instr, blank_state, TupleSpace())
+    Interpreter()._execute_instruction(instr, blank_state, DistributedTupleManager(None))
     
     assert blank_state.variables["$sum"] == 2
 
@@ -52,7 +61,7 @@ def test_math_mod(blank_state):
     blank_state.variables["$y"] = 5
     instr = Instruction(tag="MOD", args=["$sum", "$x", "$y"])
     
-    Interpreter()._execute_instruction(instr, blank_state, TupleSpace())
+    Interpreter()._execute_instruction(instr, blank_state, DistributedTupleManager(None))
     
     assert blank_state.variables["$sum"] == 0
 
@@ -62,7 +71,7 @@ def test_math_division_by_zero(blank_state):
     instr = Instruction(tag="DIV", args=["$ans", "$x", "$y"])
     
     with pytest.raises(ZeroDivisionError):
-        Interpreter()._execute_instruction(instr, blank_state, TupleSpace())
+        Interpreter()._execute_instruction(instr, blank_state, DistributedTupleManager(None))
 
 def test_math_type_enforcement(blank_state):
     blank_state.variables["$x"] = 10
@@ -70,7 +79,7 @@ def test_math_type_enforcement(blank_state):
     instr = Instruction(tag="ADD", args=["$ans", "$x", "$y"])
     
     with pytest.raises(TypeError):
-        Interpreter()._execute_instruction(instr, blank_state, TupleSpace())
+        Interpreter()._execute_instruction(instr, blank_state, DistributedTupleManager(None))
 
 # --- BRANCHING TESTS ---
 
@@ -82,7 +91,7 @@ def test_branching_beq_true(blank_state):
     blank_state.variables["$val"] = 42
     instr = Instruction(tag="BEQ", args=["$val", "42", "#Target"])
     
-    Interpreter()._execute_instruction(instr, blank_state, TupleSpace())
+    Interpreter()._execute_instruction(instr, blank_state, DistributedTupleManager(None))
     
     # Because 42 == 42, PC should jump to 5
     assert blank_state.program_counter == 5
@@ -94,7 +103,7 @@ def test_branching_beq_false(blank_state):
     blank_state.variables["$val"] = 42
     instr = Instruction(tag="BEQ", args=["$val", "99", "#Target"])
     
-    Interpreter()._execute_instruction(instr, blank_state, TupleSpace())
+    Interpreter()._execute_instruction(instr, blank_state, DistributedTupleManager(None))
     
     # Because 42 != 99, PC should increment by 1
     assert blank_state.program_counter == 1
@@ -103,12 +112,12 @@ def test_branch_to_missing_label(blank_state):
     instr = Instruction(tag="BRA", args=["#GhostLabel"])
     
     with pytest.raises(ValueError, match="Cannot branch to unknown label"):
-        Interpreter()._execute_instruction(instr, blank_state, TupleSpace())
+        Interpreter()._execute_instruction(instr, blank_state, DistributedTupleManager(None))
 
 # --- TUPLE SPACE TESTS ---
 
-def test_tuple_space_out(blank_state):
-    ts = TupleSpace()
+def test_tuple_space_out(blank_state, sched):
+    ts = sched.tuple_space
     blank_state.variables["$my_var"] = 99
     
     # OUT "test" $my_var
@@ -116,10 +125,10 @@ def test_tuple_space_out(blank_state):
     Interpreter()._execute_instruction(instr, blank_state, ts)
     
     # Verify the space holds the concrete evaluated values
-    assert ("test", 99) in ts.tuples
+    assert ("test", 99) in ts.local.space.tuples
 
-def test_tuple_space_rd_blocks_when_empty(blank_state):
-    ts = TupleSpace()
+def test_tuple_space_rd_blocks_when_empty(blank_state, sched):
+    ts = sched.tuple_space
     # RD "test" $x
     instr = Instruction(tag="RD", args=['"test"', "$x"])
     Interpreter()._execute_instruction(instr, blank_state, ts)
@@ -128,8 +137,8 @@ def test_tuple_space_rd_blocks_when_empty(blank_state):
     assert blank_state.tuple_pattern == ["test", Wildcard("$x")]
     assert blank_state.tuple_in is False
 
-def test_tuple_space_in_blocks_when_empty(blank_state):
-    ts = TupleSpace()
+def test_tuple_space_in_blocks_when_empty(blank_state, sched):
+    ts = sched.tuple_space
     # IN "test" $x
     instr = Instruction(tag="IN", args=['"test"', "$x"])
     Interpreter()._execute_instruction(instr, blank_state, ts)
@@ -138,9 +147,10 @@ def test_tuple_space_in_blocks_when_empty(blank_state):
     assert blank_state.tuple_pattern == ["test", Wildcard("$x")]
     assert blank_state.tuple_in is True
 
-def test_tuple_space_in_consumes_and_binds(blank_state):
-    ts = TupleSpace()
-    ts.tuples.append(("task", 42, "calc"))
+def test_tuple_space_in_consumes_and_binds(blank_state, sched):
+    ts = sched.tuple_space
+    ts.local.space.tuples.append(("task", 42, "calc"))
+    sched.active_threads[blank_state.thread_id] = blank_state
     
     # IN "task" $id $action
     instr = Instruction(tag="IN", args=['"task"', "$id", "$action"])
@@ -154,15 +164,16 @@ def test_tuple_space_in_consumes_and_binds(blank_state):
     assert blank_state.variables["$action"] == "calc"
     
     # Tuple should be REMOVED from the space
-    assert len(ts.tuples) == 0
+    assert len(ts.local.space.tuples) == 0
 
-def test_tuple_space_rd_reads_but_keeps(blank_state):
-    ts = TupleSpace()
-    ts.tuples.append(("status", 200))
+def test_tuple_space_rd_reads_but_keeps(blank_state, sched):
+    ts = sched.tuple_space
+    ts.local.space.tuples.append(("status", 200))
+    sched.active_threads[blank_state.thread_id] = blank_state
     
     instr = Instruction(tag="RD", args=['"status"', "$code"])
     Interpreter()._execute_instruction(instr, blank_state, ts)
     
     assert blank_state.variables["$code"] == 200
-    assert len(ts.tuples) == 1
+    assert len(ts.local.space.tuples) == 1
 
