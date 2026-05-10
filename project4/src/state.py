@@ -41,12 +41,34 @@ class Instruction:
     args: List[str]
     label: Optional[str] = None
 
+    def to_dict(self):
+        return {"tag": self.tag, "args": self.args, "label": self.label}
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls(tag=InstructionType(data["tag"]), args=data["args"], label=data["label"])
+
 @dataclass
 class Program:
     """Represents a fully parsed SimpleScript program."""
     name: str
     instructions: List[Instruction]
     labels: Dict[str, int]
+
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "instructions": [inst.to_dict() for inst in self.instructions],
+            "labels": self.labels
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls(
+            name=data["name"],
+            instructions=[Instruction.from_dict(i) for i in data["instructions"]],
+            labels=data["labels"]
+        )
 
 @dataclass
 class Wildcard:
@@ -100,6 +122,29 @@ class ThreadState:
         if self.program_counter >= len(self.program.instructions):
             return None
         return self.program.instructions[self.program_counter]
+    
+    def to_dict(self):
+        return {
+            "thread_id": self.thread_id,
+            "program": self.program.to_dict(),
+            "program_counter": self.program_counter,
+            "variables": self.variables,
+            "wakeup_timestamp": self.wakeup_timestamp
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        # Create a dummy state to bypass the __init__ logic
+        state = cls.__new__(cls)
+        state.thread_id = data["thread_id"]
+        state.program = Program.from_dict(data["program"])
+        state.program_counter = data["program_counter"]
+        state.variables = data["variables"]
+        state.wakeup_timestamp = data["wakeup_timestamp"]
+        state.tuple_pattern = []
+        state.tuple_in = False
+        state.is_terminated = False
+        return state
 
 @dataclass
 class TupleRequest:

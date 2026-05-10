@@ -36,7 +36,10 @@ class Scheduler:
 
     def add_thread(self, thread: ThreadState):
         with self.lock:
-            self.active_threads[thread.thread_id] = thread
+            if thread.wakeup_timestamp == 0:
+                self.active_threads[thread.thread_id] = thread
+            else:
+                self.sleeping_threads[thread.thread_id] = thread
             self.lock.notify_all()
 
     def kill_thread(self, tid: str) -> bool:
@@ -58,11 +61,28 @@ class Scheduler:
             
             return None
             
-    def migrate_thread(self, tid: str) -> bool:
+    def migrate_thread(self, tid: str, target_ip: str, target_port: int) -> bool:
         with self.lock:
             real_tid, thread = self._resolve_tid(tid)
             if thread is None:
                 return None
+            
+            node_id = self.env.network.find_node(target_ip, target_port)
+            if node_id is None:
+                return None
+            
+            if real_tid in self.active_threads:
+                state = self.active_threads.pop(real_tid)
+            elif real_tid in self.sleeping_threads:
+                state = self.sleeping_threads.pop(real_tid)
+            elif real_tid in self.waiting_threads:
+                state = self.waiting_threads.pop(real_tid)
+                self.tuple_space.local.remove_request(real_tid)
+                self.env.network.send_cancel(real_tid, state.tuple_in, self.env.network.node_id)
+                state.tuple_pattern = []
+                state.program_counter -= 1
+
+            self.env.network.send_migrate(state, node_id)
             return real_tid
             
     def get_threads(self, status: ThreadStatus | None = None) -> Dict[str, ThreadState]:

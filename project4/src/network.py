@@ -16,6 +16,7 @@ class MessageType(str, Enum):
     OUT_CONSUME = "OUT_CONSUME"
     IN = "IN"
     IN_CANCEL = "IN_CANCEL"
+    MIGRATE = "MIGRATE"
     SHUTDOWN = "SHUTDOWN"
 
 @dataclass
@@ -88,6 +89,23 @@ class TupleIdMessage(Message):
         }
     
 @dataclass
+class ThreadMigrateMessage(Message):
+    thread: ThreadState
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls(
+            type=MessageType(data["type"]),
+            thread=data["thread"]
+        )
+    
+    def to_dict(self):
+        return {
+            "type": self.type.value,
+            "thread": self.thread.to_dict()
+        }
+    
+@dataclass
 class ShutdownMessage(Message):
     node_id: str
 
@@ -146,6 +164,12 @@ class NetworkReceiver(threading.Thread):
     def remove_node(self, node_id: str):
         self.nodes.pop(node_id)
 
+    def find_node(self, node_ip: str, node_port: int) -> Optional[str]:
+        for nid, info in self.nodes.items():
+            if info.ip == node_ip and info.tcp_port == node_port:
+                return nid
+        return None
+
     def handle_connection(self, conn: socket.socket, addr):
         try:
             while self.running:
@@ -163,6 +187,8 @@ class NetworkReceiver(threading.Thread):
                         self.handle_in_cancel(message, conn)
                     case MessageType.OUT_CONSUME:
                         self.handle_out_consume(message, conn)
+                    case MessageType.MIGRATE:
+                        self.handle_migrate(message, conn)
                     case MessageType.SHUTDOWN:
                         self.handle_shutdown(message)
         except Exception as e:
@@ -216,6 +242,17 @@ class NetworkReceiver(threading.Thread):
                 continue
             self._send_message(node, cancel)
 
+    def handle_migrate(self, message: ThreadMigrateMessage, conn):
+        state = ThreadState.from_dict(message.thread)
+        ip, port = conn.getpeername()
+        print(f"[NETWORK] Received migrated thread {state.thread_id} from {ip}:{port}...")
+        self.scheduler.add_thread(state)
+
+    def send_migrate(self, thread: ThreadState, node_id: str):
+        msg = ThreadMigrateMessage(MessageType.MIGRATE, thread)
+        thread.variables['$result'] = 10
+        self._send_message(node_id, msg)
+
     def handle_shutdown(self, message: ShutdownMessage):
         node_info = self.nodes[message.node_id]
         print(f"[NETWORK] Received SHUTDOWN from {node_info.ip}:{node_info.tcp_port}")
@@ -229,9 +266,9 @@ class NetworkReceiver(threading.Thread):
     def _send_message(self, node_id: str, message: Message):
         data = message.to_json()
         length = len(data).to_bytes(4, "big")
-        node = self.nodes[node_id]
-        if not node:
+        if node_id not in self.nodes.keys():
             return
+        node = self.nodes[node_id]
         
         conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
@@ -276,6 +313,8 @@ class NetworkReceiver(threading.Thread):
                 return TupleInMessage.from_dict(raw)
             case MessageType.IN_CANCEL.value | MessageType.OUT_CONSUME.value:
                 return TupleIdMessage.from_dict(raw)
+            case MessageType.MIGRATE:
+                return ThreadMigrateMessage.from_dict(raw)
             case MessageType.SHUTDOWN:
                 return ShutdownMessage.from_dict(raw)
             case _:

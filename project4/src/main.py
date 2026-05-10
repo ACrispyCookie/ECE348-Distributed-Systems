@@ -157,11 +157,18 @@ class RuntimeEnvironment:
             return
             
         tid = args[0]
-        migrated = self.scheduler.migrate_thread(tid)
+        ip = args[1]
+        try:
+            port = int(args[2])
+        except ValueError:
+            print("[RUNTIME] Specify a valid port!")
+            return
+        
+        migrated = self.scheduler.migrate_thread(tid, ip, port)
         if migrated:
-            print("[RUNTIME] Not implemented yet.")
+            print(f"[RUNTIME] Migrating thread {migrated} to {ip}:{port}...")
         else:
-            print(f"[RUNTIME] Error: Thread {tid} not found. Try specifying bigger part of the ID.")
+            print(f"[RUNTIME] Error: Thread not found or node not found.")
 
     def cmd_shutdown(self, interrupt: bool):
         """Command: shutdown (Shuts down the environment peacefully or not)"""
