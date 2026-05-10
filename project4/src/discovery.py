@@ -29,10 +29,12 @@ class Message:
     
 @dataclass
 class InitializeMessage(Message):
+    tcp_port: int
     pass
 
 @dataclass
 class InitializeResponseMessage(Message):
+    tcp_port: int
     requests: list[dict[str, Any]]
 
     @classmethod
@@ -40,19 +42,19 @@ class InitializeResponseMessage(Message):
         return cls(
             type=MessageType(data["type"]),
             node_id=data["node_id"],
+            tcp_port=data["tcp_port"],
             requests=data["requests"]
         )
 
 class DiscoveryThread(threading.Thread):
-    def __init__(self, node_id, scheduler, multicast_group='224.1.1.1', port=10100):
+    def __init__(self, node_id, scheduler, network, multicast_group='224.1.1.1', port=10100):
         super().__init__(daemon=True)
-
         self.node_id = str(node_id)
         self.scheduler = scheduler
+        self.network = network
         self.multicast_group = multicast_group
         self.port = port
         self.running = True
-
         self.sock = self._create_socket()
 
         self.start()
@@ -104,6 +106,8 @@ class DiscoveryThread(threading.Thread):
                     print(f"[{self.node_id}] Network error: {e}")
             
     def handle_initialize(self, payload, addr):
+        sender_id = payload["node_id"]
+        tcp_port = payload["tcp_port"]
         print(f"[DISCOVERY] Received INITIALIZE from {addr[0]}:{addr[1]}")
 
         requests = [
@@ -113,23 +117,26 @@ class DiscoveryThread(threading.Thread):
         response = InitializeResponseMessage(
             type=MessageType.INITIALIZE_RESPONSE,
             node_id=self.node_id,
+            tcp_port=self.network.tcp_port,
             requests=requests
         )
+        self.network.add_node(sender_id, addr[0], tcp_port)
         self.sock.sendto(response.to_json(), addr)
 
     def handle_initialize_response(self, payload, addr):
         message = InitializeResponseMessage.from_dict(payload)
-        print(f"[DISCOVERY] Received INITIALIZE_RESPONSE at {addr[0]}:{addr[1]}")
+        print(f"[DISCOVERY] Received INITIALIZE_RESPONSE from {addr[0]}:{addr[1]}")
 
         requests = [
             TupleRequest.from_dict(req)
             for req in message.requests
         ]
+        self.network.add_node(message.node_id, addr[0], message.tcp_port)
         self.scheduler.tuple_space.local.add_requests(requests)
 
     def send_initialize(self):
         print(f"[DISCOVERY] Discovering nodes on {self.multicast_group}:{self.port}")
-        message = InitializeMessage(type=MessageType.INITIALIZE, node_id=self.node_id)
+        message = InitializeMessage(type=MessageType.INITIALIZE, node_id=self.node_id, tcp_port=self.network.tcp_port)
         self.sock.sendto(message.to_json(), (self.multicast_group, self.port))
 
     def stop(self):

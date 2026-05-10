@@ -41,25 +41,29 @@ class Scheduler:
 
     def kill_thread(self, tid: str) -> bool:
         with self.lock:
-            if tid in self.active_threads:
-                self.active_threads.pop(tid).is_terminated = True
-                return True
-            elif tid in self.sleeping_threads:
-                self.sleeping_threads.pop(tid).is_terminated = True
-                self.lock.notify_all()
-                return True
-            elif tid in self.waiting_threads:
-                self.waiting_threads.pop(tid).is_terminated = True
-                return True
+            real_tid, thread = self._resolve_tid(tid)
+            if thread is None:
+                return None
             
-            return False
+            if real_tid in self.active_threads:
+                self.active_threads.pop(real_tid).is_terminated = True
+                return real_tid
+            elif real_tid in self.sleeping_threads:
+                self.sleeping_threads.pop(real_tid).is_terminated = True
+                self.lock.notify_all()
+                return real_tid
+            elif real_tid in self.waiting_threads:
+                self.waiting_threads.pop(real_tid).is_terminated = True
+                return real_tid
+            
+            return None
             
     def migrate_thread(self, tid: str) -> bool:
         with self.lock:
-            if tid in self.get_threads():
-                return True
-            else:
-                return False
+            real_tid, thread = self._resolve_tid(tid)
+            if thread is None:
+                return None
+            return real_tid
             
     def get_threads(self, status: ThreadStatus | None = None) -> Dict[str, ThreadState]:
         with self.lock:
@@ -71,6 +75,25 @@ class Scheduler:
                 return dict(self.sleeping_threads)
             elif status == ThreadStatus.WAITING:
                 return dict(self.waiting_threads)
+            
+    def _resolve_tid(self, tid_prefix: str):
+        matches = []
+
+        for tid, thread in (
+            list(self.active_threads.items())
+            + list(self.sleeping_threads.items())
+            + list(self.waiting_threads.items())
+        ):
+            if tid.startswith(tid_prefix):
+                matches.append((tid, thread))
+
+        if len(matches) == 0:
+            return None, None
+
+        if len(matches) > 1:
+            return None, None  # ambiguous
+
+        return matches[0]
 
     def _on_tuple_received(self, tid: str, new_tuple: tuple):
         with self.lock:
