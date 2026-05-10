@@ -56,6 +56,8 @@ class Scheduler:
                 self.lock.notify_all()
                 return real_tid
             elif real_tid in self.waiting_threads:
+                self.tuple_space.local.remove_request(real_tid)
+                self.env.network.send_cancel(real_tid, self.waiting_threads[real_tid].tuple_in, self.env.network.node_id)
                 self.waiting_threads.pop(real_tid).is_terminated = True
                 return real_tid
             
