@@ -199,18 +199,20 @@ class NetworkReceiver(threading.Thread):
         for node in self.nodes.keys():
             self._send_message(node, msg)
 
-    def send_out(self, tid: str, owner: str, tup: tuple):
+    def send_out(self, tid: str, destructive: bool, owner: str, tup: tuple):
         msg = TupleOutMessage(MessageType.OUT, self.node_id, tid, tup)
         self._send_message(owner, msg)
-        self.pending_requests[tid] = tup
+        if destructive:
+            self.pending_requests[tid] = tup
 
-    def send_cancel(self, tid: str, completer: str):
-        msg = TupleIdMessage(MessageType.OUT_CONSUME, tid)
-        self._send_message(completer, msg)
+    def send_cancel(self, tid: str, destructive: bool, completer: str):
+        if destructive:
+            msg = TupleIdMessage(MessageType.OUT_CONSUME, tid)
+            self._send_message(completer, msg)
 
         cancel = TupleIdMessage(MessageType.IN_CANCEL, tid)
         for node in self.nodes.keys():
-            if node == completer:
+            if destructive and node == completer:
                 continue
             self._send_message(node, cancel)
 
@@ -232,9 +234,15 @@ class NetworkReceiver(threading.Thread):
             return
         
         conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        conn.connect((node.ip, node.tcp_port))
-        conn.sendall(length)
-        conn.sendall(data)
+        try:
+            conn.connect((node.ip, node.tcp_port))
+            conn.sendall(length)
+            conn.sendall(data)
+        except Exception as e:
+            print(f"[NETWORK] Failed to send message to {node_id}: {e}")
+            self.remove_node(node_id)
+        finally:
+            conn.close()
 
     def _recv_exact(self, conn, size):
         data = b""

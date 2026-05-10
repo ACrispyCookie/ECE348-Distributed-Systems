@@ -87,7 +87,7 @@ class Interpreter:
         elif tag == "PRN":
             values = [str(self._get_value(arg, state)) for arg in args]
             tid = state.thread_id[:8]
-            print(f"[THREAD {tid:<8}] {' '.join(values)}")
+            print(f"[THREAD {tid:<8}] {''.join(values)}")
             
         elif tag == "SLP":
             seconds = self._get_value(args[0], state)

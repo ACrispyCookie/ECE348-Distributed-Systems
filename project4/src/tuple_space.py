@@ -46,16 +46,25 @@ class TupleSpaceManager:
         self.requests: List[TupleRequest] = []
         self.lock = threading.Lock()
 
-    def out(self, tup: tuple, tid: str=None) -> Optional[TupleRequest]:
+    def out(self, tup: tuple, tid: str=None) -> List[TupleRequest]:
         with self.lock:
-            complete = None
-            for i, req in enumerate(self.requests):
+            completed_reqs = []
+            destructive_found = False
+            
+            for i in range(len(self.requests) - 1, -1, -1):
+                req = self.requests[i]
                 if (not tid or tid == req.thread_id) and self.space.match(tup, req.pattern):
-                    complete = self.requests.pop(i)
-                    break
-            if not tid and (not complete or not complete.is_destructive):
+                    if not req.is_destructive:
+                        # It's an RD: keep looking
+                        completed_reqs.append(self.requests.pop(i))
+                    elif not destructive_found:
+                        # It's an IN: flag that the tuple is now consumed
+                        completed_reqs.append(self.requests.pop(i))
+                        destructive_found = True
+                
+            if not tid and not destructive_found:
                 self.space.put(tup)
-            return complete
+            return completed_reqs
 
     def read(self, tid: str, pattern: list, destructive: bool, owner: str) -> tuple | TupleRequest:
         with self.lock:
@@ -112,22 +121,23 @@ class DistributedTupleManager:
         self.send_cancel = None
 
     def out(self, tup: tuple, completer: str=None, tid: str=None) -> None:
-        req = self.local.out(tup, tid)
-        if not req:
+        reqs = self.local.out(tup, tid)
+        if not reqs:
             return
         
-        if not req.owner:
-            self.scheduler_receive(req.thread_id, tup)
-            if completer:
-                self.send_cancel(req.thread_id, completer)
-        elif not completer:
-            self.send_out(req.thread_id, req.owner, tup)
+        for req in reqs:
+            if not req.owner:
+                self.scheduler_receive(req.thread_id, tup)
+                if completer:
+                    self.send_cancel(req.thread_id, req.is_destructive, completer)
+            elif not completer:
+                self.send_out(req.thread_id, req.is_destructive, req.owner, tup)
 
 
     def read(self, tid: str, pattern: list, destructive: bool, owner: str=None) -> None:
         ret = self.local.read(tid, pattern, destructive, owner)
         if isinstance(ret, tuple) and owner:
-            self.send_out(tid, owner, ret)
+            self.send_out(tid, destructive, owner, ret)
         elif isinstance(ret, tuple):
             self.scheduler_receive(tid, ret)
         elif not owner:
