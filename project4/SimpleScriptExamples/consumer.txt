@@ -1,0 +1,20 @@
+#SIMPLESCRIPT     
+
+     SET @tag $arg1
+     SET @cnt $arg2
+     SET @wait $arg3
+
+#L1  BLT $cnt 1 #L2
+     
+     SLP $wait 
+     PRN "trying to input tuple"
+     ΙΝ $tag @val
+     PRN "got tuple [" $tag " , " $val "]"
+     SUB @cnt $cnt 1
+
+     BRA #L1
+     
+#L2  PRN "bye"
+     RET
+     
+     

@@ -1,0 +1,19 @@
+#SIMPLESCRIPT     
+
+     SET @tag $arg1
+     SET @cnt $arg2
+     SET @wait $arg3
+
+#L1  BLT $cnt 1 #L2
+     
+     SLP $wait
+     PRN "output tuple [" $tag " , " $cnt "]"
+     OUT $tag $cnt
+     SUB @cnt $cnt 1
+     
+     BRA #L1
+
+#L2  PRN "bye"
+     RET
+     
+     

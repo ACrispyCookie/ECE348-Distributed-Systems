@@ -250,7 +250,6 @@ class NetworkReceiver(threading.Thread):
 
     def send_migrate(self, thread: ThreadState, node_id: str):
         msg = ThreadMigrateMessage(MessageType.MIGRATE, thread)
-        thread.variables['$result'] = 10
         self._send_message(node_id, msg)
 
     def handle_shutdown(self, message: ShutdownMessage):
