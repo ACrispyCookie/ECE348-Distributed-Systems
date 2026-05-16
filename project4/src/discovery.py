@@ -112,7 +112,7 @@ class DiscoveryThread(threading.Thread):
 
         requests = [
             req.to_dict()
-            for req in self.scheduler.tuple_space.local.get_local_requests(self.node_id)
+            for req in self.scheduler.tuple_space.get_local_requests(self.node_id)
         ]
         response = InitializeResponseMessage(
             type=MessageType.INITIALIZE_RESPONSE,
@@ -132,7 +132,7 @@ class DiscoveryThread(threading.Thread):
             for req in message.requests
         ]
         self.network.add_node(message.node_id, addr[0], message.tcp_port)
-        self.scheduler.tuple_space.local.add_requests(requests)
+        self.scheduler.tuple_space.add_foreign_requests(requests)
 
     def send_initialize(self):
         print(f"[DISCOVERY] Discovering nodes on {self.multicast_group}:{self.port}")

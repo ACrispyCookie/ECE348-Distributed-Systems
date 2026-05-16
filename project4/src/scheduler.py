@@ -1,6 +1,6 @@
 from interpreter import Interpreter
 from state import ThreadState
-from tuple_space import DistributedTupleManager, TupleRequest
+from tuple_space import DistributedTupleManager
 from enum import Enum
 from typing import Dict
 import threading
@@ -56,7 +56,7 @@ class Scheduler:
                 self.lock.notify_all()
                 return real_tid
             elif real_tid in self.waiting_threads:
-                self.tuple_space.local.remove_request(real_tid)
+                self.tuple_space.remove_request(real_tid)
                 self.env.network.send_cancel(real_tid, self.waiting_threads[real_tid].tuple_in, self.env.network.node_id)
                 self.waiting_threads.pop(real_tid).is_terminated = True
                 return real_tid
@@ -79,7 +79,7 @@ class Scheduler:
                 state = self.sleeping_threads.pop(real_tid)
             elif real_tid in self.waiting_threads:
                 state = self.waiting_threads.pop(real_tid)
-                self.tuple_space.local.remove_request(real_tid)
+                self.tuple_space.remove_request(real_tid)
                 self.env.network.send_cancel(real_tid, state.tuple_in, self.env.network.node_id)
                 state.tuple_pattern = []
                 state.program_counter -= 1

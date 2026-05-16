@@ -101,8 +101,8 @@ class RuntimeEnvironment:
 
     def cmd_tuples(self):
         """Command: tuples (prints all tuple requests and stored tuples)"""
-        tuples = self.scheduler.tuple_space.local.get_tuples()
-        requests = self.scheduler.tuple_space.local.get_requests()
+        tuples = self.scheduler.tuple_space.get_tuples()
+        requests = self.scheduler.tuple_space.get_requests()
         if not tuples and not requests:
             print("[RUNTIME] No tuples or requests")
 

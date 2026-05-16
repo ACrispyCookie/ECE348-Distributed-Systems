@@ -125,7 +125,7 @@ def test_tuple_space_out(blank_state, sched):
     Interpreter()._execute_instruction(instr, blank_state, ts)
     
     # Verify the space holds the concrete evaluated values
-    assert ("test", 99) in ts.local.space.tuples
+    assert ("test", 99) in ts.local.tuples
 
 def test_tuple_space_rd_blocks_when_empty(blank_state, sched):
     ts = sched.tuple_space
@@ -149,7 +149,7 @@ def test_tuple_space_in_blocks_when_empty(blank_state, sched):
 
 def test_tuple_space_in_consumes_and_binds(blank_state, sched):
     ts = sched.tuple_space
-    ts.local.space.tuples.append(("task", 42, "calc"))
+    ts.local.tuples.append(("task", 42, "calc"))
     sched.active_threads[blank_state.thread_id] = blank_state
     
     # IN "task" $id $action
@@ -164,16 +164,16 @@ def test_tuple_space_in_consumes_and_binds(blank_state, sched):
     assert blank_state.variables["action"] == "calc"
     
     # Tuple should be REMOVED from the space
-    assert len(ts.local.space.tuples) == 0
+    assert len(ts.local.tuples) == 0
 
 def test_tuple_space_rd_reads_but_keeps(blank_state, sched):
     ts = sched.tuple_space
-    ts.local.space.tuples.append(("status", 200))
+    ts.local.tuples.append(("status", 200))
     sched.active_threads[blank_state.thread_id] = blank_state
     
     instr = Instruction(tag="RD", args=['"status"', "@code"])
     Interpreter()._execute_instruction(instr, blank_state, ts)
     
     assert blank_state.variables["code"] == 200
-    assert len(ts.local.space.tuples) == 1
+    assert len(ts.local.tuples) == 1
 

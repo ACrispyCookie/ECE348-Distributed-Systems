@@ -3,7 +3,7 @@ from tuple_space import *
 import time
 
 class Interpreter:
-    def step(self, state: ThreadState, tuple_space: TupleSpace) -> bool:
+    def step(self, state: ThreadState, tuple_space: DistributedTupleManager) -> bool:
         """
         Executes a single instruction for the given ThreadState.
         """

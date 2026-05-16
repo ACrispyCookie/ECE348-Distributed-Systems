@@ -1,9 +1,7 @@
 import pytest
 import time
-from unittest.mock import MagicMock
 from scheduler import Scheduler, ThreadStatus
-from state import ThreadState, Program, Wildcard
-from tuple_space import TupleSpace
+from state import ThreadState, Program
 
 class DummyEnv:
     def __init__(self):

@@ -2,7 +2,7 @@ import json
 import socket
 import threading
 import copy
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from enum import Enum
 from state import *
 
@@ -210,7 +210,7 @@ class NetworkReceiver(threading.Thread):
             tup = self.pending_requests.pop(message.thread_id)
             self.scheduler.tuple_space.out(tup)
         else:
-            self.scheduler.tuple_space.local.remove_request(message.thread_id)
+            self.scheduler.tuple_space.remove_request(message.thread_id)
 
     def handle_out_consume(self, message: TupleIdMessage, conn):
         # print(f"[NETWORK] OUT_CONSUME from {conn}: {message.thread_id}")
@@ -270,15 +270,13 @@ class NetworkReceiver(threading.Thread):
         for i, thread_state in enumerate(threads):
             target_node = node_ids[i % len(node_ids)]
             if thread_state.tuple_pattern:
-                self.scheduler.tuple_space.local.remove_request(thread_state.thread_id)
+                self.scheduler.tuple_space.remove_request(thread_state.thread_id)
                 self.send_cancel(thread_state.thread_id, thread_state.tuple_in, self.node_id)
                 thread_state.tuple_pattern = []
                 thread_state.program_counter -= 1
             self.send_migrate(thread_state, target_node)
 
         return True
-
-        
 
     def _send_message(self, node_id: str, message: Message):
         data = message.to_json()

@@ -82,7 +82,7 @@ def test_e2e_producer_consumer_tuple_space(env, capsys):
     assert "Waiting for data..." in output
     assert "Data sent!" in output
     assert "Received:99" in output
-    assert len(env.scheduler.tuple_space.local.space.tuples) == 0
+    assert len(env.scheduler.tuple_space.local.tuples) == 0
 
 def test_e2e_deadlock_remains_in_waiting_queue(env):
     source = """
