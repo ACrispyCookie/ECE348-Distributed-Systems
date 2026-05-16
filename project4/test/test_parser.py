@@ -14,7 +14,7 @@ def test_parse_empty_and_comments():
 def test_parse_basic_instructions():
     source = """
     #SIMPLESCRIPT
-    SET $x 10
+    SET @x 10
     PRN "Hello World"
     """
     program = parse_simplescript(source, "TestProg")
@@ -22,7 +22,7 @@ def test_parse_basic_instructions():
     assert len(program.instructions) == 2
     
     assert program.instructions[0].tag == "SET"
-    assert program.instructions[0].args == ["$x", "10"]
+    assert program.instructions[0].args == ["@x", "10"]
     
     assert program.instructions[1].tag == "PRN"
     assert program.instructions[1].args == ['"Hello World"']
@@ -30,8 +30,8 @@ def test_parse_basic_instructions():
 def test_parse_labels():
     source = """
     #SIMPLESCRIPT
-    SET $count 0
-    #LoopStart ADD $count $count 1
+    SET @count 0
+    #LoopStart ADD @count $count 1
     BRA #LoopStart
     """
     program = parse_simplescript(source, "TestProg")

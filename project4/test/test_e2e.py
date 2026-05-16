@@ -28,9 +28,9 @@ def wait_for_completion(scheduler, timeout=2.0):
 def test_e2e_single_script_execution(env, capsys):
     source = """
     #SIMPLESCRIPT
-    SET $count 3
+    SET @count 3
     #LoopStart PRN $count
-    SUB $count $count 1
+    SUB @count $count 1
     BGT $count 0 #LoopStart
     PRN "Done"
     """
@@ -53,7 +53,7 @@ def test_e2e_producer_consumer_tuple_space(env, capsys):
     consumer_source = """
     #SIMPLESCRIPT
     PRN "Waiting for data..."
-    IN "payload" $data
+    IN "payload" @data
     PRN "Received:" $data
     """
     
@@ -81,13 +81,13 @@ def test_e2e_producer_consumer_tuple_space(env, capsys):
     
     assert "Waiting for data..." in output
     assert "Data sent!" in output
-    assert "Received: 99" in output
+    assert "Received:99" in output
     assert len(env.scheduler.tuple_space.local.space.tuples) == 0
 
 def test_e2e_deadlock_remains_in_waiting_queue(env):
     source = """
     #SIMPLESCRIPT
-    IN "never_gonna_happen" $x
+    IN "never_gonna_happen" @x
     """
     
     program = parse_simplescript(source, "doomed")

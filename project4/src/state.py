@@ -106,8 +106,8 @@ class ThreadState:
         """
         Initializes the $arg<n> variables as required by SimpleScript specs.
         """
-        self.variables["$arg0"] = self.program.name
-        self.variables["$argc"] = len(args)
+        self.variables["arg0"] = self.program.name
+        self.variables["argc"] = len(args)
         
         for i, arg in enumerate(args):
             try:
@@ -115,7 +115,7 @@ class ThreadState:
             except ValueError:
                 val = arg
                 
-            self.variables[f"$arg{i+1}"] = val
+            self.variables[f"arg{i+1}"] = val
 
     def get_current_instruction(self) -> Optional[Instruction]:
         """Returns the instruction at the current PC"""

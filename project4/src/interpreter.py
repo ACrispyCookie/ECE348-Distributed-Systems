@@ -35,11 +35,12 @@ class Interpreter:
         
         # --- VARIABLE ASSIGNMENT ---
         if tag == "SET":
-            state.variables[args[0]] = self._get_value(args[1], state)
+            var_name = self._get_target_var(args[0])
+            state.variables[var_name] = self._get_value(args[1], state)
             
         # --- ARITHMETIC ---
         elif tag in ("ADD", "SUB", "MUL", "DIV", "MOD"):
-            var_name = args[0]
+            var_name = self._get_target_var(args[0])
             val1 = self._get_value(args[1], state)
             val2 = self._get_value(args[2], state)
             
@@ -102,22 +103,29 @@ class Interpreter:
             tuple_space.out(out_tuple)
 
         elif tag in ("RD", "IN"):
-            pattern = self._parse_pattern_tuple(instr)
+            pattern = self._parse_pattern_tuple(instr, state)
             state.tuple_pattern = pattern
             state.tuple_in = tag == "IN"
             tuple_space.read(state.thread_id, pattern, tag == "IN")
 
         else:
             raise ValueError(f"Unsupported instruction tag: {tag}")
+        
+    def _get_target_var(self, arg: str) -> str:
+        """Validates and extracts the variable name for assignment/declaration."""
+        if not arg.startswith('@'):
+            raise SyntaxError(f"Target variable must start with '@' to be assigned, got '{arg}'")
+        return arg[1:]
 
     def _get_value(self, arg: str, state: ThreadState):
         """
         Parses an argument. It can be an integer, a string literal, or a variable name.
         """
         if arg.startswith('$'):
-            if arg not in state.variables:
-                raise NameError(f"Undeclared variable '{arg}' referenced.")
-            return state.variables[arg]
+            var_name = arg[1:]
+            if var_name not in state.variables:
+                raise NameError(f"Undeclared variable '{var_name}' referenced.")
+            return state.variables[var_name]
 
         if arg.startswith('"'):
             if not arg.endswith('"'):
@@ -140,7 +148,7 @@ class Interpreter:
         """Helper to determine if an instruction manipulates the PC itself."""
         return tag in ("BGT", "BGE", "BLT", "BLE", "BEQ", "BRA", "RET")
     
-    def _parse_pattern_tuple(self, instruction: Instruction) -> List:
+    def _parse_pattern_tuple(self, instruction: Instruction, state: ThreadState) -> List:
         """
         Parses an IN or RD instruction. 
         Leaves variable names as strings so they can act as wildcards.
@@ -148,8 +156,11 @@ class Interpreter:
         pattern = []
         
         for arg in instruction.args:
-            if arg.startswith('$'):
-                pattern.append(Wildcard(arg))
+            if arg.startswith('@'):
+                pattern.append(Wildcard(arg[1:]))
+                
+            elif arg.startswith('$'):
+                pattern.append(self._get_value(arg, state))
                 
             elif arg.startswith('"'):
                 if not arg.endswith('"'):
