@@ -1,4 +1,4 @@
-from state import *
+from network.state import *
 from tuple_space import *
 import time
 

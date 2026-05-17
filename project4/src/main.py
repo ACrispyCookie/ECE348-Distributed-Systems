@@ -1,8 +1,7 @@
 from parser import *
-from state import *
 from scheduler import *
-from discovery import *
-from network import *
+from network.state import *
+from network.network import NetworkThread
 import os
 import time
 
@@ -11,10 +10,8 @@ class RuntimeEnvironment:
         self.running = True
         self.load_balancing = False
         self.shutdown_warning = 0
-        self.node_id = uuid.uuid4()
         self.scheduler = Scheduler(self)
-        self.network = NetworkReceiver(self.node_id, self.scheduler)
-        self.discovery = DiscoveryThread(self.node_id, self.scheduler, self.network)
+        self.network = NetworkThread(self.scheduler)
 
     def start(self):
         """Starts the environment: CLI listener and thread scheduler"""
@@ -164,35 +161,34 @@ class RuntimeEnvironment:
             print("[RUNTIME] Specify a valid port!")
             return
         
-        migrated = self.scheduler.migrate_thread(tid, ip, port)
+        migrated = self.scheduler.migrate_thread_ip(tid, ip, port)
         if migrated:
             print(f"[RUNTIME] Migrating thread {migrated} to {ip}:{port}...")
         else:
             print(f"[RUNTIME] Error: Thread not found or node not found.")
 
-    def cmd_shutdown(self, interrupt: bool):
-        """Command: shutdown (Shuts down the environment peacefully or not)"""
+    def cmd_shutdown(self, interrupt: bool = False):
+        """Command: shutdown (Shuts down the environment peacefully or forcefully)"""
+        prefix = "\n" if interrupt else ""
         
-        shutdown = False
-        force = time.time() - self.shutdown_warning < 10
-        self.shutdown_warning = time.time()
-        if len(self.scheduler.get_threads()) == 0:
-            shutdown = True
-        elif self.network.send_shutdown():
-            shutdown = True
-            if force:
-                print(("\n" if interrupt else "") + "[RUNTIME] Warning: You have forced a shutdown...")
-        else:
-            print(("\n" if interrupt else "") + "[RUNTIME] Warning: This is the last environment running. Retry to force shutdown.")
+        current_time = time.time()
+        force = False
+        if current_time - self.shutdown_warning <= 10.0:
+            force = True
 
-        if shutdown:
-            print("[RUNTIME] Shutting down...")
-            self.running = False
-            self.scheduler.shutdown()
-            self.network.stop()
+        result = self.scheduler.shutdown(force)
+
+        if result == 0:
+            print(f"{prefix}[RUNTIME] Threads migrated safely (or none active). Shutting down...")
             self.network.join()
-            self.discovery.stop()
-            self.discovery.join()
+        elif result == 1:
+            print(f"{prefix}[RUNTIME] WARNING: Forced shutdown initiated! Unmigrated threads lost.")
+            self.network.join()
+        elif result == -1:
+            self.shutdown_warning = current_time
+            print(f"{prefix}[RUNTIME] Cannot shutdown safely: No other nodes available to migrate threads.")
+            print(f"[RUNTIME] Issue the shutdown command again within 10 seconds to force quit.")
+            return
 
 if __name__ == "__main__":
     env = RuntimeEnvironment()

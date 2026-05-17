@@ -1,5 +1,5 @@
 from typing import List, Optional
-from state import Instruction, InstructionType, Program
+from network.state import Instruction, InstructionType, Program
 import shlex
 
 def parse_simplescript(source_code: str, program_name: str) -> Optional[Program]:

@@ -1,7 +1,7 @@
 import pytest
 import time
 from scheduler import Scheduler, ThreadStatus
-from state import ThreadState, Program
+from network.state import ThreadState, Program
 
 class DummyEnv:
     def __init__(self):

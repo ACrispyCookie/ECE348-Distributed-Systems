@@ -1,7 +1,7 @@
 import pytest
 from interpreter import Interpreter, Instruction
 from scheduler import Scheduler
-from state import ThreadState, Program, Wildcard
+from network.state import ThreadState, Program, Wildcard
 from tuple_space import DistributedTupleManager
 
 @pytest.fixture

@@ -2,7 +2,7 @@ import pytest
 import time
 from main import RuntimeEnvironment
 from parser import parse_simplescript
-from state import ThreadState
+from network.state import ThreadState
 
 # --- HELPERS ---
 
@@ -14,7 +14,7 @@ def env():
     yield environment
     
     environment.running = False
-    environment.scheduler.shutdown()
+    environment.scheduler.shutdown(True)
 
 def wait_for_completion(scheduler, timeout=2.0):
     start = time.time()

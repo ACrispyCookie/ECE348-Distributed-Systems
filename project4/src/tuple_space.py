@@ -1,6 +1,6 @@
 import threading
 import copy
-from state import *
+from network.state import *
 from typing import List, Tuple, Optional, Any, Callable
     
 class TupleSpaceManager:
@@ -58,14 +58,21 @@ class TupleSpaceManager:
         with self.lock:
             self.requests = [r for r in self.requests if r.thread_id != tid]
                 
-    def remove_all_requests(self):
+    def remove_all_requests(self, node_id: str):
         """Clear all pending requests (shutdown/transfer)."""
         with self.lock:
-            self.requests.clear()
+            for i in range(len(self.requests) - 1, -1, -1):
+                req = self.requests[i]
+                if req.owner == node_id:
+                    self.requests.pop(i)
                 
-    def get_tuples(self):
+    def get_tuples(self, remove: bool):
         """Snapshot of tuples for diagnostics."""
         with self.lock:
+            if remove:
+                tuples = list(self.tuples)
+                self.tuples.clear()
+                return tuples
             return list(self.tuples)
 
     def get_requests(self):
@@ -125,8 +132,7 @@ class DistributedTupleManager:
         for req in reqs:
             if not req.owner:
                 self.scheduler_receive(req.thread_id, tup)
-                if completer:
-                    self.send_cancel(req.thread_id, req.is_destructive, completer)
+                self.send_cancel(req.thread_id, req.is_destructive, completer)
             elif not completer:
                 self.send_out(req.thread_id, req.is_destructive, req.owner, tup)
 
@@ -150,13 +156,13 @@ class DistributedTupleManager:
         """Remove requests for a thread (kill/migrate/shutdown of one thread)."""
         self.local.remove_request(tid)
 
-    def remove_all_requests(self):
+    def remove_all_requests(self, node_id: str):
         """Clear all requests (shutdown, transfer to another node)."""
-        self.local.remove_all_requests()
+        self.local.remove_all_requests(node_id)
 
-    def get_tuples(self) -> List[Tuple]:
+    def get_tuples(self, remove=False) -> List[Tuple]:
         """Snapshot of tuples for CLI/monitoring."""
-        return self.local.get_tuples()
+        return self.local.get_tuples(remove)
 
     def get_requests(self) -> List[TupleRequest]:
         """Snapshot of requests for CLI/monitoring."""

@@ -1,5 +1,5 @@
 from interpreter import Interpreter
-from state import ThreadState
+from network.state import ThreadState
 from tuple_space import DistributedTupleManager
 from enum import Enum
 from typing import Dict
@@ -30,17 +30,33 @@ class Scheduler:
         with self.lock:
             self.lock.notify_all()
 
-    def shutdown(self):
+    def shutdown(self, force: bool):
+        with self.lock:
+            result = 0
+            if not force and len(self.get_threads()) != 0 and len(self.env.network.nodes) == 0:
+                return -1
+            
+            if len(self.get_threads()) != 0 and len(self.env.network.nodes) == 0:
+                result = 1
+            
+            self.env.running = False
+            self.env.network.shutdown()
+
         self.notify()
         self.thread.join()
+        return result
 
-    def add_thread(self, thread: ThreadState):
+    def add_thread(self, thread: ThreadState) -> bool:
         with self.lock:
+            if not self.env.running:
+                return False
+            
             if thread.wakeup_timestamp == 0:
                 self.active_threads[thread.thread_id] = thread
             else:
                 self.sleeping_threads[thread.thread_id] = thread
             self.lock.notify_all()
+            return True
 
     def kill_thread(self, tid: str) -> bool:
         with self.lock:
@@ -63,29 +79,31 @@ class Scheduler:
             
             return None
             
-    def migrate_thread(self, tid: str, target_ip: str, target_port: int) -> bool:
+    def migrate_thread_ip(self, tid: str, target_ip: str, target_port: int) -> bool:
         with self.lock:
             real_tid, thread = self._resolve_tid(tid)
             if thread is None:
                 return None
             
-            node_id = self.env.network.find_node(target_ip, target_port)
-            if node_id is None:
-                return None
+            return self.migrate_thread(real_tid, target_ip, target_port)
             
-            if real_tid in self.active_threads:
-                state = self.active_threads.pop(real_tid)
-            elif real_tid in self.sleeping_threads:
-                state = self.sleeping_threads.pop(real_tid)
-            elif real_tid in self.waiting_threads:
-                state = self.waiting_threads.pop(real_tid)
-                self.tuple_space.remove_request(real_tid)
-                self.env.network.send_cancel(real_tid, state.tuple_in, self.env.network.node_id)
+    def migrate_thread(self, tid: str, target_ip: str, target_port: int) -> bool:
+        with self.lock:
+            if tid in self.active_threads:
+                state = self.active_threads.pop(tid)
+            elif tid in self.sleeping_threads:
+                state = self.sleeping_threads.pop(tid)
+            elif tid in self.waiting_threads:
+                state = self.waiting_threads.pop(tid)
+                self.tuple_space.remove_request(tid)
+                self.env.network.send_cancel(tid, state.tuple_in, self.env.network.node_id)
                 state.tuple_pattern = []
                 state.program_counter -= 1
 
-            self.env.network.send_migrate(state, node_id)
-            return real_tid
+            if self.env.network.send_migrate(state, target_ip, target_port):
+                return tid
+            return None
+
             
     def get_threads(self, status: ThreadStatus | None = None) -> Dict[str, ThreadState]:
         with self.lock:
