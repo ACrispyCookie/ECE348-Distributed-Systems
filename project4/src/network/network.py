@@ -153,8 +153,8 @@ class NetworkThread(threading.Thread):
 
             if not found:
                 return False
-            self._send_message(found, msg)
-            return True
+            send_ok = self._send_message(found, msg)
+            return send_ok
 
     def shutdown(self):
         self.discovery.shutdown()
@@ -207,21 +207,23 @@ class NetworkThread(threading.Thread):
         )
         self._send_message(node_id, response)
 
-    def _send_message(self, node_id: str, message: Message):
+    def _send_message(self, node_id: str, message: Message) -> bool:
         data = message.to_json()
         length = len(data).to_bytes(4, "big")
         if node_id not in self.nodes.keys():
-            return
+            return False
         conn = self.nodes[node_id][0]
         
         try:
             conn.sendall(length)
             conn.sendall(data)
+            return True
         except Exception as e:
             print(f"[NETWORK] Failed to send message to {node_id}: {e}")
             self.sel.unregister(conn)
             conn.close()
             del self.nodes[node_id]
+            return False
 
     def _handle_read_ready(self, node_id):
         try:

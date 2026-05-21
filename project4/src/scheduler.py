@@ -2,7 +2,7 @@ from interpreter import Interpreter
 from network.state import ThreadState
 from tuple_space import DistributedTupleManager
 from enum import Enum
-from typing import Dict
+from typing import Dict, Optional
 import threading
 import time
 
@@ -79,7 +79,7 @@ class Scheduler:
             
             return None
             
-    def migrate_thread_ip(self, tid: str, target_ip: str, target_port: int) -> bool:
+    def migrate_thread_ip(self, tid: str, target_ip: str, target_port: int) -> Optional[str]:
         with self.lock:
             real_tid, thread = self._resolve_tid(tid)
             if thread is None:
@@ -87,22 +87,41 @@ class Scheduler:
             
             return self.migrate_thread(real_tid, target_ip, target_port)
             
-    def migrate_thread(self, tid: str, target_ip: str, target_port: int) -> bool:
+    def migrate_thread(self, tid: str, target_ip: str, target_port: int) -> Optional[str]:
         with self.lock:
+            source_queue = None
+            state = None
+
             if tid in self.active_threads:
-                state = self.active_threads.pop(tid)
+                source_queue = self.active_threads
+                state = self.active_threads[tid]
             elif tid in self.sleeping_threads:
-                state = self.sleeping_threads.pop(tid)
+                source_queue = self.sleeping_threads
+                state = self.sleeping_threads[tid]
             elif tid in self.waiting_threads:
-                state = self.waiting_threads.pop(tid)
-                self.tuple_space.remove_request(tid)
-                self.env.network.send_cancel(tid, state.tuple_in, None)
+                source_queue = self.waiting_threads
+                state = self.waiting_threads[tid]
+            else:
+                return None
+
+            original_program_counter = state.program_counter
+            original_tuple_pattern = list(state.tuple_pattern)
+
+            if source_queue is self.waiting_threads:
                 state.tuple_pattern = []
                 state.program_counter -= 1
 
-            if self.env.network.send_migrate(state, target_ip, target_port):
-                return tid
-            return None
+            migrated = self.env.network.send_migrate(state, target_ip, target_port)
+            if not migrated:
+                state.program_counter = original_program_counter
+                state.tuple_pattern = original_tuple_pattern
+                return None
+
+            source_queue.pop(tid)
+            if source_queue is self.waiting_threads:
+                self.tuple_space.remove_request(tid)
+                self.env.network.send_cancel(tid, state.tuple_in, None)
+            return tid
 
             
     def get_threads(self, status: ThreadStatus | None = None) -> Dict[str, ThreadState]:
