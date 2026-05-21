@@ -2,6 +2,41 @@ from typing import List, Optional
 from network.state import Instruction, InstructionType, Program
 import shlex
 
+_FIXED_ARITY = {
+    "SET": 2,
+    "ADD": 3,
+    "SUB": 3,
+    "MUL": 3,
+    "DIV": 3,
+    "MOD": 3,
+    "BGT": 3,
+    "BGE": 3,
+    "BLT": 3,
+    "BLE": 3,
+    "BEQ": 3,
+    "BRA": 1,
+    "SLP": 1,
+    "RET": 0,
+}
+
+_MIN_ARITY = {
+    "OUT": 1,
+    "RD": 1,
+    "IN": 1,
+}
+
+
+def _validate_instruction_arity(tag: str, arg_count: int) -> Optional[str]:
+    if tag in _FIXED_ARITY:
+        expected = _FIXED_ARITY[tag]
+        if arg_count != expected:
+            return f"Instruction '{tag}' expects {expected} argument(s), got {arg_count}."
+    elif tag in _MIN_ARITY:
+        minimum = _MIN_ARITY[tag]
+        if arg_count < minimum:
+            return f"Instruction '{tag}' expects at least {minimum} argument(s), got {arg_count}."
+    return None
+
 def parse_simplescript(source_code: str, program_name: str) -> Optional[Program]:
     """
     Parses a SimpleScript source string into a Program object.
@@ -47,6 +82,11 @@ def parse_simplescript(source_code: str, program_name: str) -> Optional[Program]
         args = tokens[tag_index + 1:]
         if tag not in valid_tags:
             print(f"Syntax error in {program_name} on line {line_number}: Unknown instruction '{tag}'.")
+            return None
+
+        arity_error = _validate_instruction_arity(tag, len(args))
+        if arity_error:
+            print(f"Syntax error in {program_name} on line {line_number}: {arity_error}")
             return None
         
         if label:

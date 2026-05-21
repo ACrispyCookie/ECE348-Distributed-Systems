@@ -147,8 +147,8 @@ class TupleIdMessage(Message):
         else:
             # print(f"[NETWORK] IN_CANCEL from {conn}: {message.thread_id}")
             if self.thread_id in network.pending_requests:
-                tup = network.pending_requests.pop(self.thread_id)
-                network.scheduler.tuple_space.out(tup)
+                _owner, actual_tup = network.pending_requests.pop(self.thread_id)
+                network.scheduler.tuple_space.out(actual_tup)
             else:
                 network.scheduler.tuple_space.remove_request(self.thread_id)
     

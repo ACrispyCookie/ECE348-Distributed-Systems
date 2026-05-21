@@ -1,7 +1,9 @@
 import threading
 
 from network.network import NetworkThread
+from network.network_msgs import MessageType, TupleIdMessage
 from network.state import Program, ThreadState
+from tuple_space import DistributedTupleManager
 
 
 def make_network_with_send_result(send_result):
@@ -19,6 +21,11 @@ def make_thread_state():
     return ThreadState(Program(name="prog", instructions=[], labels={}), args=[])
 
 
+class DummyScheduler:
+    def __init__(self):
+        self.tuple_space = DistributedTupleManager(lambda *_: None)
+
+
 def test_send_migrate_reports_message_send_failure():
     network = make_network_with_send_result(False)
 
@@ -33,3 +40,16 @@ def test_send_migrate_reports_message_send_success():
     result = network.send_migrate(make_thread_state(), "127.0.0.1", 5000)
 
     assert result is True
+
+
+def test_cancel_pending_destructive_remote_in_restores_only_actual_tuple():
+    network = NetworkThread.__new__(NetworkThread)
+    network.pending_requests = {
+        "thread-1": ("owner-node", ("payload", 99))
+    }
+    network.scheduler = DummyScheduler()
+
+    TupleIdMessage(MessageType.IN_CANCEL, "thread-1").handle(network, None, None)
+
+    assert network.pending_requests == {}
+    assert network.scheduler.tuple_space.get_tuples() == [("payload", 99)]
