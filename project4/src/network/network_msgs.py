@@ -179,7 +179,11 @@ class ThreadMigrateMessage(Message):
         if added:
             print(f"[NETWORK] Received migrated thread {state.thread_id} from {ip}:{port}...")
         else:
-            network.send_migrate(state, self.node_id)
+            if self.node_id not in network.nodes:
+                print(f"[NETWORK] Failed to return migrated thread {state.thread_id}: source node {self.node_id} not found.")
+                return
+            _conn, source_addr = network.nodes[self.node_id]
+            network.send_migrate(state, source_addr[0], source_addr[1])
     
 @dataclass
 class ShutdownMessage(Message):

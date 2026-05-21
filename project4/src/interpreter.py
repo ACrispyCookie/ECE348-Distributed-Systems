@@ -171,6 +171,6 @@ class Interpreter:
                 try:
                     pattern.append(int(arg))
                 except ValueError:
-                    pass
+                    raise ValueError(f"Cannot resolve tuple pattern value: '{arg}'")
                     
         return pattern

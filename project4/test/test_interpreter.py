@@ -177,3 +177,13 @@ def test_tuple_space_rd_reads_but_keeps(blank_state, sched):
     assert blank_state.variables["code"] == 200
     assert len(ts.local.tuples) == 1
 
+
+def test_tuple_space_pattern_rejects_unquoted_bareword(blank_state, sched):
+    instr = Instruction(tag="RD", args=["payload", "@value"])
+
+    with pytest.raises(ValueError, match="Cannot resolve tuple pattern value"):
+        Interpreter()._execute_instruction(instr, blank_state, sched.tuple_space)
+
+    assert blank_state.tuple_pattern == []
+    assert sched.tuple_space.get_requests() == []
+
