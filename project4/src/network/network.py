@@ -3,6 +3,7 @@ import threading
 import selectors
 import copy
 import os
+import time
 from network.network_msgs import *
 from network.state import *
 from network.discovery import DiscoveryThread
@@ -16,9 +17,13 @@ class NetworkThread(threading.Thread):
         self.running = True
 
         self.lock = threading.RLock()
+        self.shutdown_prepare_condition = threading.Condition(self.lock)
         self.pending_requests: dict[str, tuple] = {}
         self.nodes: dict[str, tuple] = {}
         self.recv_buffers: dict[str, bytes] = {}
+        self.draining = False
+        self.draining_nodes: set[str] = set()
+        self.shutdown_prepare_acks: set[str] = set()
 
         scheduler.tuple_space.send_in = self.send_in
         scheduler.tuple_space.send_out = self.send_out
@@ -109,8 +114,26 @@ class NetworkThread(threading.Thread):
 
             for tup in tuples:
                 self.scheduler.tuple_space.out(tup)
+            if node_id in self.nodes:
+                del self.nodes[node_id]
+            self.draining_nodes.discard(node_id)
+            self.shutdown_prepare_acks.discard(node_id)
 
-            del self.nodes[node_id]
+    def mark_node_draining(self, node_id: str):
+        with self.lock:
+            self.draining_nodes.add(node_id)
+
+    def mark_shutdown_prepare_ack(self, node_id: str):
+        with self.shutdown_prepare_condition:
+            self.shutdown_prepare_acks.add(node_id)
+            self.shutdown_prepare_condition.notify_all()
+
+    def _available_nodes(self):
+        return [
+            node_id for node_id in self.nodes.keys()
+            if node_id not in self.draining_nodes
+        ]
+
 
     def send_in(self, req: TupleRequest):
         with self.lock:
@@ -118,7 +141,7 @@ class NetworkThread(threading.Thread):
             copy_req.owner = self.node_id
             msg = TupleInMessage(MessageType.IN, copy_req)
 
-            for node in self.nodes.keys():
+            for node in self._available_nodes():
                 self._send_message(node, msg)
 
     def send_out(self, tid: str, destructive: bool, owner: str, tup: tuple):
@@ -151,7 +174,7 @@ class NetworkThread(threading.Thread):
                     found = node_id
                     break
 
-            if not found:
+            if not found or found in getattr(self, "draining_nodes", set()):
                 return False
             send_ok = self._send_message(found, msg)
             return send_ok
@@ -164,23 +187,48 @@ class NetworkThread(threading.Thread):
             if not self.nodes:
                 self.close()
                 return False
-            
-            first_node = next(iter(self.nodes))
-            for tid, state in self.scheduler.get_threads().items():
-                self.scheduler.migrate_thread(tid, self.nodes[first_node][1][0], self.nodes[first_node][1][1])
+
+            self.draining = True
+            expected_acks = set(self.nodes.keys())
+            self.shutdown_prepare_acks.clear()
+            prepare = ShutdownPrepareMessage(MessageType.SHUTDOWN_PREPARE, self.node_id)
+            for node in list(self.nodes.keys()):
+                self._send_message(node, prepare)
+
+        if not self._wait_for_shutdown_prepare_acks(expected_acks):
+            print("[NETWORK] Shutdown prepare timed out; aborting graceful shutdown.")
+            return False
+
+        with self.lock:
+            available_nodes = self._available_nodes()
+            if not available_nodes:
+                print("[NETWORK] Cannot shutdown safely: no non-draining nodes available.")
+                self.draining = False
+                return False
+
+            target_node = available_nodes[0]
+            target_addr = self.nodes[target_node][1]
+            for tid in list(self.scheduler.get_threads().keys()):
+                self.scheduler.migrate_thread(tid, target_addr[0], target_addr[1])
 
             my_tuples = self.scheduler.tuple_space.get_tuples(True)
-            tuples_sent = False
 
-            for node in self.nodes.keys():
-                if not tuples_sent:
-                    msg = ShutdownMessage(MessageType.SHUTDOWN, self.node_id, my_tuples)
-                    tuples_sent = True
-                else:
-                    msg = ShutdownMessage(MessageType.SHUTDOWN, self.node_id, [])
+            for node in list(self.nodes.keys()):
+                tuples = my_tuples if node == target_node else []
+                msg = ShutdownMessage(MessageType.SHUTDOWN, self.node_id, tuples)
                 self._send_message(node, msg)
 
             self.close()
+            return True
+
+    def _wait_for_shutdown_prepare_acks(self, expected_acks: set[str], timeout: float = 5.0) -> bool:
+        deadline = time.time() + timeout
+        with self.shutdown_prepare_condition:
+            while not expected_acks.issubset(self.shutdown_prepare_acks):
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    return False
+                self.shutdown_prepare_condition.wait(timeout=remaining)
             return True
 
     def close(self):

@@ -12,6 +12,8 @@ class MessageType(str, Enum):
     IN = "IN"
     IN_CANCEL = "IN_CANCEL"
     MIGRATE = "MIGRATE"
+    SHUTDOWN_PREPARE = "SHUTDOWN_PREPARE"
+    SHUTDOWN_PREPARE_ACK = "SHUTDOWN_PREPARE_ACK"
     SHUTDOWN = "SHUTDOWN"
 
 @dataclass
@@ -38,11 +40,15 @@ class Message:
                 TupleInMessage.from_dict(raw).handle(network, addr, conn)
             case MessageType.IN_CANCEL.value | MessageType.OUT_CONSUME.value:
                 TupleIdMessage.from_dict(raw).handle(network, addr, conn)
-            case MessageType.MIGRATE:
+            case MessageType.MIGRATE.value:
                 ThreadMigrateMessage.from_dict(raw).handle(network, addr, conn)
-            case MessageType.SHUTDOWN:
+            case MessageType.SHUTDOWN_PREPARE.value:
+                ShutdownPrepareMessage.from_dict(raw).handle(network, addr, conn)
+            case MessageType.SHUTDOWN_PREPARE_ACK.value:
+                ShutdownPrepareAckMessage.from_dict(raw).handle(network, addr, conn)
+            case MessageType.SHUTDOWN.value:
                 ShutdownMessage.from_dict(raw).handle(network, addr, conn)
-            case MessageType.NEW:
+            case MessageType.NEW.value:
                 NewMessage.from_dict(raw).handle(network, addr, conn)
             case _:
                 raise ValueError(f"Unknown message type: {msg_type}")
@@ -93,6 +99,8 @@ class TupleInMessage(Message):
     
     def handle(self, network, addr, conn: socket.socket): 
         # print(f"[NETWORK] IN from {self.req.owner}: {self.req}")
+        if getattr(network, "draining", False):
+            return
         network.scheduler.tuple_space.read(self.req.thread_id, self.req.pattern, self.req.is_destructive, self.req.owner)
     
 @dataclass
@@ -175,6 +183,14 @@ class ThreadMigrateMessage(Message):
     def handle(self, network, addr, conn: socket.socket):
         state = ThreadState.from_dict(self.thread)
         ip, port = conn.getpeername()
+        if getattr(network, "draining", False):
+            if self.node_id not in network.nodes:
+                print(f"[NETWORK] Failed to return migrated thread {state.thread_id}: source node {self.node_id} not found.")
+                return
+            _conn, source_addr = network.nodes[self.node_id]
+            network.send_migrate(state, source_addr[0], source_addr[1])
+            return
+
         added = network.scheduler.add_thread(state)
         if added:
             print(f"[NETWORK] Received migrated thread {state.thread_id} from {ip}:{port}...")
@@ -184,6 +200,52 @@ class ThreadMigrateMessage(Message):
                 return
             _conn, source_addr = network.nodes[self.node_id]
             network.send_migrate(state, source_addr[0], source_addr[1])
+    
+@dataclass
+class ShutdownPrepareMessage(Message):
+    node_id: str
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls(
+            type=MessageType(data["type"]),
+            node_id=data["node_id"]
+        )
+    
+    def to_dict(self):
+        return {
+            "type": self.type.value,
+            "node_id": self.node_id
+        }
+    
+    def handle(self, network, addr, conn: socket.socket):
+        print(f"[NETWORK] Received SHUTDOWN_PREPARE from {self.node_id}")
+        network.mark_node_draining(self.node_id)
+        network._send_message(
+            self.node_id,
+            ShutdownPrepareAckMessage(MessageType.SHUTDOWN_PREPARE_ACK, network.node_id)
+        )
+
+
+@dataclass
+class ShutdownPrepareAckMessage(Message):
+    node_id: str
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls(
+            type=MessageType(data["type"]),
+            node_id=data["node_id"]
+        )
+    
+    def to_dict(self):
+        return {
+            "type": self.type.value,
+            "node_id": self.node_id
+        }
+    
+    def handle(self, network, addr, conn: socket.socket):
+        network.mark_shutdown_prepare_ack(self.node_id)
     
 @dataclass
 class ShutdownMessage(Message):
