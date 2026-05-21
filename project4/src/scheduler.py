@@ -73,7 +73,7 @@ class Scheduler:
                 return real_tid
             elif real_tid in self.waiting_threads:
                 self.tuple_space.remove_request(real_tid)
-                self.env.network.send_cancel(real_tid, self.waiting_threads[real_tid].tuple_in, self.env.network.node_id)
+                self.env.network.send_cancel(real_tid, self.waiting_threads[real_tid].tuple_in, None)
                 self.waiting_threads.pop(real_tid).is_terminated = True
                 return real_tid
             
@@ -96,7 +96,7 @@ class Scheduler:
             elif tid in self.waiting_threads:
                 state = self.waiting_threads.pop(tid)
                 self.tuple_space.remove_request(tid)
-                self.env.network.send_cancel(tid, state.tuple_in, self.env.network.node_id)
+                self.env.network.send_cancel(tid, state.tuple_in, None)
                 state.tuple_pattern = []
                 state.program_counter -= 1
 
