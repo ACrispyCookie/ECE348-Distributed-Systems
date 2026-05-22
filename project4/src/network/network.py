@@ -114,8 +114,16 @@ class NetworkThread(threading.Thread):
 
             for tup in tuples or []:
                 self.scheduler.tuple_space.out(tup)
+
             if node_id in self.nodes:
+                conn, _ = self.nodes[node_id]
+                try:
+                    self.sel.unregister(conn)
+                    conn.close()
+                except Exception:
+                    pass
                 del self.nodes[node_id]
+
             self.draining_nodes.discard(node_id)
             self.shutdown_prepare_acks.discard(node_id)
 
