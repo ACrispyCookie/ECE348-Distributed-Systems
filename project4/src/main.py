@@ -62,8 +62,12 @@ class RuntimeEnvironment:
         if not os.path.exists(filename):
             print(f"[RUNTIME] Error: Could not find script file '{filename}'")
             return
-        with open(filename, 'r') as file:
-            source_code = file.read()
+        
+        try:
+            with open(filename, 'r') as file:
+                source_code = file.read()
+        except OSError:
+            print(f"[RUNTIME] Error: Could not open the script file '{filename}'")
     
         program = parse_simplescript(source_code, progname)
         if not program:
