@@ -112,7 +112,7 @@ class NetworkThread(threading.Thread):
 
             self.scheduler.tuple_space.remove_all_requests(node_id)
 
-            for tup in tuples:
+            for tup in tuples or []:
                 self.scheduler.tuple_space.out(tup)
             if node_id in self.nodes:
                 del self.nodes[node_id]
@@ -189,14 +189,17 @@ class NetworkThread(threading.Thread):
                 return False
 
             self.draining = True
-            expected_acks = set(self.nodes.keys())
+            expected_acks = set()
             self.shutdown_prepare_acks.clear()
             prepare = ShutdownPrepareMessage(MessageType.SHUTDOWN_PREPARE, self.node_id)
             for node in list(self.nodes.keys()):
-                self._send_message(node, prepare)
+                if self._send_message(node, prepare):
+                    expected_acks.add(node)
 
         if not self._wait_for_shutdown_prepare_acks(expected_acks):
             print("[NETWORK] Shutdown prepare timed out; aborting graceful shutdown.")
+            with self.lock:
+                self.draining = False
             return False
 
         with self.lock:
@@ -209,7 +212,10 @@ class NetworkThread(threading.Thread):
             target_node = available_nodes[0]
             target_addr = self.nodes[target_node][1]
             for tid in list(self.scheduler.get_threads().keys()):
-                self.scheduler.migrate_thread(tid, target_addr[0], target_addr[1])
+                if not self.scheduler.migrate_thread(tid, target_addr[0], target_addr[1]):
+                    print(f"[NETWORK] Failed to migrate thread {tid}; aborting graceful shutdown.")
+                    self.draining = False
+                    return False
 
             my_tuples = self.scheduler.tuple_space.get_tuples(True)
 

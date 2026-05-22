@@ -7,6 +7,7 @@ class DummyNetwork:
     def __init__(self):
         self.nodes = {}
         self.should_migrate = True
+        self.shutdown_result = True
         self.sent_migrations = []
         self.cancelled_requests = []
 
@@ -18,7 +19,7 @@ class DummyNetwork:
         self.cancelled_requests.append((tid, destructive, completer))
 
     def shutdown(self):
-        return True
+        return self.shutdown_result
 
 class DummyEnv:
     def __init__(self):
@@ -168,4 +169,17 @@ def test_migrate_waiting_thread_success_cancels_request_and_rewinds_for_retry(sc
     assert migrated_state is dummy_state
     assert migrated_state.program_counter == 2
     assert migrated_state.tuple_pattern == []
+
+
+def test_scheduler_shutdown_failure_keeps_environment_running_and_reports_unsafe(sched, dummy_state):
+    sched.env.network.nodes = {"peer-node": (object(), ("127.0.0.1", 5000))}
+    sched.env.network.shutdown_result = False
+    sched.active_threads[dummy_state.thread_id] = dummy_state
+    sched.thread.join = lambda: None
+
+    result = sched.shutdown(False)
+
+    assert result == -1
+    assert sched.env.running is True
+    assert dummy_state.thread_id in sched.active_threads
 

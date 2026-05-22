@@ -33,14 +33,18 @@ class Scheduler:
     def shutdown(self, force: bool):
         with self.lock:
             result = 0
-            if not force and len(self.get_threads()) != 0 and len(self.env.network.nodes) == 0:
+            has_threads = len(self.get_threads()) != 0
+            if not force and has_threads and len(self.env.network.nodes) == 0:
                 return -1
             
-            if len(self.get_threads()) != 0 and len(self.env.network.nodes) == 0:
+            if has_threads and len(self.env.network.nodes) == 0:
                 result = 1
             
             self.env.running = False
-            self.env.network.shutdown()
+            network_shutdown_ok = self.env.network.shutdown()
+            if not network_shutdown_ok and has_threads and not force:
+                self.env.running = True
+                return -1
 
         self.notify()
         self.thread.join()
