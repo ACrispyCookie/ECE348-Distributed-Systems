@@ -115,7 +115,7 @@ class TupleOutMessage(Message):
             type=MessageType(data["type"]),
             node_id=data["node_id"],
             thread_id=data["thread_id"],
-            tup=data["tup"]
+            tup=tuple(data["tup"])
         )
     
     def to_dict(self):
@@ -261,7 +261,7 @@ class ShutdownMessage(Message):
         return cls(
             type=MessageType(data["type"]),
             node_id=data["node_id"],
-            tuples=data["tuples"]
+            tuples=[tuple(tup) for tup in data["tuples"] or []]
         )
     
     def to_dict(self):
