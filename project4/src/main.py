@@ -68,6 +68,7 @@ class RuntimeEnvironment:
                 source_code = file.read()
         except OSError:
             print(f"[RUNTIME] Error: Could not open the script file '{filename}'")
+            return
     
         program = parse_simplescript(source_code, progname)
         if not program:
