@@ -10,6 +10,8 @@ class DummyNetwork:
         self.shutdown_result = True
         self.sent_migrations = []
         self.cancelled_requests = []
+        self.broadcast_loads = []
+        self.least_loaded = None
 
     def send_migrate(self, state, ip, port):
         self.sent_migrations.append((state, ip, port))
@@ -24,12 +26,19 @@ class DummyNetwork:
     def send_cancel(self, tid, destructive, completer, exclude_node=None):
         self.cancelled_requests.append((tid, destructive, completer, exclude_node))
 
+    def broadcast_load(self, load):
+        self.broadcast_loads.append(load)
+
+    def least_loaded_node(self):
+        return self.least_loaded
+
     def shutdown(self):
         return self.shutdown_result
 
 class DummyEnv:
     def __init__(self):
         self.running = True
+        self.load_balancing = False
         self.network = DummyNetwork()
 
 @pytest.fixture
@@ -213,4 +222,69 @@ def test_migrate_waiting_thread_cancel_excludes_destination_node(sched, dummy_st
     assert sched.env.network.cancelled_requests == [
         (dummy_state.thread_id, True, None, "target-node")
     ]
+
+
+def test_load_returns_total_active_sleeping_and_waiting_threads(sched, dummy_state):
+    sleeping = ThreadState(program=dummy_state.program, args=[])
+    sleeping.thread_id = "sleeping-thread"
+    waiting = ThreadState(program=dummy_state.program, args=[])
+    waiting.thread_id = "waiting-thread"
+    sched.active_threads[dummy_state.thread_id] = dummy_state
+    sched.sleeping_threads[sleeping.thread_id] = sleeping
+    sched.waiting_threads[waiting.thread_id] = waiting
+
+    assert sched.load() == 3
+
+
+def test_choose_thread_for_load_balance_prefers_active_then_sleeping_then_waiting(sched, dummy_state):
+    sleeping = ThreadState(program=dummy_state.program, args=[])
+    sleeping.thread_id = "sleeping-thread"
+    waiting = ThreadState(program=dummy_state.program, args=[])
+    waiting.thread_id = "waiting-thread"
+    sched.active_threads[dummy_state.thread_id] = dummy_state
+    sched.sleeping_threads[sleeping.thread_id] = sleeping
+    sched.waiting_threads[waiting.thread_id] = waiting
+
+    assert sched.choose_thread_for_load_balance() == dummy_state.thread_id
+
+    sched.active_threads.clear()
+    assert sched.choose_thread_for_load_balance() == sleeping.thread_id
+
+    sched.sleeping_threads.clear()
+    assert sched.choose_thread_for_load_balance() == waiting.thread_id
+
+
+def test_load_balance_does_not_migrate_when_difference_is_less_than_two(sched, dummy_state):
+    sched.env.load_balancing = True
+    sched.env.network.least_loaded = ("peer-node", 1, ("127.0.0.1", 5000))
+    sched.active_threads[dummy_state.thread_id] = dummy_state
+    second = ThreadState(program=dummy_state.program, args=[])
+    second.thread_id = "second-thread"
+    sched.active_threads[second.thread_id] = second
+
+    sched._maybe_balance_load()
+
+    assert sched.env.network.broadcast_loads == [2]
+    assert sched.env.network.sent_migrations == []
+
+
+def test_load_balance_migrates_one_thread_to_least_loaded_peer_when_difference_is_at_least_two(sched, dummy_state):
+    sched.env.load_balancing = True
+    sched.env.network.least_loaded = ("peer-node", 1, ("127.0.0.1", 5000))
+    sched.active_threads[dummy_state.thread_id] = dummy_state
+    second = ThreadState(program=dummy_state.program, args=[])
+    second.thread_id = "second-thread"
+    sched.active_threads[second.thread_id] = second
+    third = ThreadState(program=dummy_state.program, args=[])
+    third.thread_id = "third-thread"
+    sched.active_threads[third.thread_id] = third
+
+    sched._maybe_balance_load()
+
+    assert sched.env.network.broadcast_loads == [3]
+    assert len(sched.env.network.sent_migrations) == 1
+    migrated_state, ip, port = sched.env.network.sent_migrations[0]
+    assert migrated_state.thread_id == dummy_state.thread_id
+    assert (ip, port) == ("127.0.0.1", 5000)
+    assert dummy_state.thread_id not in sched.active_threads
 

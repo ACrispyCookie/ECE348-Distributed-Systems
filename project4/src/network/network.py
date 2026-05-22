@@ -24,6 +24,7 @@ class NetworkThread(threading.Thread):
         self.draining = False
         self.draining_nodes: set[str] = set()
         self.shutdown_prepare_acks: set[str] = set()
+        self.node_loads: dict[str, int] = {}
 
         scheduler.tuple_space.send_in = self.send_in
         scheduler.tuple_space.send_out = self.send_out
@@ -126,6 +127,8 @@ class NetworkThread(threading.Thread):
 
             self.draining_nodes.discard(node_id)
             self.shutdown_prepare_acks.discard(node_id)
+            if hasattr(self, "node_loads"):
+                self.node_loads.pop(node_id, None)
 
     def mark_node_draining(self, node_id: str):
         with self.lock:
@@ -141,6 +144,31 @@ class NetworkThread(threading.Thread):
             node_id for node_id in self.nodes.keys()
             if node_id not in self.draining_nodes
         ]
+
+    def update_node_load(self, node_id: str, load: int):
+        with self.lock:
+            if node_id in self.nodes and node_id not in self.draining_nodes:
+                self.node_loads[node_id] = load
+
+    def broadcast_load(self, load: int):
+        with self.lock:
+            msg = LoadStatusMessage(MessageType.LOAD_STATUS, self.node_id, load)
+            for node_id in self._available_nodes():
+                self._send_message(node_id, msg)
+
+    def least_loaded_node(self):
+        with self.lock:
+            candidates = []
+            for node_id in self._available_nodes():
+                if node_id not in self.node_loads:
+                    continue
+                _conn, addr = self.nodes[node_id]
+                candidates.append((node_id, self.node_loads[node_id], addr))
+
+            if not candidates:
+                return None
+
+            return min(candidates, key=lambda item: item[1])
 
     def node_id_for_address(self, ip: str, port: int):
         with self.lock:
@@ -294,6 +322,7 @@ class NetworkThread(threading.Thread):
             self.sel.unregister(conn)
             conn.close()
             del self.nodes[node_id]
+            self.node_loads.pop(node_id, None)
             return False
 
     def _handle_read_ready(self, node_id):

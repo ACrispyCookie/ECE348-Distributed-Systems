@@ -15,6 +15,7 @@ class MessageType(str, Enum):
     SHUTDOWN_PREPARE = "SHUTDOWN_PREPARE"
     SHUTDOWN_PREPARE_ACK = "SHUTDOWN_PREPARE_ACK"
     SHUTDOWN = "SHUTDOWN"
+    LOAD_STATUS = "LOAD_STATUS"
 
 @dataclass
 class Message:
@@ -50,9 +51,35 @@ class Message:
                 ShutdownMessage.from_dict(raw).handle(network, addr, conn)
             case MessageType.NEW.value:
                 NewMessage.from_dict(raw).handle(network, addr, conn)
+            case MessageType.LOAD_STATUS.value:
+                LoadStatusMessage.from_dict(raw).handle(network, addr, conn)
             case _:
                 raise ValueError(f"Unknown message type: {msg_type}")
             
+@dataclass
+class LoadStatusMessage(Message):
+    node_id: str
+    load: int
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        return cls(
+            type=MessageType(data["type"]),
+            node_id=data["node_id"],
+            load=data["load"]
+        )
+
+    def to_dict(self):
+        return {
+            "type": self.type.value,
+            "node_id": self.node_id,
+            "load": self.load
+        }
+
+    def handle(self, network, addr, conn: socket.socket):
+        network.update_node_load(self.node_id, self.load)
+
+
 @dataclass
 class NewMessage(Message):
     node_id: str

@@ -4,6 +4,7 @@ from network.network import NetworkThread
 from network.network_msgs import (
     Message,
     MessageType,
+    LoadStatusMessage,
     ShutdownMessage,
     ShutdownPrepareAckMessage,
     ShutdownPrepareMessage,
@@ -82,6 +83,63 @@ def test_send_migrate_reports_message_send_success():
     result = network.send_migrate(make_thread_state(), "127.0.0.1", 5000)
 
     assert result is True
+
+
+def test_load_status_message_updates_peer_load():
+    network = NetworkThread.__new__(NetworkThread)
+    network.lock = threading.RLock()
+    network.nodes = {"peer-node": (object(), ("127.0.0.1", 5000))}
+    network.draining_nodes = set()
+    network.node_loads = {}
+
+    Message.handle_from_json(
+        LoadStatusMessage(MessageType.LOAD_STATUS, "peer-node", 3).to_json().decode("utf-8"),
+        network,
+        ("127.0.0.1", 5000),
+        None,
+    )
+
+    assert network.node_loads == {"peer-node": 3}
+
+
+def test_broadcast_load_sends_status_to_available_nodes_only():
+    network = NetworkThread.__new__(NetworkThread)
+    network.lock = threading.RLock()
+    network.node_id = "local-node"
+    network.nodes = {
+        "available-node": (object(), ("127.0.0.1", 5000)),
+        "draining-node": (object(), ("127.0.0.1", 5001)),
+    }
+    network.draining_nodes = {"draining-node"}
+    sent_messages = []
+    network._send_message = lambda node_id, message: sent_messages.append((node_id, message)) or True
+
+    network.broadcast_load(4)
+
+    assert len(sent_messages) == 1
+    assert sent_messages[0][0] == "available-node"
+    assert isinstance(sent_messages[0][1], LoadStatusMessage)
+    assert sent_messages[0][1].node_id == "local-node"
+    assert sent_messages[0][1].load == 4
+
+
+def test_least_loaded_node_ignores_unknown_loads_and_draining_nodes():
+    network = NetworkThread.__new__(NetworkThread)
+    network.lock = threading.RLock()
+    network.nodes = {
+        "busy-node": (object(), ("127.0.0.1", 5000)),
+        "idle-node": (object(), ("127.0.0.1", 5001)),
+        "draining-node": (object(), ("127.0.0.1", 5002)),
+        "unknown-load-node": (object(), ("127.0.0.1", 5003)),
+    }
+    network.draining_nodes = {"draining-node"}
+    network.node_loads = {
+        "busy-node": 5,
+        "idle-node": 1,
+        "draining-node": 0,
+    }
+
+    assert network.least_loaded_node() == ("idle-node", 1, ("127.0.0.1", 5001))
 
 
 def test_cancel_pending_destructive_remote_in_restores_only_actual_tuple():

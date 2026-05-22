@@ -2,13 +2,26 @@ from parser import *
 from scheduler import *
 from network.state import *
 from network.network import NetworkThread
+import argparse
 import os
 import time
 
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description="SimpleScript distributed runtime environment")
+    parser.add_argument(
+        "--load-balance",
+        "--balance",
+        action="store_true",
+        dest="load_balance",
+        help="start the runtime with automatic load balancing enabled",
+    )
+    return parser.parse_args(argv)
+
+
 class RuntimeEnvironment:
-    def __init__(self):
+    def __init__(self, load_balancing: bool = False):
         self.running = True
-        self.load_balancing = False
+        self.load_balancing = load_balancing
         self.shutdown_warning = 0
         self.scheduler = Scheduler(self)
         self.network = NetworkThread(self.scheduler)
@@ -41,10 +54,12 @@ class RuntimeEnvironment:
                     self.cmd_kill(args)
                 elif command == "migrate":
                     self.cmd_migrate(args)
+                elif command == "balance":
+                    self.cmd_balance(args)
                 elif command == "shutdown":
                     self.cmd_shutdown(False)
                 else:
-                    print(f"[RUNTIME] Unknown command: '{command}'. Available commands: run, list, tuples, kill, migrate, shutdown")
+                    print(f"[RUNTIME] Unknown command: '{command}'. Available commands: run, list, tuples, kill, migrate, balance, shutdown")
 
             except KeyboardInterrupt:
                 self.cmd_shutdown(True)
@@ -171,6 +186,16 @@ class RuntimeEnvironment:
         else:
             print(f"[RUNTIME] Error: Thread not found or node not found.")
 
+    def cmd_balance(self, args):
+        """Command: balance <on|off> (Enables or disables automatic load balancing)"""
+        if len(args) != 1 or args[0] not in ("on", "off"):
+            print("[RUNTIME] Usage: balance <on|off>")
+            return
+
+        self.load_balancing = args[0] == "on"
+        state = "enabled" if self.load_balancing else "disabled"
+        print(f"[RUNTIME] Load balancing {state}.")
+
     def cmd_shutdown(self, interrupt: bool = False):
         """Command: shutdown (Shuts down the environment peacefully or forcefully)"""
         prefix = "\n" if interrupt else ""
@@ -195,5 +220,6 @@ class RuntimeEnvironment:
             return
 
 if __name__ == "__main__":
-    env = RuntimeEnvironment()
+    args = parse_args()
+    env = RuntimeEnvironment(load_balancing=args.load_balance)
     env.start()

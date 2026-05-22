@@ -23,6 +23,8 @@ class Scheduler:
         self.sleeping_threads: dict[str, ThreadState] = {}
         self.waiting_threads: dict[str, ThreadState] = {}
         self.shutting_down = False
+        self.load_balance_interval = 2.0
+        self.last_load_balance = 0.0
 
     def start(self):
         self.thread.start()
@@ -151,6 +153,55 @@ class Scheduler:
             elif status == ThreadStatus.WAITING:
                 return dict(self.waiting_threads)
             
+    def load(self) -> int:
+        return len(self.get_threads())
+
+    def choose_thread_for_load_balance(self) -> Optional[str]:
+        with self.lock:
+            if self.shutting_down:
+                return None
+
+            if self.active_threads:
+                return next(iter(self.active_threads))
+            if self.sleeping_threads:
+                return next(iter(self.sleeping_threads))
+            if self.waiting_threads:
+                return next(iter(self.waiting_threads))
+            return None
+
+    def _maybe_balance_load(self):
+        if not getattr(self.env, "load_balancing", False):
+            return
+        if self.shutting_down or not self.env.running:
+            return
+
+        my_load = self.load()
+        self.env.network.broadcast_load(my_load)
+
+        target = self.env.network.least_loaded_node()
+        if target is None:
+            return
+
+        _node_id, peer_load, peer_addr = target
+        if my_load < peer_load + 2:
+            return
+
+        tid = self.choose_thread_for_load_balance()
+        if tid is None:
+            return
+
+        migrated = self.migrate_thread(tid, peer_addr[0], peer_addr[1])
+        if migrated:
+            print(
+                f"[BALANCER] Migrated thread {migrated} to {peer_addr[0]}:{peer_addr[1]} "
+                f"(local load={my_load}, peer load={peer_load})"
+            )
+
+    def _load_balance_due(self) -> bool:
+        if not getattr(self.env, "load_balancing", False):
+            return False
+        return time.time() - self.last_load_balance >= self.load_balance_interval
+
     def _resolve_tid(self, tid_prefix: str):
         matches = []
 
@@ -197,6 +248,8 @@ class Scheduler:
                 self._wakeup_sleeping()
                 while not self.active_threads and self.env.running and not self.shutting_down:
                     self._wait_for_sleeping()
+                    if self._load_balance_due():
+                        break
                 
                 if not self.env.running:
                     break
@@ -222,6 +275,10 @@ class Scheduler:
                         self.active_threads.pop(tid)
                         self.waiting_threads[tid] = state
 
+            if self._load_balance_due():
+                self.last_load_balance = time.time()
+                self._maybe_balance_load()
+
     def _wakeup_sleeping(self):
         now = time.time()
         ready_to_wake = [
@@ -236,14 +293,17 @@ class Scheduler:
 
     def _wait_for_sleeping(self):
         sleeping_threads = [s for s in self.sleeping_threads.values() if s.wakeup_timestamp != 0]
+        balance_timeout = self.load_balance_interval if getattr(self.env, "load_balancing", False) else None
 
         if sleeping_threads:
             next_thread = min(sleeping_threads, key=lambda s: s.wakeup_timestamp)
             sleep_duration = next_thread.wakeup_timestamp - time.time()
 
             if sleep_duration > 0:
+                if balance_timeout is not None:
+                    sleep_duration = min(sleep_duration, balance_timeout)
                 self.lock.wait(timeout=sleep_duration)
             else:
                 self._wakeup_sleeping()
         else:
-            self.lock.wait()
+            self.lock.wait(timeout=balance_timeout)
