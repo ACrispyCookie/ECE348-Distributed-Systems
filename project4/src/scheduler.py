@@ -182,7 +182,7 @@ class Scheduler:
         if target is None:
             return
 
-        _node_id, peer_load, peer_addr = target
+        node_id, peer_load, peer_addr = target
         if my_load < peer_load + 2:
             return
 
@@ -192,6 +192,7 @@ class Scheduler:
 
         migrated = self.migrate_thread(tid, peer_addr[0], peer_addr[1])
         if migrated:
+            self.env.network.note_migrated_to_node(node_id, peer_load)
             print(
                 f"[BALANCER] Migrated thread {migrated} to {peer_addr[0]}:{peer_addr[1]} "
                 f"(local load={my_load}, peer load={peer_load})"

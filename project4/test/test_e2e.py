@@ -282,6 +282,157 @@ def test_e2e_late_joining_node_receives_existing_foreign_request_and_can_complet
         stop_environment(node_b)
 
 
+def make_sleeping_thread(name="sleeper", seconds=20):
+    source = f"""
+    #SIMPLESCRIPT
+    SLP {seconds}
+    PRN "{name}-done"
+    """
+    return ThreadState(parse_simplescript(source, name), args=[])
+
+
+def configure_fast_load_balancer(*environments):
+    for environment in environments:
+        environment.load_balancing = True
+        environment.scheduler.load_balance_interval = 0.05
+        environment.scheduler.last_load_balance = 0.0
+
+
+def test_e2e_load_balancing_migrates_sleeping_thread_to_idle_peer():
+    node_a = RuntimeEnvironment(load_balancing=True)
+    node_b = RuntimeEnvironment(load_balancing=True)
+    disable_discovery(node_a)
+    disable_discovery(node_b)
+    configure_fast_load_balancer(node_a, node_b)
+    node_a.scheduler.start()
+    node_b.scheduler.start()
+    try:
+        connect_networks(node_a, node_b)
+        thread_ids = []
+        for idx in range(3):
+            state = make_sleeping_thread(f"sleeper-{idx}")
+            thread_ids.append(state.thread_id)
+            node_a.scheduler.add_thread(state)
+
+        wait_until(
+            lambda: len(node_b.scheduler.get_threads()) >= 1,
+            timeout=5.0,
+            description="load balancer to migrate one sleeping thread to idle peer",
+        )
+
+        node_a_ids = set(node_a.scheduler.get_threads().keys())
+        node_b_ids = set(node_b.scheduler.get_threads().keys())
+        assert node_b_ids & set(thread_ids)
+        assert len(node_a_ids | node_b_ids) == 3
+        assert len(node_a_ids) <= 2
+    finally:
+        stop_environment(node_a)
+        stop_environment(node_b)
+
+
+def test_e2e_load_balancing_disabled_does_not_migrate_threads():
+    node_a = RuntimeEnvironment(load_balancing=False)
+    node_b = RuntimeEnvironment(load_balancing=False)
+    disable_discovery(node_a)
+    disable_discovery(node_b)
+    node_a.scheduler.load_balance_interval = 0.05
+    node_b.scheduler.load_balance_interval = 0.05
+    node_a.scheduler.start()
+    node_b.scheduler.start()
+    try:
+        connect_networks(node_a, node_b)
+        for idx in range(3):
+            node_a.scheduler.add_thread(make_sleeping_thread(f"disabled-sleeper-{idx}"))
+
+        time.sleep(0.5)
+
+        assert len(node_b.scheduler.get_threads()) == 0
+        assert len(node_a.scheduler.get_threads()) == 3
+    finally:
+        stop_environment(node_a)
+        stop_environment(node_b)
+
+
+def test_e2e_load_balancing_stops_when_two_nodes_are_roughly_balanced():
+    node_a = RuntimeEnvironment(load_balancing=True)
+    node_b = RuntimeEnvironment(load_balancing=True)
+    disable_discovery(node_a)
+    disable_discovery(node_b)
+    configure_fast_load_balancer(node_a, node_b)
+    node_a.scheduler.start()
+    node_b.scheduler.start()
+    try:
+        connect_networks(node_a, node_b)
+        for idx in range(3):
+            node_a.scheduler.add_thread(make_sleeping_thread(f"balanced-sleeper-{idx}"))
+
+        wait_until(
+            lambda: len(node_a.scheduler.get_threads()) == 2 and len(node_b.scheduler.get_threads()) == 1,
+            timeout=5.0,
+            description="load balancer to reach a roughly balanced 2/1 split",
+        )
+
+        time.sleep(0.4)
+
+        assert len(node_a.scheduler.get_threads()) == 2
+        assert len(node_b.scheduler.get_threads()) == 1
+    finally:
+        stop_environment(node_a)
+        stop_environment(node_b)
+
+
+def test_e2e_load_balancing_spreads_threads_across_three_nodes():
+    node_a = RuntimeEnvironment(load_balancing=True)
+    node_b = RuntimeEnvironment(load_balancing=True)
+    node_c = RuntimeEnvironment(load_balancing=True)
+    disable_discovery(node_a)
+    disable_discovery(node_b)
+    disable_discovery(node_c)
+    configure_fast_load_balancer(node_a, node_b, node_c)
+    node_a.scheduler.start()
+    node_b.scheduler.start()
+    node_c.scheduler.start()
+    try:
+        connect_networks(node_a, node_b)
+        connect_networks(node_a, node_c)
+        connect_networks(node_b, node_c)
+        for idx in range(6):
+            node_a.scheduler.add_thread(make_sleeping_thread(f"three-node-sleeper-{idx}"))
+
+        wait_until(
+            lambda: (
+                sum([
+                    len(node_a.scheduler.get_threads()),
+                    len(node_b.scheduler.get_threads()),
+                    len(node_c.scheduler.get_threads()),
+                ]) == 6
+                and max(
+                    len(node_a.scheduler.get_threads()),
+                    len(node_b.scheduler.get_threads()),
+                    len(node_c.scheduler.get_threads()),
+                ) - min(
+                    len(node_a.scheduler.get_threads()),
+                    len(node_b.scheduler.get_threads()),
+                    len(node_c.scheduler.get_threads()),
+                ) <= 1
+            ),
+            timeout=8.0,
+            description="load balancer to spread threads across three nodes",
+        )
+
+        loads = [
+            len(node_a.scheduler.get_threads()),
+            len(node_b.scheduler.get_threads()),
+            len(node_c.scheduler.get_threads()),
+        ]
+        assert sum(loads) == 6
+        assert max(loads) - min(loads) <= 1
+    finally:
+        stop_environment(node_a)
+        stop_environment(node_b)
+        stop_environment(node_c)
+
+
 def test_e2e_shutdown_transfers_stored_tuples_to_surviving_node(capsys):
     node_a = RuntimeEnvironment()
     node_b = RuntimeEnvironment()

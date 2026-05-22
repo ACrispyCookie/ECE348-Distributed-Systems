@@ -25,6 +25,7 @@ class NetworkThread(threading.Thread):
         self.draining_nodes: set[str] = set()
         self.shutdown_prepare_acks: set[str] = set()
         self.node_loads: dict[str, int] = {}
+        self.node_load_floor_until: dict[str, float] = {}
 
         scheduler.tuple_space.send_in = self.send_in
         scheduler.tuple_space.send_out = self.send_out
@@ -129,6 +130,8 @@ class NetworkThread(threading.Thread):
             self.shutdown_prepare_acks.discard(node_id)
             if hasattr(self, "node_loads"):
                 self.node_loads.pop(node_id, None)
+            if hasattr(self, "node_load_floor_until"):
+                self.node_load_floor_until.pop(node_id, None)
 
     def mark_node_draining(self, node_id: str):
         with self.lock:
@@ -148,6 +151,10 @@ class NetworkThread(threading.Thread):
     def update_node_load(self, node_id: str, load: int):
         with self.lock:
             if node_id in self.nodes and node_id not in self.draining_nodes:
+                current_load = self.node_loads.get(node_id)
+                floor_until = getattr(self, "node_load_floor_until", {}).get(node_id, 0.0)
+                if current_load is not None and load < current_load and time.time() < floor_until:
+                    return
                 self.node_loads[node_id] = load
 
     def broadcast_load(self, load: int):
@@ -169,6 +176,14 @@ class NetworkThread(threading.Thread):
                 return None
 
             return min(candidates, key=lambda item: item[1])
+
+    def note_migrated_to_node(self, node_id: str, observed_load: int):
+        with self.lock:
+            if node_id in self.nodes and node_id not in self.draining_nodes:
+                self.node_loads[node_id] = max(self.node_loads.get(node_id, observed_load), observed_load) + 1
+                if not hasattr(self, "node_load_floor_until"):
+                    self.node_load_floor_until = {}
+                self.node_load_floor_until[node_id] = time.time() + 1.0
 
     def node_id_for_address(self, ip: str, port: int):
         with self.lock:
@@ -323,6 +338,7 @@ class NetworkThread(threading.Thread):
             conn.close()
             del self.nodes[node_id]
             self.node_loads.pop(node_id, None)
+            self.node_load_floor_until.pop(node_id, None)
             return False
 
     def _handle_read_ready(self, node_id):

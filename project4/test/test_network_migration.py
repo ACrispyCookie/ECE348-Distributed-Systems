@@ -142,6 +142,46 @@ def test_least_loaded_node_ignores_unknown_loads_and_draining_nodes():
     assert network.least_loaded_node() == ("idle-node", 1, ("127.0.0.1", 5001))
 
 
+def test_note_migrated_to_node_optimistically_updates_observed_peer_load():
+    network = NetworkThread.__new__(NetworkThread)
+    network.lock = threading.RLock()
+    network.nodes = {"peer-node": (object(), ("127.0.0.1", 5000))}
+    network.draining_nodes = set()
+    network.node_loads = {"peer-node": 0}
+    network.node_load_floor_until = {}
+
+    network.note_migrated_to_node("peer-node", 0)
+
+    assert network.node_loads["peer-node"] == 1
+
+
+def test_load_update_does_not_overwrite_recent_optimistic_migration_with_stale_lower_load():
+    network = NetworkThread.__new__(NetworkThread)
+    network.lock = threading.RLock()
+    network.nodes = {"peer-node": (object(), ("127.0.0.1", 5000))}
+    network.draining_nodes = set()
+    network.node_loads = {"peer-node": 0}
+    network.node_load_floor_until = {}
+
+    network.note_migrated_to_node("peer-node", 0)
+    network.update_node_load("peer-node", 0)
+
+    assert network.node_loads["peer-node"] == 1
+
+
+def test_note_migrated_to_node_does_not_lower_newer_peer_load():
+    network = NetworkThread.__new__(NetworkThread)
+    network.lock = threading.RLock()
+    network.nodes = {"peer-node": (object(), ("127.0.0.1", 5000))}
+    network.draining_nodes = set()
+    network.node_loads = {"peer-node": 3}
+    network.node_load_floor_until = {}
+
+    network.note_migrated_to_node("peer-node", 0)
+
+    assert network.node_loads["peer-node"] == 4
+
+
 def test_cancel_pending_destructive_remote_in_restores_only_actual_tuple():
     network = NetworkThread.__new__(NetworkThread)
     network.pending_requests = {

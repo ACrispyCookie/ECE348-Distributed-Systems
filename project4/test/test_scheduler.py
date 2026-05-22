@@ -12,6 +12,7 @@ class DummyNetwork:
         self.cancelled_requests = []
         self.broadcast_loads = []
         self.least_loaded = None
+        self.migration_notes = []
 
     def send_migrate(self, state, ip, port):
         self.sent_migrations.append((state, ip, port))
@@ -31,6 +32,9 @@ class DummyNetwork:
 
     def least_loaded_node(self):
         return self.least_loaded
+
+    def note_migrated_to_node(self, node_id, observed_load):
+        self.migration_notes.append((node_id, observed_load))
 
     def shutdown(self):
         return self.shutdown_result
@@ -287,4 +291,5 @@ def test_load_balance_migrates_one_thread_to_least_loaded_peer_when_difference_i
     assert migrated_state.thread_id == dummy_state.thread_id
     assert (ip, port) == ("127.0.0.1", 5000)
     assert dummy_state.thread_id not in sched.active_threads
+    assert sched.env.network.migration_notes == [("peer-node", 1)]
 
