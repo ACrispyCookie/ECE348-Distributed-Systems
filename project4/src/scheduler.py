@@ -22,6 +22,7 @@ class Scheduler:
         self.active_threads: dict[str, ThreadState] = {}
         self.sleeping_threads: dict[str, ThreadState] = {}
         self.waiting_threads: dict[str, ThreadState] = {}
+        self.shutting_down = False
 
     def start(self):
         self.thread.start()
@@ -39,14 +40,22 @@ class Scheduler:
             
             if has_threads and len(self.env.network.nodes) == 0:
                 result = 1
-            
-            self.env.running = False
-            network_shutdown_ok = self.env.network.shutdown()
+
+            self.shutting_down = True
+            self.lock.notify_all()
+
+        network_shutdown_ok = self.env.network.shutdown()
+
+        with self.lock:
             if not network_shutdown_ok and has_threads and not force:
-                self.env.running = True
+                self.shutting_down = False
+                self.lock.notify_all()
                 return -1
 
-        self.notify()
+            self.env.running = False
+            self.shutting_down = False
+            self.lock.notify_all()
+
         self.thread.join()
         return result
 
@@ -182,12 +191,18 @@ class Scheduler:
     def _scheduler(self):
         while self.env.running:
             with self.lock:
+                while self.env.running and self.shutting_down:
+                    self.lock.wait()
+
                 self._wakeup_sleeping()
-                while not self.active_threads and self.env.running:
+                while not self.active_threads and self.env.running and not self.shutting_down:
                     self._wait_for_sleeping()
                 
                 if not self.env.running:
                     break
+
+                if self.shutting_down:
+                    continue
 
                 thread_ids = list(self.active_threads.keys())
                 for tid in thread_ids:
