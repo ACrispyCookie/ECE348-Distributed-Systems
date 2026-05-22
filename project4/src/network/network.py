@@ -134,6 +134,13 @@ class NetworkThread(threading.Thread):
             if node_id not in self.draining_nodes
         ]
 
+    def node_id_for_address(self, ip: str, port: int):
+        with self.lock:
+            for node_id, (_conn, addr) in self.nodes.items():
+                if addr[0] == ip and addr[1] == port:
+                    return node_id
+        return None
+
 
     def send_in(self, req: TupleRequest):
         with self.lock:
@@ -151,7 +158,7 @@ class NetworkThread(threading.Thread):
             if destructive:
                 self.pending_requests[tid] = owner, tup
 
-    def send_cancel(self, tid: str, destructive: bool, completer: str):
+    def send_cancel(self, tid: str, destructive: bool, completer: str, exclude_node: str | None = None):
         with self.lock:
             if destructive and completer:
                 msg = TupleIdMessage(MessageType.OUT_CONSUME, tid)
@@ -159,6 +166,8 @@ class NetworkThread(threading.Thread):
 
             cancel = TupleIdMessage(MessageType.IN_CANCEL, tid)
             for node in self.nodes.keys():
+                if node == exclude_node:
+                    continue
                 if destructive and node == completer:
                     continue
                 self._send_message(node, cancel)

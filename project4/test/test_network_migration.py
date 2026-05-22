@@ -387,3 +387,88 @@ def test_shutdown_message_with_missing_tuple_payload_is_treated_as_empty_transfe
     assert "peer-node" not in network.nodes
     assert network.draining_nodes == set()
     assert network.shutdown_prepare_acks == set()
+
+
+def test_receiving_migrated_thread_removes_stale_foreign_request_before_retry():
+    network = NetworkThread.__new__(NetworkThread)
+    network.draining = False
+    network.scheduler = DummyScheduler()
+    network.scheduler.tuple_space.add_foreign_requests([
+        TupleRequest(
+            thread_id="migrated-thread",
+            owner="source-node",
+            completer=None,
+            pattern=["task", Wildcard("payload")],
+            is_destructive=True,
+        )
+    ])
+    original_state = make_thread_state()
+    original_state.thread_id = "migrated-thread"
+    original_state.program_counter = 2
+
+    ThreadMigrateMessage(
+        MessageType.MIGRATE,
+        "source-node",
+        original_state.to_dict(),
+    ).handle(network, None, DummyConn())
+
+    assert network.scheduler.added_threads[0].thread_id == "migrated-thread"
+    assert network.scheduler.tuple_space.get_requests() == []
+
+
+def test_send_cancel_can_skip_migration_destination_to_avoid_deleting_retried_request():
+    network = NetworkThread.__new__(NetworkThread)
+    network.lock = threading.RLock()
+    network.nodes = {
+        "target-node": (object(), ("127.0.0.1", 5000)),
+        "other-node": (object(), ("127.0.0.1", 5001)),
+    }
+    sent_messages = []
+    network._send_message = lambda node_id, message: sent_messages.append((node_id, message)) or True
+
+    network.send_cancel("migrated-thread", True, None, exclude_node="target-node")
+
+    assert [(node_id, msg.type, msg.thread_id) for node_id, msg in sent_messages] == [
+        ("other-node", MessageType.IN_CANCEL, "migrated-thread")
+    ]
+
+
+def test_out_consume_ack_does_not_restore_reserved_tuple():
+    network = NetworkThread.__new__(NetworkThread)
+    network.pending_requests = {"thread-1": ("owner-node", ("task", 123))}
+    network.scheduler = DummyScheduler()
+
+    TupleIdMessage(MessageType.OUT_CONSUME, "thread-1").handle(network, None, None)
+
+    assert network.pending_requests == {}
+    assert network.scheduler.tuple_space.get_tuples() == []
+
+
+def test_receiving_migrated_thread_recovers_pending_out_tuple_for_retry():
+    network = NetworkThread.__new__(NetworkThread)
+    network.draining = False
+    network.pending_requests = {"migrated-thread": ("source-node", ("task", 123, "payload"))}
+    network.scheduler = DummyScheduler()
+    network.scheduler.tuple_space.add_foreign_requests([
+        TupleRequest(
+            thread_id="migrated-thread",
+            owner="source-node",
+            completer=None,
+            pattern=["task", Wildcard("task_id"), Wildcard("payload")],
+            is_destructive=True,
+        )
+    ])
+    original_state = make_thread_state()
+    original_state.thread_id = "migrated-thread"
+    original_state.program_counter = 2
+
+    ThreadMigrateMessage(
+        MessageType.MIGRATE,
+        "source-node",
+        original_state.to_dict(),
+    ).handle(network, None, DummyConn())
+
+    assert network.pending_requests == {}
+    assert network.scheduler.tuple_space.get_requests() == []
+    assert network.scheduler.tuple_space.get_tuples() == [("task", 123, "payload")]
+    assert network.scheduler.added_threads[0].thread_id == "migrated-thread"

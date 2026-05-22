@@ -191,6 +191,10 @@ class ThreadMigrateMessage(Message):
             network.send_migrate(state, source_addr[0], source_addr[1])
             return
 
+        network.scheduler.tuple_space.remove_request(state.thread_id)
+        if state.thread_id in getattr(network, "pending_requests", {}):
+            _owner, pending_tup = network.pending_requests.pop(state.thread_id)
+            network.scheduler.tuple_space.out(pending_tup)
         added = network.scheduler.add_thread(state)
         if added:
             print(f"[NETWORK] Received migrated thread {state.thread_id} from {ip}:{port}...")

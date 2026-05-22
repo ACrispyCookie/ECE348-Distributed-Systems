@@ -124,7 +124,10 @@ class Scheduler:
             source_queue.pop(tid)
             if source_queue is self.waiting_threads:
                 self.tuple_space.remove_request(tid)
-                self.env.network.send_cancel(tid, state.tuple_in, None)
+                exclude_node = None
+                if hasattr(self.env.network, "node_id_for_address"):
+                    exclude_node = self.env.network.node_id_for_address(target_ip, target_port)
+                self.env.network.send_cancel(tid, state.tuple_in, None, exclude_node=exclude_node)
             return tid
 
             

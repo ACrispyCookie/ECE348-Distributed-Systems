@@ -15,8 +15,14 @@ class DummyNetwork:
         self.sent_migrations.append((state, ip, port))
         return self.should_migrate
 
-    def send_cancel(self, tid, destructive, completer):
-        self.cancelled_requests.append((tid, destructive, completer))
+    def node_id_for_address(self, ip, port):
+        for node_id, (_conn, addr) in self.nodes.items():
+            if addr == (ip, port):
+                return node_id
+        return None
+
+    def send_cancel(self, tid, destructive, completer, exclude_node=None):
+        self.cancelled_requests.append((tid, destructive, completer, exclude_node))
 
     def shutdown(self):
         return self.shutdown_result
@@ -164,7 +170,7 @@ def test_migrate_waiting_thread_success_cancels_request_and_rewinds_for_retry(sc
     assert result == dummy_state.thread_id
     assert dummy_state.thread_id not in sched.waiting_threads
     assert sched.tuple_space.local.requests == []
-    assert sched.env.network.cancelled_requests == [(dummy_state.thread_id, True, None)]
+    assert sched.env.network.cancelled_requests == [(dummy_state.thread_id, True, None, None)]
     migrated_state = sched.env.network.sent_migrations[0][0]
     assert migrated_state is dummy_state
     assert migrated_state.program_counter == 2
@@ -182,4 +188,29 @@ def test_scheduler_shutdown_failure_keeps_environment_running_and_reports_unsafe
     assert result == -1
     assert sched.env.running is True
     assert dummy_state.thread_id in sched.active_threads
+
+
+def test_migrate_waiting_thread_cancel_excludes_destination_node(sched, dummy_state):
+    sched.env.network.nodes = {
+        "target-node": (object(), ("127.0.0.1", 5000)),
+        "other-node": (object(), ("127.0.0.1", 5001)),
+    }
+    dummy_state.program_counter = 3
+    dummy_state.tuple_pattern = ["payload", Wildcard("x")]
+    dummy_state.tuple_in = True
+    sched.waiting_threads[dummy_state.thread_id] = dummy_state
+    sched.tuple_space.local.requests.append(TupleRequest(
+        thread_id=dummy_state.thread_id,
+        owner=None,
+        completer=None,
+        pattern=dummy_state.tuple_pattern,
+        is_destructive=True,
+    ))
+
+    result = sched.migrate_thread(dummy_state.thread_id, "127.0.0.1", 5000)
+
+    assert result == dummy_state.thread_id
+    assert sched.env.network.cancelled_requests == [
+        (dummy_state.thread_id, True, None, "target-node")
+    ]
 
