@@ -90,6 +90,31 @@ class NetworkThread(threading.Thread):
             except Exception as e:
                 print(f"[NETWORK] Failed to connect to {remote_addr}: {e}")
 
+    def connect_to_address(self, ip: str, port: int) -> bool:
+        remote_addr = (ip, port)
+        with self.lock:
+            if remote_addr == self.node_addr:
+                return False
+            for _node_id, (_conn, addr) in self.nodes.items():
+                if addr == remote_addr:
+                    return True
+
+            node_key = str(remote_addr)
+            try:
+                print(f"[NETWORK] Manually connecting to {ip}:{port}, sending NEW message")
+                conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                conn.settimeout(5.0)
+                conn.connect(remote_addr)
+                conn.setblocking(False)
+
+                self.nodes[node_key] = conn, remote_addr
+                self.sel.register(conn, selectors.EVENT_READ, data=node_key)
+                self._send_new(node_key)
+                return True
+            except Exception as e:
+                print(f"[NETWORK] Failed to connect to {remote_addr}: {e}")
+                return False
+
     def new_node(self, node_addr: tuple, conn: socket.socket, node_id:str, real_node_addr: tuple, requests: list[dict[str, Any]]):
         with self.lock:
             tuple_reqs = [

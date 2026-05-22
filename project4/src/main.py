@@ -6,6 +6,14 @@ import argparse
 import os
 import time
 
+
+def tcp_port(value):
+    port = int(value)
+    if port < 0 or port > 65535:
+        raise argparse.ArgumentTypeError("TCP port must be between 0 and 65535")
+    return port
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="SimpleScript distributed runtime environment")
     parser.add_argument(
@@ -15,16 +23,24 @@ def parse_args(argv=None):
         dest="load_balance",
         help="start the runtime with automatic load balancing enabled",
     )
+    parser.add_argument(
+        "-p",
+        "--port",
+        type=tcp_port,
+        default=0,
+        dest="tcp_port",
+        help="TCP port for this runtime environment to listen on (default: 0, choose an ephemeral port)",
+    )
     return parser.parse_args(argv)
 
 
 class RuntimeEnvironment:
-    def __init__(self, load_balancing: bool = False):
+    def __init__(self, load_balancing: bool = False, tcp_port: int = 0):
         self.running = True
         self.load_balancing = load_balancing
         self.shutdown_warning = 0
         self.scheduler = Scheduler(self)
-        self.network = NetworkThread(self.scheduler)
+        self.network = NetworkThread(self.scheduler, tcp_port=tcp_port)
 
     def start(self):
         """Starts the environment: CLI listener and thread scheduler"""
@@ -54,12 +70,14 @@ class RuntimeEnvironment:
                     self.cmd_kill(args)
                 elif command == "migrate":
                     self.cmd_migrate(args)
+                elif command == "connect":
+                    self.cmd_connect(args)
                 elif command == "balance":
                     self.cmd_balance(args)
                 elif command == "shutdown":
                     self.cmd_shutdown(False)
                 else:
-                    print(f"[RUNTIME] Unknown command: '{command}'. Available commands: run, list, tuples, kill, migrate, balance, shutdown")
+                    print(f"[RUNTIME] Unknown command: '{command}'. Available commands: run, list, tuples, kill, migrate, connect, balance, shutdown")
 
             except KeyboardInterrupt:
                 self.cmd_shutdown(True)
@@ -187,6 +205,25 @@ class RuntimeEnvironment:
         else:
             print(f"[RUNTIME] Error: Thread not found or node not found.")
 
+    def cmd_connect(self, args):
+        """Command: connect <IP address> <port number> (Manually connects to another environment)."""
+        if len(args) != 2:
+            print("[RUNTIME] Usage: connect <IP address> <port number>")
+            return
+
+        ip = args[0]
+        try:
+            port = int(args[1])
+        except ValueError:
+            print("[RUNTIME] Specify a valid port!")
+            return
+
+        connected = self.network.connect_to_address(ip, port)
+        if connected:
+            print(f"[RUNTIME] Connected to {ip}:{port}")
+        else:
+            print(f"[RUNTIME] Error: Could not connect to {ip}:{port}")
+
     def cmd_balance(self, args):
         """Command: balance <on|off> (Enables or disables automatic load balancing)"""
         if len(args) != 1 or args[0] not in ("on", "off"):
@@ -222,5 +259,5 @@ class RuntimeEnvironment:
 
 if __name__ == "__main__":
     args = parse_args()
-    env = RuntimeEnvironment(load_balancing=args.load_balance)
+    env = RuntimeEnvironment(load_balancing=args.load_balance, tcp_port=args.tcp_port)
     env.start()
