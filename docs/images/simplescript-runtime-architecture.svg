@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">SimpleScript distributed runtime architecture</title>
+  <desc id="desc">Architecture diagram for Assignment 4, showing CLI commands, runtime environment, scheduler queues, interpreter state, tuple space, network messages, discovery, migration, load balancing, shutdown and peer runtime nodes.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#020617"/><stop offset="55%" stop-color="#111827"/><stop offset="100%" stop-color="#134e4a"/></linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1f2937"/><stop offset="100%" stop-color="#0f172a"/></linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#22d3ee"/><stop offset="100%" stop-color="#5eead4"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000" flood-opacity=".35"/></filter>
+    <style>
+      .title{font:800 34px Inter,Segoe UI,Arial,sans-serif;fill:#f8fafc}.sub{font:500 16px Inter,Segoe UI,Arial,sans-serif;fill:#cbd5e1}.box-title{font:800 19px Inter,Segoe UI,Arial,sans-serif;fill:#f8fafc}.box-text{font:500 14px Inter,Segoe UI,Arial,sans-serif;fill:#cbd5e1}.tiny{font:800 11px Inter,Segoe UI,Arial,sans-serif;letter-spacing:.08em}.chip{font:700 13px Inter,Segoe UI,Arial,sans-serif}.flow{stroke:#67e8f9;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;fill:none}.flow2{stroke:#a7f3d0;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;fill:none}.muted{stroke:#475569;stroke-width:2;stroke-dasharray:6 8;fill:none}.node{fill:#0f172a;stroke:#334155;stroke-width:1.5}.pill{fill:#164e63;stroke:#22d3ee;stroke-width:1}
+    </style>
+  </defs>
+  <rect width="1200" height="760" rx="30" fill="url(#bg)"/>
+  <circle cx="95" cy="665" r="240" fill="#0891b2" opacity=".13"/>
+  <circle cx="1110" cy="110" r="220" fill="#14b8a6" opacity=".12"/>
+  <text x="60" y="62" class="title">Assignment 4 — SimpleScript distributed runtime</text>
+  <text x="60" y="92" class="sub">A small mobile-code execution environment with tuple-space communication, migration, balancing, and shutdown handoff</text>
+
+  <g filter="url(#shadow)">
+    <rect x="60" y="125" width="1080" height="520" rx="26" fill="url(#panel)" stroke="#334155"/>
+    <text x="92" y="166" class="box-title">Local runtime environment</text>
+    <text x="92" y="190" class="box-text">One process hosting SimpleScript threads, a tuple space, a scheduler, and a network endpoint</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="100" y="235" width="215" height="130" rx="20" class="node"/>
+    <text x="130" y="275" class="box-title">CLI commands</text>
+    <text x="130" y="304" class="box-text">run · list · kill</text>
+    <text x="130" y="328" class="box-text">connect · migrate</text>
+    <text x="130" y="352" class="box-text">tuples · shutdown</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="405" y="215" width="320" height="170" rx="20" class="node"/>
+    <text x="440" y="255" class="box-title">Scheduler</text>
+    <text x="440" y="282" class="box-text">cooperatively steps each thread</text>
+    <rect x="440" y="305" width="83" height="26" rx="13" fill="#1d4ed8"/><text x="457" y="323" class="chip" fill="#dbeafe">active</text>
+    <rect x="533" y="305" width="95" height="26" rx="13" fill="#7c2d12"/><text x="548" y="323" class="chip" fill="#ffedd5">sleeping</text>
+    <rect x="638" y="305" width="76" height="26" rx="13" fill="#581c87"/><text x="652" y="323" class="chip" fill="#f3e8ff">waiting</text>
+    <text x="440" y="356" class="box-text">load-based migration when imbalance ≥ 2</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="100" y="430" width="275" height="145" rx="20" class="node"/>
+    <text x="130" y="470" class="box-title">Parser + interpreter</text>
+    <text x="130" y="500" class="box-text">#SIMPLESCRIPT validation</text>
+    <text x="130" y="524" class="box-text">arithmetic, branches, sleep, PRN</text>
+    <text x="130" y="548" class="box-text">ThreadState: pc, vars, wait pattern</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="455" y="430" width="285" height="145" rx="20" class="node"/>
+    <text x="485" y="470" class="box-title">Distributed tuple space</text>
+    <text x="485" y="500" class="box-text">OUT publishes concrete tuples</text>
+    <text x="485" y="524" class="box-text">RD reads without consuming</text>
+    <text x="485" y="548" class="box-text">IN consumes with cancel/consume ACKs</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="815" y="235" width="265" height="340" rx="20" class="node"/>
+    <text x="845" y="275" class="box-title">Network layer</text>
+    <text x="845" y="305" class="box-text">TCP runtime messages</text>
+    <text x="845" y="329" class="box-text">UDP multicast discovery</text>
+    <text x="845" y="353" class="box-text">manual connect fallback</text>
+    <rect x="845" y="385" width="190" height="28" rx="14" class="pill"/><text x="861" y="404" class="chip" fill="#ecfeff">TupleIn / TupleOut</text>
+    <rect x="845" y="423" width="190" height="28" rx="14" class="pill"/><text x="861" y="442" class="chip" fill="#ecfeff">ThreadMigrate</text>
+    <rect x="845" y="461" width="190" height="28" rx="14" class="pill"/><text x="861" y="480" class="chip" fill="#ecfeff">LoadStatus</text>
+    <rect x="845" y="499" width="190" height="28" rx="14" class="pill"/><text x="861" y="518" class="chip" fill="#ecfeff">ShutdownPrepare</text>
+  </g>
+
+  <path class="flow" d="M315 300 C345 300 365 300 405 300"/><path class="flow" d="M395 290 L405 300 L395 310"/>
+  <path class="flow" d="M520 385 C485 410 425 430 375 482"/><path class="flow" d="M388 477 L375 482 L382 469"/>
+  <path class="flow" d="M600 385 C600 405 600 415 600 430"/><path class="flow" d="M590 420 L600 430 L610 420"/>
+  <path class="flow" d="M740 500 C770 500 790 500 815 500"/><path class="flow" d="M805 490 L815 500 L805 510"/>
+  <path class="flow2" d="M815 330 C780 320 760 300 725 300"/><path class="flow2" d="M735 290 L725 300 L735 310"/>
+
+  <g>
+    <rect x="925" y="650" width="215" height="55" rx="18" fill="#042f2e" stroke="#2dd4bf"/>
+    <text x="955" y="674" class="box-title" font-size="16">Peer runtimes</text>
+    <text x="955" y="696" class="box-text">same architecture on other nodes</text>
+  </g>
+  <path class="muted" d="M970 575 C1000 610 1010 625 1030 650"/>
+  <path class="muted" d="M930 575 C910 610 905 625 890 650"/>
+  <rect x="760" y="650" width="135" height="55" rx="18" fill="#111827" stroke="#475569"/>
+  <text x="784" y="674" class="box-title" font-size="15">Peer A</text>
+  <text x="784" y="696" class="box-text">tuples + threads</text>
+
+  <g>
+    <rect x="100" y="665" width="590" height="42" rx="21" fill="url(#accent)" opacity=".92"/>
+    <text x="128" y="691" class="tiny" fill="#042f2e">MIGRATION PRESERVES THREAD ID + PROGRAM COUNTER + VARIABLES + SLEEP/WAIT STATE</text>
+  </g>
+</svg>
