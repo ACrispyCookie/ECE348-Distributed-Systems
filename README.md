@@ -51,13 +51,7 @@ The strongest project is **Assignment 4**, a distributed runtime for the intenti
 
 ## Selected results
 
-Assignment 3 includes cache experiments comparing a baseline network file access path with client-side cached reads. The best-case cached throughput is visibly higher than the uncached baseline when repeated reads can be served from the local block cache.
-
-<p align="center">
-  <img src="docs/images/project3-cache-throughput.png" alt="Assignment 3 network file system throughput comparison between baseline and cached reads" width="75%">
-</p>
-
-Additional benchmark plots remain next to the assignments that produced them:
+Benchmark plots remain next to the assignments that produced them, so the README can point to the measurements without turning the landing page into a plot gallery:
 
 - [`project1/client/tests/throughput_scaling_plot.png`](project1/client/tests/throughput_scaling_plot.png) — request/reply throughput scaling with server workers and load.
 - [`project2/simple-chat-app/benchmarks/`](project2/simple-chat-app/benchmarks/) — group communication throughput measurements.
