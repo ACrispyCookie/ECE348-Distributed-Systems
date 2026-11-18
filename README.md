@@ -8,7 +8,7 @@
 
 Coursework repository for **ECE348 — Distributed Systems** at the **University of Thessaly**. The assignments build distributed services and runtimes from UDP request/reply protocols to reliable group communication, a cached network file service, and a SimpleScript execution environment with transparent tuple-space operations and thread migration.
 
-The repository keeps the implementations, tests, benchmark plots, handouts, and final presentation decks for the four assignments. Assignment 4 is the main showcase: a distributed runtime that can discover peers, execute mobile SimpleScript threads, migrate blocked or sleeping computation, balance load, and drain work during shutdown.
+Each assignment has its implementation, tests, benchmark plots, handout, and presentation. Assignment 4 is the largest: a distributed runtime that discovers peers, runs SimpleScript threads, migrates blocked or sleeping threads, balances load, and hands off work when a node shuts down.
 
 ## Quick overview
 
@@ -23,22 +23,22 @@ The repository keeps the implementations, tests, benchmark plots, handouts, and 
   <img src="docs/images/ece348-project-map.svg" alt="ECE348 project map from request-reply protocols to group communication, network file systems, and the SimpleScript distributed runtime" width="100%">
 </p>
 
-## Standout work: SimpleScript distributed runtime
+## Highlight: SimpleScript distributed runtime
 
 <p align="center">
   <img src="docs/images/simplescript-runtime-architecture.svg" alt="SimpleScript distributed runtime architecture with CLI commands, scheduler queues, interpreter state, tuple space, network messages, migration, load balancing, shutdown, and peer runtimes" width="100%">
 </p>
 
-The strongest project is **Assignment 4**, a distributed runtime for the intentionally small SimpleScript language. It behaves like a compact mobile-code execution environment: programs run as managed threads, block on tuple-space operations, migrate between runtime nodes, and continue execution after load-balancing or shutdown handoff.
+**Assignment 4** is a distributed runtime for SimpleScript, a deliberately small language. Programs run as managed threads that can block on tuple-space operations, move to another node, and continue there after load balancing or a shutdown handoff.
 
 - **Language runtime:** parses `#SIMPLESCRIPT` programs and executes arithmetic, branching, sleeping, printing, and tuple operations one instruction at a time.
 - **Thread scheduler:** tracks active, sleeping, and waiting `ThreadState` objects so blocked tuple operations and sleeping computations can be resumed later.
 - **Distributed tuple space:** supports local and remote `OUT`, non-destructive `RD`, and destructive `IN` with request forwarding, completion, cancel, and consume messages.
 - **Node discovery:** combines UDP multicast discovery with a manual `connect <ip> <port>` fallback for cross-machine demos.
 - **Live migration:** transfers program code and execution state to another runtime while preserving the same globally unique thread id.
-- **Automatic load balancing:** exchanges load status and migrates threads only when the imbalance is large enough to avoid useless oscillation.
+- **Automatic load balancing:** nodes exchange load status and migrate a thread only when the difference is at least 2, so threads don't bounce back and forth.
 - **Graceful shutdown:** coordinates shutdown with peer acknowledgements, marks the node as draining, and migrates local threads and tuples to surviving runtimes.
-- **Demo/test coverage:** includes presentation-ready demo scripts plus parser, interpreter, scheduler, tuple-space, migration, and multi-node end-to-end tests.
+- **Demos and tests:** demo scripts plus parser, interpreter, scheduler, tuple-space, migration, and multi-node end-to-end tests.
 
 ## Course contents
 
@@ -51,7 +51,7 @@ The strongest project is **Assignment 4**, a distributed runtime for the intenti
 
 ## Selected results
 
-Benchmark plots remain next to the assignments that produced them, so the README can point to the measurements without turning the landing page into a plot gallery:
+Benchmark plots live next to the assignments that produced them:
 
 - [`project1/client/tests/throughput_scaling_plot.png`](project1/client/tests/throughput_scaling_plot.png) — request/reply throughput scaling with server workers and load.
 - [`project2/simple-chat-app/benchmarks/`](project2/simple-chat-app/benchmarks/) — group communication throughput measurements.
