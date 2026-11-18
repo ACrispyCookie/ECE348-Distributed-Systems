@@ -1,10 +1,8 @@
 # ECE348 — Distributed Systems
 
-![C](https://img.shields.io/badge/C-systems-blue)
-![Java](https://img.shields.io/badge/Java-group%20communication-orange)
-![Python](https://img.shields.io/badge/Python-distributed%20runtime-green)
-![Distributed Systems](https://img.shields.io/badge/Distributed-systems-purple)
-![Coursework](https://img.shields.io/badge/UTH-ECE348-teal)
+![C](https://img.shields.io/badge/C-0E7C86?style=flat&logo=c&logoColor=white)
+![Java](https://img.shields.io/badge/Java-0E7C86?style=flat&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxwYXRoIGQ9Ik00IDloMTN2NWE2IDYgMCAwIDEtNiA2aC0xYTYgNiAwIDAgMS02LTZ6Ii8+PHBhdGggZD0iTTE3IDExaDEuNWEyLjUgMi41IDAgMCAxIDAgNUgxNyIvPjxwYXRoIGQ9Ik04IDIuNWMtMSAxLjIgMSAyIDAgMy41TTEyIDIuNWMtMSAxLjIgMSAyIDAgMy41Ii8+PC9zdmc+)
+![Python](https://img.shields.io/badge/Python-0E7C86?style=flat&logo=python&logoColor=white)
 
 Coursework repository for **ECE348 — Distributed Systems** at the **University of Thessaly**. The assignments build distributed services and runtimes from UDP request/reply protocols to reliable group communication, a cached network file service, and a SimpleScript execution environment with transparent tuple-space operations and thread migration.
 
